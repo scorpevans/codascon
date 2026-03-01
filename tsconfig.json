@@ -1,0 +1,4 @@
+{
+  "files": [],
+  "references": [{ "path": "./packages/codascon" }, { "path": "./packages/odetovibe" }]
+}

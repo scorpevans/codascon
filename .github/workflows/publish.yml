@@ -1,0 +1,42 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create tags and push changelog commits
+      pull-requests: write # to open the Changesets version PR
+      id-token: write # for OIDC trusted publishing — no NPM_TOKEN needed
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Create release PR or publish to npm
+        uses: changesets/action@v1
+        with:
+          publish: pnpm changeset:publish
+          title: "chore: release packages"
+          commit: "chore: release packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

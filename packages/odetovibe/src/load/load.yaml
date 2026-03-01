@@ -1,0 +1,93 @@
+# ═══════════════════════════════════════════════════════════════════
+# odetovibe — Load Domain
+#
+# Responsible for writing ts-morph SourceFiles to disk.
+#
+# The Transform domain produces a ts-morph Project with all
+# SourceFiles already populated. The Load domain iterates those
+# SourceFiles and writes each one to the correct output path.
+#
+# Phase 1 (current): overwrite mode — fresh files each run.
+#   All structural elements are annotated with /* @odetovibe-generated */
+#   from day one, so that Phase 2 merge can identify them.
+#
+# Phase 2 (planned): merge mode — triggered when overwrite is false.
+#   Reads existing files and reconciles with newly generated code.
+#   Ownership contract:
+#     - Structural elements (/* @odetovibe-generated */) → odetovibe owns
+#     - Implementation bodies (visit method bodies, execute body) → user owns
+#     - Imports → union (add missing, keep user's extras)
+#     - Unrecognized declarations → preserve untouched
+#     - User comments → preserved
+#   When merge is added, a MergeWriter template (with strategies per
+#   node type: ClassMerger, InterfaceMerger, ImportMerger) will replace
+#   OverwriteWriter when overwrite is false.
+#
+# Public API exposed to clients:
+#   - writeFiles(project: Project, context: WriteContext): Promise<WriteResult[]>
+# ═══════════════════════════════════════════════════════════════════
+
+namespace: load
+
+imports:
+  "ts-morph":
+    - SourceFile
+
+domainTypes:
+  # ── Subject ─────────────────────────────────────────────────────
+  SourceFileEntry:
+    visitName: resolveSourceFile
+
+  # ── Object type ─────────────────────────────────────────────────
+  WriteContext:
+
+  # ── Return type ─────────────────────────────────────────────────
+  WriteResult:
+
+commands:
+  WriteFileCommand:
+    commandName: writeFile
+    baseType: SourceFileEntry
+    objectType: WriteContext
+    returnType: WriteResult
+    returnAsync: true
+    subjectUnion:
+      - SourceFileEntry
+    # Routing is mode-based (WriteContext.mode), not subject-type-based.
+    # The dispatch entry below names the default template (mode: "merge").
+    dispatch:
+      SourceFileEntry: MergeWriter
+    templates:
+      # Unconditionally overwrites the output file.
+      # Prepends /* @odetovibe-generated */ header, creates parent dirs.
+      # Selected when WriteContext.mode is "overwrite".
+      OverwriteWriter:
+        isParameterized: false
+        subjectSubset: [SourceFileEntry]
+        strategies: {}
+
+      # Reconciles generated structure with existing user code (default).
+      # Selected when WriteContext.mode is "merge".
+      # Falls back to overwrite behaviour when the file does not yet exist.
+      # Ownership contract:
+      #   - Class structure, properties, constructors → odetovibe
+      #   - Method signatures → odetovibe
+      #   - Method bodies → user (always preserved regardless of content)
+      #   - Interfaces → user (never touched once created)
+      #   - Imports → union (generated added, user extras kept)
+      #   - Declarations absent from generated output → preserved
+      MergeWriter:
+        isParameterized: false
+        subjectSubset: [SourceFileEntry]
+        strategies: {}
+
+      # Strict merge: conflict-safe variant of MergeWriter.
+      # Selected when WriteContext.mode is "strict".
+      # Falls back to overwrite behaviour when the file does not yet exist.
+      # On conflict (any codegen-owned slot in existing file differs from
+      # generated), writes generated content to $filename.ode.ts instead
+      # and returns WriteResult.conflicted = true.
+      StrictMergeWriter:
+        isParameterized: false
+        subjectSubset: [SourceFileEntry]
+        strategies: {}

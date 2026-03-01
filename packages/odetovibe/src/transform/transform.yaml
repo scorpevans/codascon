@@ -1,0 +1,156 @@
+# ═══════════════════════════════════════════════════════════════════
+# odetovibe — Transform Domain
+#
+# Responsible for converting a validated ConfigIndex into TypeScript
+# code using ts-morph. Each Subject type dispatches to a distinct
+# emitter — no runtime branching in visit methods.
+#
+# The split made in the Extract domain (SubjectTypeEntry vs PlainTypeEntry,
+# AbstractTemplateEntry vs ConcreteTemplateEntry) ensures that
+# EmitAstCommand's dispatch is fully structural.
+#
+# Subjects are the ConfigEntry types produced by Extract.
+# They are imported from the extract domain — codegen should import,
+# not re-emit these classes.
+#
+# File placement (computed by each emitter using EmitContext):
+#   SubjectTypeEntry / PlainTypeEntry  →  domain-types.ts  (root output dir)
+#   CommandEntry                       →  <namespace>/commands/<cmd-name>.ts
+#   AbstractTemplateEntry              →  <namespace>/commands/<parent-cmd-name>.ts
+#   ConcreteTemplateEntry              →  <namespace>/commands/<parent-cmd-name>.ts
+#   StrategyEntry                      →  <namespace>/commands/<grandparent-cmd-name>.ts
+#
+# Command file names are kebab-case of the command key with the
+# "Command" suffix dropped: AccessBuildingCommand → access-building.ts
+#
+# Public API exposed to clients:
+#   - emitAst(configIndex: ConfigIndex, context: EmitContext): void
+#     (emitters add declarations directly to SourceFiles in context.project)
+# ═══════════════════════════════════════════════════════════════════
+
+namespace: transform
+
+imports:
+  "../schema.js":
+    - DomainType
+    - Command
+    - Template
+    - Strategy
+  "ts-morph":
+    - Project
+  "../extract/domain-types.js":
+    - ConfigIndex
+    - ConfigEntry
+    - SubjectTypeEntry
+    - PlainTypeEntry
+    - CommandEntry
+    - AbstractTemplateEntry
+    - ConcreteTemplateEntry
+    - StrategyEntry
+
+externalTypes:
+  # Types defined in the extract domain. Listed here so that validators
+  # and command emitters can reference them, but never re-emitted.
+
+  ConfigEntry:
+
+  SubjectTypeEntry:
+    visitName: resolveSubjectType
+
+  PlainTypeEntry:
+    visitName: resolvePlainType
+
+  CommandEntry:
+    visitName: resolveCommand
+
+  AbstractTemplateEntry:
+    visitName: resolveAbstractTemplate
+
+  ConcreteTemplateEntry:
+    visitName: resolveConcreteTemplate
+
+  StrategyEntry:
+    visitName: resolveStrategy
+
+domainTypes:
+  # ── Object type ─────────────────────────────────────────────────
+  EmitContext:
+
+  # ── Return type ─────────────────────────────────────────────────
+  EmitResult:
+
+commands:
+  EmitAstCommand:
+    commandName: emitAst
+    baseType: ConfigEntry
+    objectType: EmitContext
+    returnType: EmitResult
+    subjectUnion:
+      - SubjectTypeEntry
+      - PlainTypeEntry
+      - CommandEntry
+      - AbstractTemplateEntry
+      - ConcreteTemplateEntry
+      - StrategyEntry
+    dispatch:
+      SubjectTypeEntry: SubjectClassEmitter
+      PlainTypeEntry: InterfaceEmitter
+      CommandEntry: CommandClassEmitter
+      AbstractTemplateEntry: AbstractTemplateEmitter
+      ConcreteTemplateEntry: ConcreteTemplateEmitter
+      StrategyEntry: StrategyClassEmitter
+    templates:
+      # Emits: class Foo extends Subject { readonly visitName = "resolveFoo" as const; ... }
+      # Target: domain-types.ts
+      SubjectClassEmitter:
+        isParameterized: false
+        subjectSubset: [SubjectTypeEntry]
+        strategies: {}
+
+      # Emits: interface Foo { ... }
+      # Target: domain-types.ts
+      InterfaceEmitter:
+        isParameterized: false
+        subjectSubset: [PlainTypeEntry]
+        strategies: {}
+
+      # Emits: class FooCommand extends Command<B, O, R, [S1, S2]> {
+      #          readonly commandName = "foo" as const;
+      #          resolveS1(...): Template { ... }   /* @odetovibe-generated */
+      #          resolveS2(...): Template { ... }   /* @odetovibe-generated */
+      #        }
+      # Target: commands/<cmd-name>.ts
+      CommandClassEmitter:
+        isParameterized: false
+        subjectSubset: [CommandEntry]
+        strategies: {}
+
+      # Emits: abstract class FooTemplate<CSU extends S1 | S2>
+      #          implements Template<FooCommand, [HookCmd], CSU> {
+      #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
+      #          abstract execute(subject: CSU, object: Readonly<O>): R;
+      #        }
+      # Target: commands/<parent-cmd-name>.ts (same file as CommandClassEmitter)
+      AbstractTemplateEmitter:
+        isParameterized: false
+        subjectSubset: [AbstractTemplateEntry]
+        strategies: {}
+
+      # Emits: class FooTemplate implements Template<FooCommand, [HookCmd], CSU> {
+      #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
+      #          execute(subject: CSU, object: Readonly<O>): R { ... }
+      #        }
+      # Target: commands/<parent-cmd-name>.ts
+      ConcreteTemplateEmitter:
+        isParameterized: false
+        subjectSubset: [ConcreteTemplateEntry]
+        strategies: {}
+
+      # Emits: class FooStrategy extends FooTemplate<S1> {
+      #          // hook override if declared in strategy commandHooks
+      #        }
+      # Target: commands/<grandparent-cmd-name>.ts
+      StrategyClassEmitter:
+        isParameterized: false
+        subjectSubset: [StrategyEntry]
+        strategies: {}

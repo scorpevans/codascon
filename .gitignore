@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# env files
+.env
+.env.*
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# test coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
