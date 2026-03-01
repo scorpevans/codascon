@@ -362,7 +362,8 @@ All output must conform to this layout:
 
     src/
     └── [namespace]              ← the namespace defined in the domain
-        ├── types.ts             ← all Subject classes and plain interfaces
+        ├── TypesA.ts            ← Subject classes and plain interfaces
+        ├── TypesB.ts            ← Subject classes and plain interfaces
         └── commands/
             ├── FirstCommand.ts  ← Command + its Templates and Strategies
             └── SecondCommand.ts ← Command + its Templates and Strategies
@@ -375,7 +376,7 @@ Output complete, compile-safe TypeScript with stub strategy implementations — 
 ```
 
 - **Structural rails** — The protocol tells the LLM exactly where new code goes. "Add a `Contractor` subject to `AccessBuildingCommand`" has one unambiguous implementation path.
-- **YAML as prompting surface** — Hand the **Odetovibe** config to the LLM instead of describing changes in prose. Higher fidelity, lower ambiguity.
+- **YAML as prompting surface** — Hand the [**Odetovibe**](https://www.npmjs.com/package/odetovibe) config to the LLM instead of describing changes in prose. Higher fidelity, lower ambiguity.
 - **Compiler as guardrail** — Forgotten visit methods are compile errors, not silent bugs. The LLM gets immediate feedback.
 - **Predictable file structure** — Each `Command` + `Template`s + `Strategy` classes lives in one file. No architectural decisions for the LLM to get wrong across iterations.
 

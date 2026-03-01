@@ -136,6 +136,8 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 
 **Duplicate `visitName`** — Two `Subject`s with the same `visitName` in one `Command`'s union. The type system creates an impossible intersection, making the visit method unimplementable.
 
+**Missing abstract method in a `Strategy`** — A `Strategy` that extends an abstract `Template` without implementing all abstract methods. Compile error at the class declaration.
+
 ## Advanced Patterns
 
 ### Parameterized Templates
@@ -255,7 +257,8 @@ All output must conform to this layout:
 
     src/
     └── [namespace]              ← the namespace defined in the domain
-        ├── types.ts             ← all Subject classes and plain interfaces
+        ├── TypesA.ts            ← Subject classes and plain interfaces
+        ├── TypesB.ts            ← Subject classes and plain interfaces
         └── commands/
             ├── FirstCommand.ts  ← Command + its Templates and Strategies
             └── SecondCommand.ts ← Command + its Templates and Strategies
