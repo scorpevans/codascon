@@ -382,20 +382,39 @@ Output complete, compile-safe TypeScript with stub strategy implementations — 
 ## Project Structure
 
 ```
-codascon/                        # monorepo root
+codascon/                          # monorepo root
 ├── packages/
-│   ├── codascon/                # published as "codascon"
+│   ├── codascon/                  # published as "codascon"
 │   │   └── src/
-│   │       └── index.ts         # Subject, Command, Template, Strategy + type machinery
-│   └── odetovibe/               # published as "odetovibe"
+│   │       ├── index.test.ts
+│   │       └── index.ts           # Subject, Command, Template, Strategy + type machinery
+│   └── odetovibe/                 # published as "odetovibe"
 │       └── src/
-│           ├── cli.ts           # bin entry: odetovibe <schema.yaml> --out <dir>
-│           ├── index.ts         # library entry
-│           ├── schema.ts        # YamlConfig type definitions
-│           ├── extract/         # parse YAML → validate → ConfigIndex
-│           ├── transform/       # ConfigIndex → ts-morph AST
-│           └── load/            # ts-morph AST → write files to disk
-└── tsconfig.base.json           # shared compiler options
+│           ├── extract/           # parse YAML → validate → ConfigIndex
+│           │   ├── commands/
+│           │   │   └── validate-entry.ts
+│           │   ├── domain-types.ts
+│           │   ├── index.test.ts
+│           │   └── index.ts
+│           ├── load/              # ts-morph AST → write files to disk
+│           │   ├── commands/
+│           │   │   └── write-file.ts
+│           │   ├── domain-types.ts
+│           │   ├── index.test.ts
+│           │   └── index.ts
+│           ├── transform/         # ConfigIndex → ts-morph AST
+│           │   ├── commands/
+│           │   │   └── emit-ast.ts
+│           │   ├── domain-types.ts
+│           │   ├── index.test.ts
+│           │   └── index.ts
+│           ├── cli.ts             # bin entry: odetovibe <schema.yaml> --out <dir>
+│           ├── extract.yaml       # extract phase domain config
+│           ├── index.ts           # library entry
+│           ├── load.yaml          # load phase domain config
+│           ├── schema.ts          # YamlConfig type definitions
+│           └── transform.yaml     # transform phase domain config
+└── tsconfig.base.json             # shared compiler options
 ```
 
 ## Development
