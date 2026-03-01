@@ -335,7 +335,7 @@ The abstraction tax is real. It pays off when extension happens along the axes t
 
 **Codascon** is particularly well-suited for LLM-assisted ("vibe") coding:
 
-> Bot! Using the **codascon** protocol as described in the [README](https://www.npmjs.com/package/codascon) and [source](https://github.com/scorpevans/codascon/blob/main/packages/codascon/src/index.ts), implement the following domain in TypeScript:
+> Bot! Using the **codascon** protocol as described in the [README](https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/README.md) and [source](https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/src/index.ts), implement the following domain in TypeScript:
 >
 > [your domain description here]
 
