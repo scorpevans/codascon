@@ -252,14 +252,12 @@ The abstraction tax is real. It pays off when extension happens along the axes t
 >
 > All output must conform to this layout:
 >
-> ```
-> src/
-> └── [namespace]              ← the namespace defined in the domain
->     ├── types.ts             ← all Subject classes and plain interfaces
->     └── commands/
->         ├── FirstCommand.ts  ← Command + its Templates and Strategies
->         └── SecondCommand.ts ← Command + its Templates and Strategies
-> ```
+>     src/
+>     └── [namespace]              ← the namespace defined in the domain
+>         ├── types.ts             ← all Subject classes and plain interfaces
+>         └── commands/
+>             ├── FirstCommand.ts  ← Command + its Templates and Strategies
+>             └── SecondCommand.ts ← Command + its Templates and Strategies
 >
 > **Step 4: Implement This Domain**
 >
