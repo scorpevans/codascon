@@ -8,6 +8,14 @@
 
 ## Install
 
+**CLI (global):**
+
+```bash
+npm install -g odetovibe
+```
+
+**Library (local):**
+
 ```bash
 npm install odetovibe
 # or
@@ -17,6 +25,14 @@ pnpm add odetovibe
 Requires [`codascon`](https://www.npmjs.com/package/codascon) as a peer.
 
 ## CLI
+
+Run without installing via `npx`:
+
+```bash
+npx odetovibe schema.yaml --out src/
+```
+
+Or if installed globally:
 
 ```bash
 odetovibe schema.yaml --out src/
