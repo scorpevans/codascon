@@ -8,6 +8,7 @@ jobs:
   publish:
     name: Release
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
       contents: write # to create tags and push changelog commits
       pull-requests: write # to open the Changesets version PR
