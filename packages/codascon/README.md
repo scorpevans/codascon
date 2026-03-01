@@ -136,6 +136,8 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 
 **Duplicate `visitName`** — Two `Subject`s with the same `visitName` in one `Command`'s union. The type system creates an impossible intersection, making the visit method unimplementable.
 
+**Missing abstract method in a `Strategy`** — A `Strategy` that extends an abstract `Template` without implementing all abstract methods. Compile error at the class declaration.
+
 ## Advanced Patterns
 
 ### Parameterized Templates
