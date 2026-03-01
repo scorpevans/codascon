@@ -228,46 +228,44 @@ The abstraction tax is real. It pays off when extension happens along the axes t
 
 **Codascon** is particularly well-suited for LLM-assisted ("vibe") coding:
 
-````markdown
+```markdown
 You are an expert TypeScript architect. Build a new domain using the **codascon** protocol — a strict, double-dispatch visitor framework.
 
 ### Step 1: Understand the Protocol
 
 Read both resources in full before writing any code:
 
-- **README:** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/README.md
-- **SOURCE:** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/src/index.ts
+- README: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/README.md
+- SOURCE: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/src/index.ts
 
 ### Step 2: Study the Reference Implementation
 
 Mimic the file structure and patterns from these real-world files exactly:
 
-- **SUBJECTS:** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/domain-types.ts
-- **COMMAND:** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/commands/validate-entry.ts
-- **SCHEMA:** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/schema.ts
-- **YAML (extract):** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract.yaml
-- **YAML (transform):** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/transform.yaml
-- **YAML (load):** https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/load.yaml
+- SUBJECTS: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/domain-types.ts
+- COMMAND: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/commands/validate-entry.ts
+- SCHEMA: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/schema.ts
+- YAML (extract): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract.yaml
+- YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/transform.yaml
+- YAML (load): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/load.yaml
 
 ### Step 3: Apply These Structural Rules
 
 All output must conform to this layout:
 
-```text
-src/
-└── [namespace]              ← the namespace defined in the domain
-    ├── types.ts             ← all Subject classes and plain interfaces
-    └── commands/
-        ├── FirstCommand.ts  ← Command + its Templates and Strategies
-        └── SecondCommand.ts ← Command + its Templates and Strategies
-```
+    src/
+    └── [namespace]              ← the namespace defined in the domain
+        ├── types.ts             ← all Subject classes and plain interfaces
+        └── commands/
+            ├── FirstCommand.ts  ← Command + its Templates and Strategies
+            └── SecondCommand.ts ← Command + its Templates and Strategies
 
 ### Step 4: Implement This Domain
 
 [INSERT YOUR DOMAIN DESCRIPTION OR YAML SCHEMA HERE]
 
 Output complete, compile-safe TypeScript.
-````
+```
 
 - **Structural rails** — The protocol tells the LLM exactly where new code goes. "Add a `Contractor` subject to `AccessBuildingCommand`" has one unambiguous implementation path.
 - **YAML as prompting surface** — Hand the [**Odetovibe**](https://www.npmjs.com/package/odetovibe) config to the LLM instead of describing changes in prose. Higher fidelity, lower ambiguity.
