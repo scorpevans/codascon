@@ -369,9 +369,9 @@ All output must conform to this layout:
 
 ### Step 4: Implement This Domain
 
-[INSERT YOUR DOMAIN DESCRIPTION OR YAML SCHEMA HERE]
+[INSERT YOUR DOMAIN DESCRIPTION]
 
-Output complete, compile-safe TypeScript.
+Output complete, compile-safe TypeScript with stub strategy implementations — or equivalently, a YAML config in the odetovibe schema format.
 ```
 
 - **Structural rails** — The protocol tells the LLM exactly where new code goes. "Add a `Contractor` subject to `AccessBuildingCommand`" has one unambiguous implementation path.
