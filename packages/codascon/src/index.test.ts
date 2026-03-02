@@ -878,14 +878,13 @@ function testHookSubjectMismatchAtInvocation() {
   };
 }
 
-// ── 14e. Non-literal visitName — compiles but fails at runtime ───
+// ── 14e. Non-literal visitName — compile error at run() call site ─
 //
-//   When visitName is `string` (not a literal), SubjectVisitName returns
-//   `never`, so CommandSubjectStrategies collapses to `{}`.  The `this`
-//   constraint on run() is trivially satisfied — no compile error.
-//   However, at runtime there's no matching method, so dispatch fails.
-//   The SubjectVisitName<BadSubject> → never check in §11 is the
-//   compile-time guard; this test verifies the runtime consequence.
+//   When visitName is `string` (not a literal), WithLiteralVisitNames<CV>
+//   resolves to an impossible structural requirement on run()'s `this`
+//   parameter: { "Error: One or more Subjects...": never }.
+//   Since no Command class has this property, run() becomes uncallable
+//   at the call site — a compile-time error instead of a silent runtime failure.
 
 {
   class DynamicVisitName extends Subject implements Person {
@@ -897,27 +896,12 @@ function testHookSubjectMismatchAtInvocation() {
   class DynamicCommand extends Command<Person, string, string, [DynamicVisitName]> {
     readonly commandName = "dynamic" as const;
   }
-}
-
-function testNonLiteralVisitNameRuntimeError() {
-  class DynamicVisitName extends Subject implements Person {
-    readonly visitName: string = "dynamic";
-    constructor(public readonly name: string) {
-      super();
-    }
-  }
-  class DynamicCommand extends Command<Person, string, string, [DynamicVisitName]> {
-    readonly commandName = "dynamic" as const;
-  }
-  const cmd = new DynamicCommand();
-  let threw = false;
-  try {
-    cmd.run(new DynamicVisitName("x"), "test");
-  } catch {
-    threw = true;
-  }
-  strictEqual(threw, true);
-  console.log("  ✓ 14e: Non-literal visitName — compiles but throws at runtime");
+  const _cmd = new DynamicCommand();
+  const _14e = () => {
+    // @ts-expect-error — DynamicVisitName.visitName is 'string' not a literal;
+    // WithLiteralVisitNames<[DynamicVisitName]> resolves to { "Error: ...": never }
+    _cmd.run(new DynamicVisitName("x"), "test");
+  };
 }
 
 // ── 14f. Wrong return type from visit method ─────────────────────
@@ -1006,11 +990,11 @@ function testCompileTimeConstraints() {
   console.log("  ✓ 14b: Unsupported subject rejected at call site");
   console.log("  ✓ 14c: Template missing hook dependency rejected at implements");
   testHookSubjectMismatchAtInvocation();
+  console.log("  ✓ 14e: Non-literal visitName — run() rejected at call site");
   console.log("  ✓ 14f: Wrong return type from execute rejected at call site");
   console.log("  ✓ 14g: Wrong object type in execute rejected at call site");
   console.log("  ✓ 14h: Non-Subject in CV tuple rejected");
   console.log("  ✓ 14i: Duplicate visitName — conflicting handlers rejected");
-  testNonLiteralVisitNameRuntimeError();
 }
 
 // ═══════════════════════════════════════════════════════════════════

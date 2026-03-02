@@ -2,11 +2,86 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Top Priority: Load Relevant Memories Before Engaging
+
+**At the start of a session, or when first encountering a topic area within a conversation, read the relevant memory topic files before writing any code or forming a plan.**
+
+MEMORY.md is auto-loaded but contains only a concise index. The detail lives in topic files that must be read explicitly.
+
+When to load:
+
+- **New session**: no topic files have been read yet — load all relevant ones before the first task
+- **New topic within a session**: if a task touches an area not yet covered in this conversation, read the relevant file before proceeding
+- **After context compression**: if the conversation has been auto-compressed, earlier reads may have been dropped — reload if the content feels absent
+
+When NOT to reload:
+
+- **Same session, already read**: if the file was read earlier in this conversation, its content is still in context — do not re-read it
+
+This prevents repeating past mistakes (bad patterns already documented) and honours past decisions (architectural choices already recorded).
+
+## Top Priority: Keep This File and Memory Files Current
+
+**Whenever you learn something new — a constraint, a gotcha, a decision, a failed approach — record it immediately** in the right place. Do not wait until the end of a session.
+
+Where it goes:
+
+- **CLAUDE.md** — principles, project structure, publishing
+- **`memory/codascon-architecture.md`** — four primitives, dispatch flow, type safety guarantees, client pattern, internal type machinery, ETL design, YAML schema rules
+- **`memory/typescript-gotchas.md`** — TypeScript type system constraints and failed approaches
+- **`memory/workflows.md`** — pre-approved workflows, exact shell command patterns (commit, PR, push, build, test)
+- **`memory/MEMORY.md`** — concise index only; update when topic files are added or reorganised
+
+If a new topic area emerges that does not fit existing files, create a new topic file, add it to the Memory Organization section in this file, and add a pointer in MEMORY.md.
+
+## Top Priority: Clean Slate Before New Approaches
+
+**Before pivoting to a new implementation approach, always establish a clean slate:**
+
+```bash
+git restore <file>   # revert a specific file
+git restore .        # revert all working-tree changes
+```
+
+Only carry existing changes forward into a new approach if **all of them are directly relevant** to that new approach. Any change that does not serve the new direction must be reverted first. This prevents stale artefacts (dead properties, outdated comments, unused types) from accumulating across failed attempts.
+
+## Top Priority: Honor Past Decisions When Reversing Course
+
+**Before proposing to undo, revert, or change a previous decision, explicitly acknowledge why that decision was made.**
+
+The pattern to follow:
+
+1. **State the original reason** — why was the current approach chosen? What problem was it solving?
+2. **Name the new tension** — what new information, constraint, or trade-off makes the original choice problematic?
+3. **Then propose the change** — only after steps 1 and 2 are stated clearly.
+
+Without step 1, reversals look arbitrary and risk re-introducing the original problem. Without step 2, there is no basis for changing course. Skipping either step leads to circular churn — solving problem A, then undoing it, then rediscovering A.
+
+This applies to: error message formats, type machinery approaches, naming conventions, file structure, API shape, or any other deliberate design decision recorded in this file or in session history.
+
+## Top Priority: Reason Before Acting
+
+**Do not blindly follow instructions.** Before implementing anything non-trivial, reason it through first.
+
+**Step 1: Understand the intention.** An instruction is a means to an end — not the end itself. Before thinking about _how_ to implement, ask _why_: what is the user trying to achieve? Form a concrete guess at the underlying intention. This guess is the lens through which better alternatives become visible. Without it, you optimise within the instruction's frame rather than toward the user's actual goal.
+
+If your guesses at the intention are wildly divergent — the instruction could plausibly mean very different things — that is a reasonable basis to ask for clarification before proceeding.
+
+**Step 2: Reason from that intention.** Once you have a working hypothesis of the goal, ask:
+
+- Is the stated approach the best way to achieve it?
+- Are there hidden costs, edge cases, or better alternatives?
+- Does it conflict with existing architecture or constraints?
+
+**If something seems wrong or suboptimal, push back.** Explain the concern clearly, offer alternatives or your own opinion, and wait for acknowledgement.
+
+**If the user insists after your pushback**, ask one final yes/no confirmation before proceeding — default answer is **no**. Include a concise warning stating exactly why you disagree. Only a clear "yes" from the user moves forward.
+
 ## Project Overview
 
-**codascon** (Code As Config) is a TypeScript framework built around a single idea: when a domain has N entity types and M operations, the compiler should guarantee that every combination is handled — not tests, not runtime checks, the compiler.
+**codascon** is a structural protocol for code organization, in accordance with established design patterns and SOLID principles, and with exhaustive compile-time type checking. When a domain has N entity types and M operations, the compiler guarantees that every combination is handled — not tests, not runtime checks, the compiler.
 
-It achieves this through a structural protocol of three primitives (`Subject`, `Command`, `Template`) and a type machinery layer that converts the protocol's constraints into compile-time errors. The result is exhaustive double-dispatch: adding an entity type without updating every operation is a compile error, not a runtime bug.
+It achieves this through four primitives (`Subject`, `Command`, `Template`, `Strategy`) and a type machinery layer that converts the protocol's constraints into compile-time errors. The result is exhaustive double-dispatch: adding an entity type without updating every operation is a compile error, not a runtime bug.
 
 The runtime footprint is ~10 lines. Everything else is types.
 
@@ -51,167 +126,80 @@ codascon/
     │   ├── tsconfig.json   # composite: true, extends ../../tsconfig.base.json
     │   ├── vitest.config.ts
     │   └── src/
-    │       ├── index.ts        # all exports: Subject, Command, Template + type utilities
+    │       ├── index.ts        # all exports: Subject, Command, Template + type utilities (SubjectVisitName, CommandName, CommandObject, CommandReturn, CommandSubjectUnion)
     │       └── index.test.ts   # full test suite (16 sections, compile-time + runtime)
     └── odetovibe/          # published as "odetovibe" — YAML-to-TypeScript codegen
         ├── package.json    # bin: odetovibe, depends on codascon: workspace:*
         ├── tsconfig.json   # composite: true, references ../codascon
         └── src/
-            ├── cli.ts      # bin entry (#!/usr/bin/env node): YAML → parse → validate → generate
-            ├── index.ts    # library entry: re-exports all modules + schema types
-            ├── schema.ts   # YamlConfigSchema TypeScript type definitions
-            ├── parser/     # parse(yaml: string): YamlConfigSchema
-            ├── generator/  # generate(schema: YamlConfigSchema): GeneratedFile[]
-            └── validator/  # validate(schema: YamlConfigSchema): ValidationResult
+            ├── cli.ts          # bin entry: extract → transform → load pipeline
+            ├── index.ts        # library entry: re-exports all three phases + schema types
+            ├── schema.ts       # YamlConfig type (config instance) + YamlConfigSchema rules
+            ├── extract.yaml    # extract phase domain config
+            ├── transform.yaml  # transform phase domain config
+            ├── load.yaml       # load phase domain config
+            ├── extract/        # phase 1: YAML → ConfigIndex
+            │   ├── domain-types.ts       # Subject classes + ConfigIndex, ValidationResult
+            │   ├── index.ts              # parseYaml(), validateYaml()
+            │   └── commands/
+            │       └── validate-entry.ts # ValidateEntryCommand + 6 validator Templates
+            ├── transform/      # phase 2: ConfigIndex → ts-morph AST
+            │   ├── domain-types.ts       # EmitContext, EmitResult
+            │   ├── index.ts              # emitAst()
+            │   └── commands/
+            │       └── emit-ast.ts       # EmitAstCommand + 6 emitter Templates
+            └── load/           # phase 3: ts-morph AST → disk
+                ├── domain-types.ts       # WriteContext, WriteResult, WriteMode
+                ├── index.ts              # writeFiles()
+                └── commands/
+                    └── write-file.ts     # WriteFileCommand + 3 writer Templates
 ```
 
 Stack: pnpm workspaces · tsc project references · ESM-only (`"type": "module"`) · Vitest 3.x · TypeScript 5.7.x · ESLint 9 flat config · Prettier 3.x
 
-## Core Architecture
-
-### The Three Primitives
-
-**`Subject`** (abstract class)
-
-The entities of the domain — things that _are_ something (`Student`, `Professor`, `Document`). Each Subject declares a unique string literal `visitName` (by convention prefixed with `"resolve"`, e.g., `"resolveStudent"`). This literal is the routing key: it names the method a Command must implement to handle this Subject.
-
-**`Command<B, O, R, CV>`** (abstract class)
-
-The operations of the domain — things that _happen_ (`AccessBuilding`, `CheckoutEquipment`). Each Command must implement one handler method per Subject in its declared union `CV` — the method name matches the Subject's `visitName`. The handler receives the Subject and a context object, inspects both, and returns a `Template` (the execution strategy for this combination).
-
-Generic params: `B` = base type all Subjects share · `O` = context/payload type · `R` = return type (may be `Promise<T>`) · `CV` = tuple of handled Subject types
-
-The `run(subject, object)` method orchestrates dispatch. Its `this` parameter is constrained to the intersection of all required handlers — if any handler is missing, `run` is uncallable at the call site.
-
-**`Template<C, H, CSU>`** (type alias)
-
-The execution contract. A Template combines an `execute(subject, object): R` method with structural properties for any hook Commands it depends on during execution (`CommandHooks<H>`). Templates are typically abstract classes (with concrete Strategy subclasses) or concrete classes when no variation is needed. The `CSU` parameter lets a Template narrow which Subjects it handles — Strategies can further narrow this.
-
-Generic params: `C` = the Command this serves · `H` = tuple of hook Commands (other Commands invoked during execute) · `CSU` = subject union subset (defaults to full union)
-
-### Dispatch Flow
-
-```
-command.run(subject, object)
-  → subject.getCommandStrategy(command, object)
-    → command[subject.visitName](subject, object)   // handler selected by visitName key
-      → returns a Template instance
-  → template.execute(subject, object)
-  → returns R
-```
-
-### Type Safety Guarantees
-
-The type machinery (`CommandSubjectStrategies`, `UnionToIntersection`, `CommandHooks`) enforces these at compile time — no decorators, no runtime reflection:
-
-- **Exhaustive handlers**: Any missing handler method makes `run()` uncallable at the call site
-- **Literal `visitName`**: Non-literal `string` types produce `never` keys, making exhaustiveness impossible to satisfy
-- **Duplicate `visitName`**: Two Subjects with the same `visitName` in one Command's union produce an impossible intersection type for the handler
-- **Hook structural requirement**: Declaring `Template<C, [AuditCommand]>` without an `audit` property fails at the `implements` site
-- **Subject union enforcement**: `run()` rejects Subjects not in the Command's declared union
-- **Return type enforcement**: Handler returning wrong type makes `run()` uncallable
-
-### Key Exported Types
-
-- `SubjectVisitName<S>` – Extracts the `visitName` literal from a Subject (`never` for non-literals)
-- `CommandName<C>` – Extracts the `commandName` literal from a Command
-- `CommandObject<C>` – Extracts the context/payload type `O` from a Command
-- `CommandReturn<C>` – Extracts the return type `R` from a Command
-
-### Internal Type Machinery (`packages/codascon/src/index.ts`)
-
-- `UnionToIntersection<U>` – Converts a union to an intersection; the mechanism behind exhaustiveness checking and duplicate visitName detection
-- `CommandSubjectStrategies<C>` – Computes the full intersection of required handler methods; used as the `this` constraint on `run()`
-- `CommandHooks<H>` – Maps a tuple of hook Commands to required structural properties on a Template, keyed by `commandName`
-- `SubjectUnionVisitors<CSU, H>` – Validates that hook Commands cover the Template's subject union (enforced at invocation site due to TypeScript limitation in constraint position)
-
-## Client Implementation Pattern
-
-```typescript
-// Entities
-class Student extends Subject {
-  readonly visitName = "resolveStudent" as const;
-  constructor(
-    public readonly name: string,
-    public readonly department: string,
-  ) {
-    super();
-  }
-}
-class Professor extends Subject {
-  readonly visitName = "resolveProfessor" as const;
-  constructor(
-    public readonly name: string,
-    public readonly tenured: boolean,
-  ) {
-    super();
-  }
-}
-
-// Operation — handler method names match visitName values
-class AccessCommand extends Command<Person, Building, AccessResult, [Student, Professor]> {
-  readonly commandName = "access" as const;
-
-  resolveStudent(s: Student, b: Readonly<Building>): Template<AccessCommand, [], Student> {
-    return s.department === b.department ? new GrantAccess() : new DenyAccess();
-  }
-  resolveProfessor(p: Professor, b: Readonly<Building>): Template<AccessCommand, [], Professor> {
-    return new GrantAccess();
-  }
-}
-
-// Execution contract (abstract, with Strategy subclasses)
-abstract class AccessTemplate<CSU extends Student | Professor> implements Template<
-  AccessCommand,
-  [AuditCommand],
-  CSU
-> {
-  readonly audit = new AuditCommand();
-  execute(subject: CSU, object: Building): AccessResult {
-    this.audit.run(subject, { action: "access" });
-    return this.doAccess(subject, object);
-  }
-  protected abstract doAccess(subject: CSU, object: Building): AccessResult;
-}
-
-// Concrete strategy
-class GrantAccess extends AccessTemplate<Student | Professor> {
-  protected doAccess(s: Student | Professor, b: Building) {
-    return { granted: true, reason: `${s.name} has access` };
-  }
-}
-```
-
 ## Package Publishing
 
-`codascon` is published to npm. `odetovibe` is not yet published (stubs not implemented).
+Both packages are published to npm.
 
-**`packages/codascon/package.json` key fields:**
+| Package     | Version scheme                                  | npm       |
+| ----------- | ----------------------------------------------- | --------- |
+| `codascon`  | CalVer `yyyy.M.d-alpha` (e.g. `2026.3.1-alpha`) | published |
+| `odetovibe` | CalVer `yyyy.M.d` (e.g. `2026.3.1`)             | published |
+
+Note: `codascon` carries `-alpha` to signal the API is still stabilising; `odetovibe` does not.
+
+**Both `package.json` files share these key fields:**
 
 - `sideEffects: false` — fully tree-shakeable
 - `"type": "module"` — ESM-only
 - `exports` — single `.` export with `import` + `types` conditions
 - `prepublishOnly: "pnpm build && pnpm test"` — build + test gate on publish
-- Version scheme: CalVer `yyyy.M.d-alpha` (e.g. `2026.2.27-alpha`) — valid semver, no leading zeros in month/day
 
-**To publish codascon:**
+**To publish:**
 
 ```bash
-pnpm login                                        # once
+pnpm login                                         # once
 pnpm --filter codascon publish --access public
+pnpm --filter odetovibe publish --access public
 ```
 
-## odetovibe Notes
+## Memory Organization
 
-`odetovibe` is both a **library** (`import { parse, validate, generate } from "odetovibe"`) and a **CLI** (`odetovibe schema.yaml --out src/`). When implementing its build, prefer `tsup` over bare `tsc` — it handles the `#!/usr/bin/env node` shebang, executable bit (`chmod +x`), and library+binary split in one pass. The `parser`, `validator`, and `generator` modules are currently stubs that throw `Error("Not implemented")`.
+All memory files live in `.claude/projects/.../memory/` (user-level, not checked into the repo).
 
-## YAML Schema
+| File                       | Auto-loaded                  | Purpose                                                                                                                                                          |
+| -------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MEMORY.md`                | Yes (truncated at 200 lines) | Concise index — repo structure, key commands, behavioral rules, pointers to topic files                                                                          |
+| `codascon-architecture.md` | No — read on demand          | Four primitives, dispatch flow, type safety guarantees, client implementation pattern, internal type machinery, odetovibe ETL pipeline design, YAML schema rules |
+| `typescript-gotchas.md`    | No — read on demand          | TypeScript type system constraints specific to this codebase, failed approaches not to re-introduce                                                              |
+| `workflows.md`             | No — read on demand          | Pre-approved workflows with exact shell command patterns; single source of truth for commit, PR, push, build, test                                               |
 
-`packages/odetovibe/src/schema.ts` defines the `YamlConfigSchema` type — the declarative vocabulary for describing a codascon domain. Key structural rules:
+**Keep this table current.** When a new topic file is created, add a row here and a pointer in MEMORY.md. When a topic file is removed or renamed, update both places. An out-of-date table defeats the purpose — Claude will not know to look for files it does not know exist.
 
-- Every Subject in a Command's `subjectUnion` must appear in its `dispatch` map
-- `visitName` must be unique within a Command's union and use the `"resolve"` prefix
-- Template `subjectSubset` must be a subset of its Command's `subjectUnion`
-- Strategy `subjectSubset` must be a subset of its parent Template's `subjectSubset`
-- Templates with a non-empty `strategies` map are abstract; those with `strategies: {}` are concrete
-- Strategies may only override hook keys declared by their parent Template
+### Executing Pre-Approved Workflows
+
+Read `workflows.md` before executing any workflow listed there. Then:
+
+- **Ask once** — request permission at the start of the workflow, not before each individual step.
+- **Execute without interruption** — once started, run all steps in sequence without prompting.
+- **Re-ask mid-workflow** if an event forces a deviation from the documented steps — for example: a step fails, an unexpected error requires a recovery action, or completing the workflow would require interleaving steps not listed in the workflow. State what happened, what you propose to do instead, and wait for approval before continuing.
