@@ -213,14 +213,14 @@ Stack: pnpm workspaces · tsc project references · ESM-only (`"type": "module"`
 
 ## Package Publishing
 
-Both packages are published to npm.
+Both packages are published to npm via **Changesets**. Never manually bump versions or run `pnpm publish` directly — always go through the changeset workflow.
 
-| Package     | Version scheme                                  | npm       |
-| ----------- | ----------------------------------------------- | --------- |
-| `codascon`  | CalVer `yyyy.M.d-alpha` (e.g. `2026.3.1-alpha`) | published |
-| `odetovibe` | CalVer `yyyy.M.d` (e.g. `2026.3.1`)             | published |
+| Package     | Version scheme    | npm       |
+| ----------- | ----------------- | --------- |
+| `codascon`  | CalVer `yyyy.M.d` | published |
+| `odetovibe` | CalVer `yyyy.M.d` | published |
 
-Note: `codascon` carries `-alpha` to signal the API is still stabilising; `odetovibe` does not.
+Pre-release suffixes (e.g. `-alpha`, `-beta`) are appended as appropriate. Version scheme is CalVer regardless of suffix.
 
 **Both `package.json` files share these key fields:**
 
@@ -229,13 +229,20 @@ Note: `codascon` carries `-alpha` to signal the API is still stabilising; `odeto
 - `exports` — single `.` export with `import` + `types` conditions
 - `prepublishOnly: "pnpm build && pnpm test"` — build + test gate on publish
 
-**To publish:**
+**To release:**
 
 ```bash
-pnpm login                                         # once
-pnpm --filter codascon publish --access public
-pnpm --filter odetovibe publish --access public
+pnpm changeset   # locally: describe the change (select packages, bump type, summary)
+                 # → commit the generated .changeset/*.md file and merge to main via PR
 ```
+
+The rest is automated by GitHub Actions (`publish.yml`):
+
+1. On merge to `main` with pending changeset files → the `changesets/action` bot opens a `"chore: release packages"` PR that bumps versions and updates the changelog
+2. Merge that PR
+3. On that merge → the bot publishes to npm automatically using the `NPM_TOKEN` secret (no local login or OTP needed)
+
+`pnpm changeset:version` and `pnpm changeset:publish` are only needed for local/manual recovery — the CI handles them in normal flow.
 
 ## Memory Organization
 
