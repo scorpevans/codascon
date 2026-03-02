@@ -26,9 +26,10 @@ This prevents repeating past mistakes (bad patterns already documented) and hono
 
 Where it goes:
 
-- **CLAUDE.md** — principles, workflow rules, project structure, publishing
+- **CLAUDE.md** — principles, project structure, publishing
 - **`memory/codascon-architecture.md`** — four primitives, dispatch flow, type safety guarantees, client pattern, internal type machinery, ETL design, YAML schema rules
 - **`memory/typescript-gotchas.md`** — TypeScript type system constraints and failed approaches
+- **`memory/workflows.md`** — pre-approved workflows, exact shell command patterns (commit, PR, push, build, test)
 - **`memory/MEMORY.md`** — concise index only; update when topic files are added or reorganised
 
 If a new topic area emerges that does not fit existing files, create a new topic file, add it to the Memory Organization section in this file, and add a pointer in MEMORY.md.
@@ -102,23 +103,6 @@ Per-package:
 ```bash
 pnpm --filter codascon test
 pnpm --filter codascon build
-```
-
-## Git Commit Messages
-
-**Do not use `<<'EOF'` (single-quoted heredoc) when the message body contains apostrophes.** The single quotes in `'EOF'` conflict with apostrophes in the message (`Command's`, `run()'s`, etc.), causing a shell parse error: `unexpected EOF while looking for matching '`.
-
-Use `<<\EOF` instead — the backslash-escaped delimiter also suppresses variable expansion with no quoting conflict:
-
-```bash
-git commit -m "$(cat <<\EOF
-feat: message with apostrophes like Command's run()
-
-Body here.
-
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-EOF
-)"
 ```
 
 ## Project Structure
@@ -208,5 +192,14 @@ All memory files live in `.claude/projects/.../memory/` (user-level, not checked
 | `MEMORY.md`                | Yes (truncated at 200 lines) | Concise index — repo structure, key commands, behavioral rules, pointers to topic files                                                                          |
 | `codascon-architecture.md` | No — read on demand          | Four primitives, dispatch flow, type safety guarantees, client implementation pattern, internal type machinery, odetovibe ETL pipeline design, YAML schema rules |
 | `typescript-gotchas.md`    | No — read on demand          | TypeScript type system constraints specific to this codebase, failed approaches not to re-introduce                                                              |
+| `workflows.md`             | No — read on demand          | Pre-approved workflows with exact shell command patterns; single source of truth for commit, PR, push, build, test                                               |
 
 **Keep this table current.** When a new topic file is created, add a row here and a pointer in MEMORY.md. When a topic file is removed or renamed, update both places. An out-of-date table defeats the purpose — Claude will not know to look for files it does not know exist.
+
+### Executing Pre-Approved Workflows
+
+Read `workflows.md` before executing any workflow listed there. Then:
+
+- **Ask once** — request permission at the start of the workflow, not before each individual step.
+- **Execute without interruption** — once started, run all steps in sequence without prompting.
+- **Re-ask mid-workflow** if an event forces a deviation from the documented steps — for example: a step fails, an unexpected error requires a recovery action, or completing the workflow would require interleaving steps not listed in the workflow. State what happened, what you propose to do instead, and wait for approval before continuing.
