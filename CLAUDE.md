@@ -100,6 +100,19 @@ This applies to: error message formats, type machinery approaches, naming conven
 
 The exact patterns for commits, PR creation, push, build, and test are in `workflows.md`. Do not reconstruct them from memory.
 
+## Top Priority: Never Reference Untracked Files
+
+**Consider this on every prompt, before any git action. Never skip for convenience — referencing an untracked file reveals its existence, even if the file itself is never committed.**
+
+**Never reference an untracked file in git or in any tracked file without explicit user approval.** This includes `.gitignore` entries, commit messages, PR titles, PR bodies, code comments, and any other tracked content. Untracked files are untracked for a reason — do not expose that reason in the repository history.
+
+This means:
+
+- Do not add an untracked file to `.gitignore` without explicit approval
+- Do not name an untracked file in a commit message or PR body
+- Do not stage or commit an untracked file without explicit approval
+- If an untracked file appears in `git status` output during a workflow step, ignore it silently
+
 ## Top Priority: Reason Before Acting
 
 **Consider this on every prompt, before taking any action. Never skip for convenience — feeling confident or certain is not a reason to skip this step; it is a signal to apply it more carefully.**
