@@ -213,14 +213,12 @@ Stack: pnpm workspaces · tsc project references · ESM-only (`"type": "module"`
 
 ## Package Publishing
 
-Both packages are published to npm.
+Both packages are published to npm via **Changesets**. Never manually bump versions or run `pnpm publish` directly — always go through the changeset workflow.
 
-| Package     | Version scheme                                  | npm       |
-| ----------- | ----------------------------------------------- | --------- |
-| `codascon`  | CalVer `yyyy.M.d-alpha` (e.g. `2026.3.1-alpha`) | published |
-| `odetovibe` | CalVer `yyyy.M.d` (e.g. `2026.3.1`)             | published |
-
-Note: `codascon` carries `-alpha` to signal the API is still stabilising; `odetovibe` does not.
+| Package     | npm       |
+| ----------- | --------- |
+| `codascon`  | published |
+| `odetovibe` | published |
 
 **Both `package.json` files share these key fields:**
 
@@ -229,13 +227,16 @@ Note: `codascon` carries `-alpha` to signal the API is still stabilising; `odeto
 - `exports` — single `.` export with `import` + `types` conditions
 - `prepublishOnly: "pnpm build && pnpm test"` — build + test gate on publish
 
-**To publish:**
+**To release:**
 
 ```bash
-pnpm login                                         # once
-pnpm --filter codascon publish --access public
-pnpm --filter odetovibe publish --access public
+pnpm login                  # once
+pnpm changeset              # document the changes (prompts for package selection, bump type, summary)
+pnpm changeset:version      # bumps versions in package.json files based on changeset files
+pnpm changeset:publish      # builds + publishes all changed packages
 ```
+
+The `changeset:publish` script (`pnpm build && changeset publish`) runs the full build and publishes all packages whose version has been bumped. Changesets handles the dist-tag automatically based on the version pre-release suffix.
 
 ## Memory Organization
 
