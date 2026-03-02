@@ -232,13 +232,17 @@ Pre-release suffixes (e.g. `-alpha`, `-beta`) are appended as appropriate. Versi
 **To release:**
 
 ```bash
-pnpm login                  # once
-pnpm changeset              # document the changes (prompts for package selection, bump type, summary)
-pnpm changeset:version      # bumps versions in package.json files based on changeset files
-pnpm changeset:publish      # builds + publishes all changed packages
+pnpm changeset   # locally: describe the change (select packages, bump type, summary)
+                 # → commit the generated .changeset/*.md file and merge to main via PR
 ```
 
-The `changeset:publish` script (`pnpm build && changeset publish`) runs the full build and publishes all packages whose version has been bumped. Changesets handles the dist-tag automatically based on the version pre-release suffix.
+The rest is automated by GitHub Actions (`publish.yml`):
+
+1. On merge to `main` with pending changeset files → the `changesets/action` bot opens a `"chore: release packages"` PR that bumps versions and updates the changelog
+2. Merge that PR
+3. On that merge → the bot publishes to npm automatically using the `NPM_TOKEN` secret (no local login or OTP needed)
+
+`pnpm changeset:version` and `pnpm changeset:publish` are only needed for local/manual recovery — the CI handles them in normal flow.
 
 ## Memory Organization
 
