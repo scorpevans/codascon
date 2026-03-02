@@ -25,7 +25,7 @@ command.run(subject, object)
   → returns result
 ```
 
-A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** (strategy) to execute. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
 
 ## Install
 
@@ -64,11 +64,10 @@ class Professor extends Subject {
 }
 ```
 
-### Define a Command with Templates
+### Define a Command
 
 ```typescript
-import { Command } from "codascon";
-import type { Template } from "codascon";
+import { Command, type Template, type CommandSubjectUnion } from "codascon";
 
 interface Building {
   name: string;
@@ -100,17 +99,26 @@ class AccessBuildingCommand extends Command<
 }
 ```
 
-### Define Templates (Strategies)
+### Define a Template and Strategies
 
 ```typescript
-class GrantAccess implements Template<AccessBuildingCommand> {
-  execute(subject: Student | Professor, building: Building): AccessResult {
+// CommandSubjectUnion<C> extracts the subject union from a Command —
+// no need to repeat Student | Professor manually
+abstract class AccessTemplate implements Template<AccessBuildingCommand> {
+  abstract execute(
+    subject: CommandSubjectUnion<AccessBuildingCommand>,
+    building: Building,
+  ): AccessResult;
+}
+
+class GrantAccess extends AccessTemplate {
+  execute(subject: CommandSubjectUnion<AccessBuildingCommand>): AccessResult {
     return { granted: true, reason: `${subject.name} has access` };
   }
 }
 
-class DenyAccess implements Template<AccessBuildingCommand> {
-  execute(subject: Student | Professor, building: Building): AccessResult {
+class DenyAccess extends AccessTemplate {
+  execute(subject: CommandSubjectUnion<AccessBuildingCommand>): AccessResult {
     return { granted: false, reason: `${subject.name} denied` };
   }
 }
@@ -177,16 +185,21 @@ class StudentCheckout extends CheckoutTemplate<Student> {
 `Template`s can declare dependencies on other `Command`s via the `H` parameter:
 
 ```typescript
-class AuditedTemplate implements Template<MyCommand, [AuditCommand, LogCommand]> {
-  readonly audit: AuditCommand; // structural requirement from CommandHooks<H>
-  readonly log: LogCommand; // structural requirement from CommandHooks<H>
-  // ...
+abstract class AuditedTemplate implements Template<MyCommand, [AuditCommand, LogCommand]> {
+  // Instantiated on the Template — shared across all Strategies
+  readonly log = new LogCommand();
+  // Abstract — each Strategy must provide its own instance
+  abstract readonly audit: AuditCommand;
+}
+
+class MyStrategy extends AuditedTemplate {
+  readonly audit = new AuditCommand(); // Strategy provides the abstract hook
 }
 ```
 
-Hooks can be concrete (shared), abstract (`Strategy` provides), overridden, or constructor-injected.
-
 ### Async Commands
+
+Set the return type to `Promise<T>`:
 
 ```typescript
 class AssignParkingCommand extends Command<
@@ -198,6 +211,7 @@ class AssignParkingCommand extends Command<
   /* ... */
 }
 
+// Usage
 const result = await parkingCmd.run(student, lotA);
 ```
 
