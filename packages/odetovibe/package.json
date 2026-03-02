@@ -6,7 +6,7 @@
   "author": "@scorpevans",
   "repository": {
     "type": "git",
-    "url": "https://github.com/scorpevans/codascon.git",
+    "url": "git+https://github.com/scorpevans/codascon.git",
     "directory": "packages/odetovibe"
   },
   "keywords": [
