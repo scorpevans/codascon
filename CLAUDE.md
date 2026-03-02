@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Top Priority: Load Relevant Memories Before Engaging
 
+**Consider this on every prompt, before taking any action. Never skip for convenience — confidence that you already know the content is not a reason to skip this step.**
+
 **At the start of a session, or when first encountering a topic area within a conversation, read the relevant memory topic files before writing any code or forming a plan.**
 
 MEMORY.md is auto-loaded but contains only a concise index. The detail lives in topic files that must be read explicitly.
@@ -22,6 +24,8 @@ This prevents repeating past mistakes (bad patterns already documented) and hono
 
 ## Top Priority: Keep This File and Memory Files Current
 
+**Consider this on every prompt, before ending any task. Never skip for convenience — do not defer recording on the assumption you will remember it later.**
+
 **Whenever you learn something new — a constraint, a gotcha, a decision, a failed approach — record it immediately** in the right place. Do not wait until the end of a session.
 
 Where it goes:
@@ -36,6 +40,8 @@ If a new topic area emerges that does not fit existing files, create a new topic
 
 ## Top Priority: Clean Slate Before New Approaches
 
+**Consider this on every prompt where you pivot approach. Never skip for convenience — do not carry forward changes just because reverting them feels like lost work.**
+
 **Before pivoting to a new implementation approach, always establish a clean slate:**
 
 ```bash
@@ -45,7 +51,34 @@ git restore .        # revert all working-tree changes
 
 Only carry existing changes forward into a new approach if **all of them are directly relevant** to that new approach. Any change that does not serve the new direction must be reverted first. This prevents stale artefacts (dead properties, outdated comments, unused types) from accumulating across failed attempts.
 
+**Before cleaning, all three conditions must be met:**
+
+1. **Verify the work exists elsewhere** — the slate may only be cleaned if the work being discarded is recoverable (committed to a branch, stashed, saved in a file, or documented). Work that exists only in the working tree and has not been saved anywhere must not be silently discarded.
+2. **Notify before cleaning** — state exactly what will be removed and how to recover it (e.g. `git stash pop`, the branch name, the file path).
+3. **If unrecoverable, stop** — if the work cannot be recovered after cleaning, do not proceed. Instead, apply the "Confirm Before Irreversible Actions" principle and wait for explicit confirmation.
+
+## Top Priority: Confirm Before Irreversible Actions
+
+**Consider this on every prompt, before taking any action. Never skip for convenience — do not proceed on the assumption that the user implicitly accepts the loss.**
+
+**Before taking any action that cannot be reversed**, stop and explicitly confirm with the user. This includes but is not limited to:
+
+- Discarding uncommitted changes that are not saved elsewhere (`git restore`, `git reset --hard`, `git clean`)
+- Force-pushing to a shared branch
+- Deleting files, branches, or database records
+- Overwriting content that has no backup
+
+**The confirmation must include:**
+
+1. What will be permanently lost or changed
+2. Why the action is necessary
+3. Whether any recovery path exists
+
+Only proceed after receiving an explicit **yes** from the user.
+
 ## Top Priority: Honor Past Decisions When Reversing Course
+
+**Consider this on every prompt, before proposing any reversal. Never skip for convenience — do not skip the acknowledgement step because the reversal feels obviously correct.**
 
 **Before proposing to undo, revert, or change a previous decision, explicitly acknowledge why that decision was made.**
 
@@ -59,9 +92,17 @@ Without step 1, reversals look arbitrary and risk re-introducing the original pr
 
 This applies to: error message formats, type machinery approaches, naming conventions, file structure, API shape, or any other deliberate design decision recorded in this file or in session history.
 
+## Top Priority: Follow Established Workflows Exactly
+
+**Consider this on every prompt, before executing any git or PR step. Never skip for convenience — believing you already know the pattern is not a reason to skip reading `workflows.md`; it is the most common reason mistakes happen.**
+
+**Before executing any git or PR workflow step, read `workflows.md` first — no exceptions, even when you believe you already know the pattern.** Confidence is the failure mode: rules are violated precisely when they feel unnecessary.
+
+The exact patterns for commits, PR creation, push, build, and test are in `workflows.md`. Do not reconstruct them from memory.
+
 ## Top Priority: Reason Before Acting
 
-**Do not blindly follow instructions.** Before implementing anything non-trivial, reason it through first.
+**Consider this on every prompt, before taking any action. Never skip for convenience — feeling confident or certain is not a reason to skip this step; it is a signal to apply it more carefully.**
 
 **Step 1: Understand the intention.** An instruction is a means to an end — not the end itself. Before thinking about _how_ to implement, ask _why_: what is the user trying to achieve? Form a concrete guess at the underlying intention. This guess is the lens through which better alternatives become visible. Without it, you optimise within the instruction's frame rather than toward the user's actual goal.
 
