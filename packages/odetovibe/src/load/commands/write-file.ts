@@ -35,7 +35,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { format as prettierFormat } from "prettier";
+import { format as prettierFormat, resolveConfig as prettierResolveConfig } from "prettier";
 import { Project, IndentationText } from "ts-morph";
 import type {
   SourceFile,
@@ -102,7 +102,8 @@ const FALLBACK_FILTERED_CODES = new Set([
  */
 async function formatCode(code: string, filepath: string): Promise<string> {
   try {
-    return await prettierFormat(code, { filepath });
+    const config = await prettierResolveConfig(filepath);
+    return await prettierFormat(code, { ...config, filepath });
   } catch {
     return code;
   }
@@ -149,9 +150,15 @@ function checkDiagnostics(text: string, targetFilePath: string): string[] {
     const project = new Project({
       tsConfigFilePath,
       skipAddingFilesFromTsConfig: true,
-      compilerOptions: { composite: false, declaration: false, declarationMap: false },
+      compilerOptions: {
+        composite: false,
+        declaration: false,
+        declarationMap: false,
+      },
     });
-    const sf = project.createSourceFile(targetFilePath, text, { overwrite: true });
+    const sf = project.createSourceFile(targetFilePath, text, {
+      overwrite: true,
+    });
     return project
       .getPreEmitDiagnostics()
       .filter(
@@ -413,7 +420,9 @@ function mergeFile(generatedText: string, existingContent: string): string {
 
   const project = new Project({
     useInMemoryFileSystem: true,
-    manipulationSettings: { indentationText: detectIndentation(existingContent) },
+    manipulationSettings: {
+      indentationText: detectIndentation(existingContent),
+    },
   });
   const existing = project.createSourceFile("file.ts", existingContent);
 
@@ -622,7 +631,8 @@ class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
     }
 
     const existingContent = fs.readFileSync(outputPath, "utf-8");
-    const finalText = mergeFile(generatedText, existingContent);
+    const mergedText = mergeFile(generatedText, existingContent);
+    const finalText = await formatCode(mergedText, outputPath);
     const compileErrors = checkDiagnostics(finalText, outputPath);
     if (compileErrors.length > 0) return { path: outputPath, created: false, compileErrors };
     fs.writeFileSync(outputPath, finalText, "utf-8");
@@ -666,7 +676,8 @@ class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntr
       return { path: altPath, created: true, conflicted: true };
     }
 
-    const finalText = mergeFile(generatedText, existingContent);
+    const mergedText = mergeFile(generatedText, existingContent);
+    const finalText = await formatCode(mergedText, outputPath);
     const compileErrors = checkDiagnostics(finalText, outputPath);
     if (compileErrors.length > 0) return { path: outputPath, created: false, compileErrors };
     fs.writeFileSync(outputPath, finalText, "utf-8");
