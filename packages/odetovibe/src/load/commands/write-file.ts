@@ -35,7 +35,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { format as prettierFormat } from "prettier";
+import { format as prettierFormat, resolveConfig as prettierResolveConfig } from "prettier";
 import { Project, IndentationText } from "ts-morph";
 import type {
   SourceFile,
@@ -102,7 +102,8 @@ const FALLBACK_FILTERED_CODES = new Set([
  */
 async function formatCode(code: string, filepath: string): Promise<string> {
   try {
-    return await prettierFormat(code, { filepath });
+    const config = await prettierResolveConfig(filepath);
+    return await prettierFormat(code, { ...config, filepath });
   } catch {
     return code;
   }
