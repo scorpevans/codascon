@@ -61,7 +61,11 @@ function ensureTypeImport(sf: SourceFile, moduleSpecifier: string, name: string)
       decl.addNamedImport(name);
     }
   } else {
-    sf.addImportDeclaration({ moduleSpecifier, namedImports: [name], isTypeOnly: true });
+    sf.addImportDeclaration({
+      moduleSpecifier,
+      namedImports: [name],
+      isTypeOnly: true,
+    });
   }
 }
 
@@ -142,7 +146,11 @@ class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEnt
     const sf = getOrCreate(object.project, filePath);
     ensureValueImport(sf, "codascon", "Subject");
 
-    const cls = sf.addClass({ name: subject.key, isExported: true, extends: "Subject" });
+    const cls = sf.addClass({
+      name: subject.key,
+      isExported: true,
+      extends: "Subject",
+    });
     cls.addProperty({
       name: "visitName",
       isReadonly: true,
@@ -225,7 +233,10 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
       const visitName = subjectEntry.config.visitName;
       const method = cls.addMethod({ name: visitName });
       method.addParameter({ name: "subject", type: subjectRef });
-      method.addParameter({ name: "object", type: `Readonly<${config.objectType}>` });
+      method.addParameter({
+        name: "object",
+        type: `Readonly<${config.objectType}>`,
+      });
       method.setReturnType(`Template<${key}, [], ${subjectRef}>`);
       method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
     }
@@ -437,7 +448,11 @@ class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry
       ? `${templateKey}<${subsetUnion}>`
       : templateKey;
 
-    const cls = sf.addClass({ name: key, isExported: true, extends: extendsClause });
+    const cls = sf.addClass({
+      name: key,
+      isExported: true,
+      extends: extendsClause,
+    });
 
     for (const [propName, cmdRef] of hookOverrides) {
       cls.addProperty({

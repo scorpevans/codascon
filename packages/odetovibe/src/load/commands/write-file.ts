@@ -149,9 +149,15 @@ function checkDiagnostics(text: string, targetFilePath: string): string[] {
     const project = new Project({
       tsConfigFilePath,
       skipAddingFilesFromTsConfig: true,
-      compilerOptions: { composite: false, declaration: false, declarationMap: false },
+      compilerOptions: {
+        composite: false,
+        declaration: false,
+        declarationMap: false,
+      },
     });
-    const sf = project.createSourceFile(targetFilePath, text, { overwrite: true });
+    const sf = project.createSourceFile(targetFilePath, text, {
+      overwrite: true,
+    });
     return project
       .getPreEmitDiagnostics()
       .filter(
@@ -413,7 +419,9 @@ function mergeFile(generatedText: string, existingContent: string): string {
 
   const project = new Project({
     useInMemoryFileSystem: true,
-    manipulationSettings: { indentationText: detectIndentation(existingContent) },
+    manipulationSettings: {
+      indentationText: detectIndentation(existingContent),
+    },
   });
   const existing = project.createSourceFile("file.ts", existingContent);
 
@@ -622,7 +630,8 @@ class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
     }
 
     const existingContent = fs.readFileSync(outputPath, "utf-8");
-    const finalText = mergeFile(generatedText, existingContent);
+    const mergedText = mergeFile(generatedText, existingContent);
+    const finalText = await formatCode(mergedText, outputPath);
     const compileErrors = checkDiagnostics(finalText, outputPath);
     if (compileErrors.length > 0) return { path: outputPath, created: false, compileErrors };
     fs.writeFileSync(outputPath, finalText, "utf-8");
@@ -666,7 +675,8 @@ class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntr
       return { path: altPath, created: true, conflicted: true };
     }
 
-    const finalText = mergeFile(generatedText, existingContent);
+    const mergedText = mergeFile(generatedText, existingContent);
+    const finalText = await formatCode(mergedText, outputPath);
     const compileErrors = checkDiagnostics(finalText, outputPath);
     if (compileErrors.length > 0) return { path: outputPath, created: false, compileErrors };
     fs.writeFileSync(outputPath, finalText, "utf-8");
