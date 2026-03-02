@@ -215,10 +215,12 @@ Stack: pnpm workspaces · tsc project references · ESM-only (`"type": "module"`
 
 Both packages are published to npm via **Changesets**. Never manually bump versions or run `pnpm publish` directly — always go through the changeset workflow.
 
-| Package     | npm       |
-| ----------- | --------- |
-| `codascon`  | published |
-| `odetovibe` | published |
+| Package     | Version scheme    | npm       |
+| ----------- | ----------------- | --------- |
+| `codascon`  | CalVer `yyyy.M.d` | published |
+| `odetovibe` | CalVer `yyyy.M.d` | published |
+
+Pre-release suffixes (e.g. `-alpha`, `-beta`) are appended as appropriate. Version scheme is CalVer regardless of suffix.
 
 **Both `package.json` files share these key fields:**
 
