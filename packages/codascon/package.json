@@ -33,10 +33,18 @@
   },
   "sideEffects": false,
   "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
@@ -48,13 +56,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && tsup",
+    "build:cjs": "tsup",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",
+    "tsup": "^8.0.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"
   }
