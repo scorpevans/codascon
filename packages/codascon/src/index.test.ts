@@ -808,11 +808,11 @@ function testMultipleCommandsSameSubjects() {
 
 // ── 14d. Hook command that doesn't visit the subject union ───────
 //
-//   Template<C, H, CSU> declares `H extends AnyCommand[] & SubjectUnionVisitors<CSU, H>`.
+//   Template<C, H, SU> declares `H extends AnyCommand[] & SubjectUnionVisitors<SU, H>`.
 //   This constraint is semantically correct but TypeScript can't enforce it
 //   at the type alias instantiation site: `CommandSubjectUnion<H[K]>` uses
-//   `infer CV` on a class type inside a constraint position, which resolves
-//   to `any`, making `CSU extends any` always true.
+//   `infer CSU` on a class type inside a constraint position, which resolves
+//   to `any`, making `SU extends any` always true.
 //
 //   Enforcement instead happens at TWO other sites:
 //     1. `implements` — CommandHooks<H> requires the hook as a structural property
@@ -880,7 +880,7 @@ function testHookSubjectMismatchAtInvocation() {
 
 // ── 14e. Non-literal visitName — compile error at run() call site ─
 //
-//   When visitName is `string` (not a literal), WithLiteralVisitNames<CV>
+//   When visitName is `string` (not a literal), WithLiteralVisitNames<CSU>
 //   resolves to an impossible structural requirement on run()'s `this`
 //   parameter: { "Error: One or more Subjects...": never }.
 //   Since no Command class has this property, run() becomes uncallable
@@ -950,7 +950,7 @@ function testHookSubjectMismatchAtInvocation() {
   }
 
   // @ts-expect-error — NotASubject doesn't extend Subject, so [NotASubject]
-  // doesn't satisfy CV extends (B & Subject)[]
+  // doesn't satisfy CSU extends (B & Subject)[]
   class BadSubjectCommand extends Command<{}, string, string, [NotASubject]> {
     readonly commandName = "badSubject" as const;
     resolveNotASubject() {
@@ -993,7 +993,7 @@ function testCompileTimeConstraints() {
   console.log("  ✓ 14e: Non-literal visitName — run() rejected at call site");
   console.log("  ✓ 14f: Wrong return type from execute rejected at call site");
   console.log("  ✓ 14g: Wrong object type in execute rejected at call site");
-  console.log("  ✓ 14h: Non-Subject in CV tuple rejected");
+  console.log("  ✓ 14h: Non-Subject in CSU tuple rejected");
   console.log("  ✓ 14i: Duplicate visitName — conflicting handlers rejected");
 }
 

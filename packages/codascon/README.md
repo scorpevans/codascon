@@ -176,23 +176,23 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 A `Template` can leave its subject union as a type parameter, letting `Strategy` classes narrow which `Subject`s they handle:
 
 ```typescript
-abstract class CheckoutTemplate<CSU extends Student | Professor> implements Template<
+abstract class CheckoutTemplate<SU extends Student | Professor> implements Template<
   CheckoutCmd,
   [AccessBuildingCommand],
-  CSU
+  SU
 > {
   readonly accessBuilding: AccessBuildingCommand;
   constructor(cmd: AccessBuildingCommand) {
     this.accessBuilding = cmd;
   }
 
-  execute(subject: CSU, equipment: Equipment): CheckoutResult {
+  execute(subject: SU, equipment: Equipment): CheckoutResult {
     const access = this.accessBuilding.run(subject, equipmentBuilding);
     if (!access.granted) return deny(access.reason);
     return this.computeTerms(subject, equipment);
   }
 
-  protected abstract computeTerms(subject: CSU, eq: Equipment): CheckoutResult;
+  protected abstract computeTerms(subject: SU, eq: Equipment): CheckoutResult;
 }
 
 // Strategy narrows to Student only

@@ -237,10 +237,10 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: AbstractTemplateEmitter
 //
-// Emits: export abstract class FooTemplate<CSU extends S1 | S2>
-//          implements Template<FooCommand, [HookCmd], CSU> {
+// Emits: export abstract class FooTemplate<SU extends S1 | S2>
+//          implements Template<FooCommand, [HookCmd], SU> {
 //          readonly hookCmd = new HookCmd(); // @odetovibe-generated
-//          abstract execute(subject: CSU, object: Readonly<O>): R;
+//          abstract execute(subject: SU, object: Readonly<O>): R;
 //        }
 // Target: <namespace>/commands/<parent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
@@ -282,13 +282,13 @@ class AbstractTemplateEmitter implements Template<EmitAstCommand, [], AbstractTe
     }
 
     const hooksParam = hookTypes.length > 0 ? `[${hookTypes.join(", ")}]` : "[]";
-    const subjectParam = config.isParameterized ? "CSU" : subsetUnion;
+    const subjectParam = config.isParameterized ? "SU" : subsetUnion;
 
     const cls = sf.addClass({ name: key, isAbstract: true, isExported: true });
 
     if (config.isParameterized) {
-      cls.addTypeParameter({ name: "CSU", constraint: subsetUnion });
-      cls.addImplements(`Template<${commandKey}, ${hooksParam}, CSU>`);
+      cls.addTypeParameter({ name: "SU", constraint: subsetUnion });
+      cls.addImplements(`Template<${commandKey}, ${hooksParam}, SU>`);
     } else {
       cls.addImplements(`Template<${commandKey}, ${hooksParam}, ${subsetUnion}>`);
     }

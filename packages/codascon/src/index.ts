@@ -42,7 +42,7 @@
  *   uncallable at the call site.
  *
  * - **Subject union enforcement**: `run` only accepts Subjects that are in the
- *   Command's declared subject union (`CV`). Passing an unsupported Subject is
+ *   Command's declared subject union (`CSU`). Passing an unsupported Subject is
  *   a compile error.
  *
  * - **Literal visitName**: `SubjectVisitName<S>` rejects non-literal `string`
@@ -59,9 +59,9 @@
  *   to have a property for each hook Command, keyed by `commandName`. This is
  *   enforced structurally at `implements` sites.
  *
- * - **Hook subject coverage**: `SubjectUnionVisitors<CSU, H>` constrains the `H`
+ * - **Hook subject coverage**: `SubjectUnionVisitors<SU, H>` constrains the `H`
  *   parameter on `Template` to only accept hook Commands whose subject union
- *   covers the Template's CSU. Note: due to TypeScript limitations with
+ *   covers the Template's SU. Note: due to TypeScript limitations with
  *   conditional type inference in constraint position, this constraint is not
  *   enforced at the type alias instantiation site. Instead, enforcement occurs
  *   at the hook invocation site — calling `hookCmd.run(subject)` where the
@@ -72,17 +72,17 @@
  *
  * **Template as abstract class with Strategies:**
  * ```ts
- * abstract class AccessTemplate<CSU extends Student | Professor>
- *   implements Template<AccessCommand, [AuditCommand], CSU>
+ * abstract class AccessTemplate<SU extends Student | Professor>
+ *   implements Template<AccessCommand, [AuditCommand], SU>
  * {
  *   abstract readonly audit: AuditCommand;  // hook — instantiated by Strategy
  *
- *   execute(subject: CSU, object: Building): AccessResult {
+ *   execute(subject: SU, object: Building): AccessResult {
  *     this.audit.run(subject, { action: "access" });
  *     return this.doAccess(subject, object);
  *   }
  *
- *   protected abstract doAccess(subject: CSU, object: Building): AccessResult;
+ *   protected abstract doAccess(subject: SU, object: Building): AccessResult;
  * }
  *
  * class GrantAccess extends AccessTemplate<Student> {
@@ -97,8 +97,8 @@
  * - Overridden by the Strategy
  * - Injected via constructor during strategy resolution in the Command's visit method
  *
- * **CSU parameterization:**
- * A Template can parameterize its CSU (`T<CSU extends ...>`), allowing Strategies
+ * **SU parameterization:**
+ * A Template can parameterize its SU (`T<SU extends ...>`), allowing Strategies
  * to narrow which Subjects they handle. This does not break LSP — a
  * `GrantAccess extends AccessTemplate<Student>` is a valid strategy for any
  * dispatch that routes Students to it.
@@ -118,7 +118,7 @@
  * Returns `never` if the Subject's `visitName` is the wide `string` type
  * rather than a string literal. This prevents non-literal visitNames from
  * participating in dispatch — they would produce `never`-keyed visit methods
- * in `Visit<C, CSU>`, making `CommandSubjectStrategies` impossible to satisfy.
+ * in `Visit<C, SU>`, making `CommandSubjectStrategies` impossible to satisfy.
  *
  * @example
  * class Dog extends Subject { readonly visitName = "resolveDog" as const; }
@@ -183,30 +183,30 @@ export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : n
 type AnyCommand = Command<any, any, any, any>;
 
 /**
- * Extracts the Subject union from a Command's `CV` tuple parameter.
+ * Extracts the Subject union from a Command's `CSU` tuple parameter.
  *
  * Given `Command<B, O, R, [Student, Professor]>`, produces `Student | Professor`.
  * This is the set of Subjects the Command can dispatch to.
  *
  * Note: when used inside type parameter constraints (e.g. in `SubjectUnionVisitors`),
- * the `infer CV` may resolve to `any` for class types, causing the conditional
+ * the `infer CSU` may resolve to `any` for class types, causing the conditional
  * to produce `any` rather than the expected union. This is a TypeScript limitation
  * that affects constraint enforcement but not runtime behavior.
  */
 export type CommandSubjectUnion<C> =
-  C extends Command<any, any, any, infer CV> ? CV[number] : never;
+  C extends Command<any, any, any, infer CSU> ? CSU[number] : never;
 
 /**
  * Validates that each Command in the hook tuple `H` has a subject union
- * that covers `CSU` (the Template's subject union).
+ * that covers `SU` (the Template's subject union).
  *
- * For each position `K` in `H`, checks whether `CSU` extends
+ * For each position `K` in `H`, checks whether `SU` extends
  * `CommandSubjectUnion<H[K]>`. If the hook Command doesn't visit all
- * Subjects in CSU, that position resolves to `never`, making
- * `H extends AnyCommand[] & SubjectUnionVisitors<CSU, H>` fail.
+ * Subjects in SU, that position resolves to `never`, making
+ * `H extends AnyCommand[] & SubjectUnionVisitors<SU, H>` fail.
  *
  * **TypeScript limitation:** This constraint is semantically correct but
- * is not enforced at the `Template<C, H, CSU>` instantiation site due to
+ * is not enforced at the `Template<C, H, SU>` instantiation site due to
  * `CommandSubjectUnion<H[K]>` resolving to `any` in constraint position.
  * Enforcement instead occurs at two other sites:
  *
@@ -215,15 +215,15 @@ export type CommandSubjectUnion<C> =
  * 2. **Invocation** — `hookCmd.run(subject)` checks the hook Command's own
  *    `this & CommandSubjectStrategies` constraint, catching subject mismatches.
  */
-type SubjectUnionVisitors<CSU extends Subject, H extends AnyCommand[]> = {
-  [K in keyof H]: CSU extends CommandSubjectUnion<H[K]> ? H[K] : never;
+type SubjectUnionVisitors<SU extends Subject, H extends AnyCommand[]> = {
+  [K in keyof H]: SU extends CommandSubjectUnion<H[K]> ? H[K] : never;
 };
 
 /**
  * Defines the signature of a single visit method on a Command.
  *
- * For a given Command `C` and Subject type `CSU`, produces an object type
- * with a single method keyed by `SubjectVisitName<CSU>`. The method receives
+ * For a given Command `C` and Subject type `SU`, produces an object type
+ * with a single method keyed by `SubjectVisitName<SU>`. The method receives
  * the Subject and a `Readonly` view of the object, and returns a Template.
  *
  * The object is `Readonly` in the visit method signature to signal that
@@ -231,19 +231,19 @@ type SubjectUnionVisitors<CSU extends Subject, H extends AnyCommand[]> = {
  * `execute`.
  *
  * The return type erases hooks to `any[]` — hook validation occurs at the
- * Template implementation site (`implements Template<C, H, CSU>`), not at
+ * Template implementation site (`implements Template<C, H, SU>`), not at
  * the visit-method return boundary. This avoids requiring visit methods to
  * declare the full hook parameterization.
  *
  * @example
- * // For Command<Person, Building, Result, [Student, Professor]> and CSU = Student:
+ * // For Command<Person, Building, Result, [Student, Professor]> and SU = Student:
  * // Visit<C, Student> = { resolveStudent: (s: Student, o: Readonly<Building>) => Template<C, any[], Student> }
  */
-type Visit<C extends AnyCommand, CSU extends CommandSubjectUnion<C>> = {
-  [K in SubjectVisitName<CSU>]: (
-    subject: CSU,
+type Visit<C extends AnyCommand, SU extends CommandSubjectUnion<C>> = {
+  [K in SubjectVisitName<SU>]: (
+    subject: SU,
     object: Readonly<CommandObject<C>>,
-  ) => Template<C, any[], CSU>;
+  ) => Template<C, any[], SU>;
 };
 
 /**
@@ -264,7 +264,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
 /**
  * Computes the full set of visit methods a Command must implement.
  *
- * Maps each Subject in the Command's `CV` tuple to a `Visit<C, Subject>` type,
+ * Maps each Subject in the Command's `CSU` tuple to a `Visit<C, Subject>` type,
  * collects them into a union via `[number]` indexing, then intersects them
  * via `UnionToIntersection`. The result is an object type with one method per
  * Subject, each keyed by that Subject's `visitName`.
@@ -273,7 +273,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * If the Command subclass is missing any visit method, the `this` constraint
  * is unsatisfied and `run` becomes uncallable at the call site.
  *
- * When any Subject in CV has a non-literal `visitName` (i.e. typed as `string`
+ * When any Subject in CSU has a non-literal `visitName` (i.e. typed as `string`
  * rather than a string literal), the `this` constraint becomes an impossible
  * structural requirement — `run` is uncallable at the call site with a
  * descriptive property name explaining the issue.
@@ -286,13 +286,13 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * // }
  */
 type CommandSubjectStrategies<C extends AnyCommand> =
-  C extends Command<any, any, any, infer CV>
-    ? UnionToIntersection<{ [K in keyof CV]: Visit<C, CV[K]> }[number]>
+  C extends Command<any, any, any, infer CSU>
+    ? UnionToIntersection<{ [K in keyof CSU]: Visit<C, CSU[K]> }[number]>
     : never;
 
 /**
  * Produces an impossible structural requirement on `run()`'s `this` parameter
- * when any Subject in `CV` declares `visitName` as the wide `string` type.
+ * when any Subject in `CSU` declares `visitName` as the wide `string` type.
  *
  * When all `visitName` values are literals this resolves to `Record<never, never>`
  * (i.e. `{}`), which is trivially satisfied by any type.
@@ -303,18 +303,18 @@ type CommandSubjectStrategies<C extends AnyCommand> =
  * becomes uncallable at the call site — a compile-time error with a clear message.
  *
  * The `any` case must short-circuit to `Record<never, never>` (via `0 extends
- * 1 & CV[number]`) to preserve AnyCommand structural compatibility. Without it,
+ * 1 & CSU[number]`) to preserve AnyCommand structural compatibility. Without it,
  * `string extends any["visitName"]` is `true`, which would make AnyCommand's
  * `run()` uncallable and break all Template hook constraints.
  */
 type WidenedVisitNameError =
   "visitName must be a literal. Fix: readonly visitName = 'resolveFoo' as const";
 
-type WithLiteralVisitNames<CV extends Subject[]> =
+type WithLiteralVisitNames<CSU extends Subject[]> =
   // IsAny guard: 0 extends (1 & T) is only true when T is `any`.
-  0 extends 1 & CV[number]
+  0 extends 1 & CSU[number]
     ? Record<never, never>
-    : string extends CV[number]["visitName"]
+    : string extends CSU[number]["visitName"]
       ? { [K in WidenedVisitNameError]: never }
       : Record<never, never>;
 
@@ -348,20 +348,20 @@ type CommandHooks<H extends AnyCommand[]> = {
  * Subclasses must:
  *
  * 1. Declare `readonly commandName` as a string literal (used for hook keying).
- * 2. Implement one visit method per Subject in `CV`, named after that Subject's
+ * 2. Implement one visit method per Subject in `CSU`, named after that Subject's
  *    `visitName`. Each visit method receives the Subject and the object, and
  *    returns a Template (strategy) to execute.
  *
  * ## Generic Parameters
  *
- * - `B` — Base type. All Subjects in `CV` must extend `B & Subject`.
+ * - `B` — Base type. All Subjects in `CSU` must extend `B & Subject`.
  *         Allows constraining Subjects to share a common interface
  *         (e.g. `Person`, `Node`).
  * - `O` — Object type. The context/payload passed to both visit methods
  *         and `execute`. Available during strategy selection and execution.
  * - `R` — Return type. The result of `execute` and `run`. Use `Promise<T>`
  *         for async Commands.
- * - `CV` — Subject tuple. The ordered list of Subject types this Command
+ * - `CSU` — Subject tuple. The ordered list of Subject types this Command
  *          dispatches to. Each element must extend `B & Subject`. The tuple
  *          drives exhaustive visit method checking.
  *
@@ -408,11 +408,11 @@ type CommandHooks<H extends AnyCommand[]> = {
  *
  * const result = accessCmd.run(student, building);
  */
-export abstract class Command<B, O, R, CV extends (B & Subject)[]> {
+export abstract class Command<B, O, R, CSU extends (B & Subject)[]> {
   abstract readonly commandName: string;
 
-  run<T extends CommandSubjectUnion<Command<B, O, R, CV>>>(
-    this: this & CommandSubjectStrategies<Command<B, O, R, CV>> & WithLiteralVisitNames<CV>,
+  run<T extends CommandSubjectUnion<Command<B, O, R, CSU>>>(
+    this: this & CommandSubjectStrategies<Command<B, O, R, CSU>> & WithLiteralVisitNames<CSU>,
     subject: T,
     object: O,
   ): R {
@@ -453,7 +453,7 @@ export abstract class Command<B, O, R, CV extends (B & Subject)[]> {
  * binding on the Command, allowing visit methods to access Command
  * instance state via `this`.
  *
- * The `this` parameter constraint (`this & CSU`) ensures the Subject
+ * The `this` parameter constraint (`this & SU`) ensures the Subject
  * is part of the Command's subject union. This is automatically satisfied
  * during normal dispatch.
  *
@@ -469,12 +469,12 @@ export abstract class Command<B, O, R, CV extends (B & Subject)[]> {
 export abstract class Subject {
   abstract readonly visitName: string;
 
-  getCommandStrategy<C extends AnyCommand, CSU extends CommandSubjectUnion<C>>(
-    this: this & CSU,
-    command: Visit<C, CSU>,
+  getCommandStrategy<C extends AnyCommand, SU extends CommandSubjectUnion<C>>(
+    this: this & SU,
+    command: Visit<C, SU>,
     object: CommandObject<C>,
-  ): Template<C, any[], CSU> {
-    const methodName = this.visitName as SubjectVisitName<CSU>;
+  ): Template<C, any[], SU> {
+    const methodName = this.visitName as SubjectVisitName<SU>;
     return command[methodName](this, object);
   }
 }
@@ -508,14 +508,14 @@ export abstract class Subject {
  *         The hooks are part of the Template's contract — they are not chosen
  *         by Strategies.
  *
- * - `CSU` — Command Subject Union. The subset of `C`'s subject union that this
+ * - `SU` — Command Subject Union. The subset of `C`'s subject union that this
  *          Template handles. Defaults to the full union (`CommandSubjectUnion<C>`).
  *
  *          **This CAN be parameterized** on the Template class, allowing
  *          Strategies to narrow which Subjects they handle:
  *          ```ts
- *          abstract class AccessTemplate<CSU extends Student | Professor>
- *            implements Template<AccessCmd, [AuditCmd], CSU> { ... }
+ *          abstract class AccessTemplate<SU extends Student | Professor>
+ *            implements Template<AccessCmd, [AuditCmd], SU> { ... }
  *
  *          class GrantAccess extends AccessTemplate<Student> { ... }
  *          ```
@@ -529,8 +529,8 @@ export abstract class Subject {
  *
  * **Abstract Template with Strategies:**
  * ```ts
- * abstract class AccessTemplate<CSU extends Student | Professor>
- *   implements Template<AccessCmd, [AuditCmd], CSU>
+ * abstract class AccessTemplate<SU extends Student | Professor>
+ *   implements Template<AccessCmd, [AuditCmd], SU>
  * {
  *   // Hook — concrete (shared across Strategies)
  *   readonly audit = new AuditCommand();
@@ -538,11 +538,11 @@ export abstract class Subject {
  *   // Or abstract — each Strategy provides its own
  *   // abstract readonly audit: AuditCommand;
  *
- *   execute(subject: CSU, object: Building): AccessResult {
+ *   execute(subject: SU, object: Building): AccessResult {
  *     this.audit.run(subject, { action: "access" });
  *     return this.doAccess(subject, object);
  *   }
- *   protected abstract doAccess(subject: CSU, object: Building): AccessResult;
+ *   protected abstract doAccess(subject: SU, object: Building): AccessResult;
  * }
  *
  * class GrantAccess extends AccessTemplate<Student> {
@@ -579,8 +579,8 @@ export abstract class Subject {
  * a class implementing `Template<C, [AuditCmd]>` without an `audit` property
  * will fail to compile.
  *
- * The `SubjectUnionVisitors<CSU, H>` constraint on `H` is semantically correct
- * (each hook Command should visit all Subjects in CSU) but is not enforced at
+ * The `SubjectUnionVisitors<SU, H>` constraint on `H` is semantically correct
+ * (each hook Command should visit all Subjects in SU) but is not enforced at
  * the type alias instantiation site due to a TypeScript limitation. Instead,
  * enforcement occurs when the hook is actually invoked in `execute` — calling
  * `this.audit.run(subject)` where `subject` is outside the hook's union
@@ -588,8 +588,8 @@ export abstract class Subject {
  */
 export type Template<
   C extends AnyCommand,
-  H extends AnyCommand[] & SubjectUnionVisitors<CSU, H> = [],
-  CSU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
+  H extends AnyCommand[] & SubjectUnionVisitors<SU, H> = [],
+  SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
 > = CommandHooks<H> & {
-  execute<T extends CSU>(subject: T, object: CommandObject<C>): CommandReturn<C>;
+  execute<T extends SU>(subject: T, object: CommandObject<C>): CommandReturn<C>;
 };
