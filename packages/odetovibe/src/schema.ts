@@ -202,7 +202,7 @@ export type DomainType = {
 /**
  * An operation that can be performed on Subjects.
  *
- * Maps directly to a class extending `Command<B, O, R, CV>` in the
+ * Maps directly to a class extending `Command<B, O, R, CSU>` in the
  * framework. The Command's visit methods (one per Subject in the union)
  * are not declared here — they are derived from `subjectUnion` entries
  * and their `visitName` values. The `dispatch` map specifies which
@@ -227,7 +227,7 @@ export type DomainType = {
  *                            `execute` and `run`. Use `Promise<T>` for
  *                            async Commands.
  *
- * @property subjectUnion   — The `CV` tuple. References to domain types
+ * @property subjectUnion   — The `CSU` tuple. References to domain types
  *                            that have `visitName` (i.e. Subjects). Each
  *                            entry requires a corresponding visit method
  *                            on the Command class, enforced at compile time
@@ -281,29 +281,29 @@ export type Command = {
 /**
  * The strategy interface / abstract class.
  *
- * Maps to a class implementing `Template<C, H, CSU>` in the framework.
+ * Maps to a class implementing `Template<C, H, SU>` in the framework.
  * A Template with a non-empty `strategies` map is abstract — it should
  * not be dispatched to directly. A Template with `strategies: {}` is
  * concrete and can serve as both the Template and the Strategy.
  *
  * The parent Command is implicit from nesting — Templates are defined
  * within the `templates` map of their owning Command. The `C` generic
- * parameter in `Template<C, H, CSU>` is derived from this parent.
+ * parameter in `Template<C, H, SU>` is derived from this parent.
  *
- * @property isParameterized — Whether the Template's CSU is a type
+ * @property isParameterized — Whether the Template's SU is a type
  *                             parameter that Strategies instantiate.
  *
- *   When `true`, the Template class is generic over CSU:
+ *   When `true`, the Template class is generic over SU:
  *   ```ts
- *   abstract class AccessTemplate<CSU extends Student | Professor>
- *     implements Template<AccessCmd, [AuditCmd], CSU> { ... }
+ *   abstract class AccessTemplate<SU extends Student | Professor>
+ *     implements Template<AccessCmd, [AuditCmd], SU> { ... }
  *   ```
- *   Strategies extend it with a concrete CSU:
+ *   Strategies extend it with a concrete SU:
  *   ```ts
  *   class DepartmentMatch extends AccessTemplate<Student> { ... }
  *   ```
  *
- *   When `false`, the Template's CSU is fixed (either the full Command
+ *   When `false`, the Template's SU is fixed (either the full Command
  *   subject union or the declared `subjectSubset`). Strategy
  *   `subjectSubset` is ignored in this case.
  *
@@ -314,7 +314,7 @@ export type Command = {
  *                            Values reference entries in `commands`.
  *
  *                            In the framework, these become the `H` parameter
- *                            on `Template<C, H, CSU>` and are enforced
+ *                            on `Template<C, H, SU>` and are enforced
  *                            structurally via `CommandHooks<H>`.
  *
  *                            Hooks can be:
@@ -334,7 +334,7 @@ export type Command = {
  *                            of the Command's `subjectUnion`. When omitted,
  *                            defaults to the full `subjectUnion`.
  *
- *                            This becomes the `CSU` parameter (or its
+ *                            This becomes the `SU` parameter (or its
  *                            constraint, when `isParameterized` is true).
  *
  * @property strategies     — Concrete extensions of this Template. An empty
@@ -368,7 +368,7 @@ export type Template = {
  * In dispatch references, Strategies use the dotted format:
  * `"TemplateName.StrategyName"`.
  *
- * @property subjectSubset  — The CSU narrowing this Strategy applies.
+ * @property subjectSubset  — The SU narrowing this Strategy applies.
  *                            Must be a subset of the parent Template's
  *                            effective `subjectSubset`.
  *

@@ -357,14 +357,14 @@ describe("AbstractTemplateEmitter", () => {
     expect(cls.isAbstract()).toBe(true);
   });
 
-  it("adds a CSU type parameter constrained to subjectSubset when isParameterized", () => {
+  it("adds a SU type parameter constrained to subjectSubset when isParameterized", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("AccessTemplate");
     const typeParams = cls.getTypeParameters();
     expect(typeParams).toHaveLength(1);
-    expect(typeParams[0].getName()).toBe("CSU");
+    expect(typeParams[0].getName()).toBe("SU");
     expect(typeParams[0].getConstraint()?.getText()).toBe("Student");
   });
 
@@ -380,11 +380,11 @@ describe("AbstractTemplateEmitter", () => {
     expect(cls.getTypeParameters()).toHaveLength(0);
   });
 
-  it("implements Template<Command, [], CSU> in the parameterized case", () => {
+  it("implements Template<Command, [], SU> in the parameterized case", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const t = text(project, "commands/access-building.ts");
-    expect(t).toContain("Template<AccessBuildingCommand, [], CSU>");
+    expect(t).toContain("Template<AccessBuildingCommand, [], SU>");
   });
 
   it("implements Template<Command, [], SubjectUnion> in the non-parameterized case", () => {
