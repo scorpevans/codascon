@@ -260,6 +260,10 @@ class AbstractTemplateEmitter implements Template<EmitAstCommand, [], AbstractTe
     const cmdEntry = configIndex.commands.get(commandKey)!;
     const subjectSubset = config.subjectSubset ?? cmdEntry.config.subjectUnion;
     const subsetUnion = subjectSubset.join(" | ");
+    const isFullUnion = !config.subjectSubset;
+    const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
+
+    if (isFullUnion) ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
 
     for (const ref of subjectSubset) {
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
@@ -282,15 +286,15 @@ class AbstractTemplateEmitter implements Template<EmitAstCommand, [], AbstractTe
     }
 
     const hooksParam = hookTypes.length > 0 ? `[${hookTypes.join(", ")}]` : "[]";
-    const subjectParam = config.isParameterized ? "SU" : subsetUnion;
+    const subjectParam = config.isParameterized ? "SU" : suRef;
 
     const cls = sf.addClass({ name: key, isAbstract: true, isExported: true });
 
     if (config.isParameterized) {
-      cls.addTypeParameter({ name: "SU", constraint: subsetUnion });
+      cls.addTypeParameter({ name: "SU", constraint: suRef });
       cls.addImplements(`Template<${commandKey}, ${hooksParam}, SU>`);
     } else {
-      cls.addImplements(`Template<${commandKey}, ${hooksParam}, ${subsetUnion}>`);
+      cls.addImplements(`Template<${commandKey}, ${hooksParam}, ${suRef}>`);
     }
 
     for (const [propName, cmdRef] of hookEntries) {
@@ -343,6 +347,10 @@ class ConcreteTemplateEmitter implements Template<EmitAstCommand, [], ConcreteTe
     const cmdEntry = configIndex.commands.get(commandKey)!;
     const subjectSubset = config.subjectSubset ?? cmdEntry.config.subjectUnion;
     const subsetUnion = subjectSubset.join(" | ");
+    const isFullUnion = !config.subjectSubset;
+    const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
+
+    if (isFullUnion) ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
 
     for (const ref of subjectSubset) {
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
@@ -367,7 +375,7 @@ class ConcreteTemplateEmitter implements Template<EmitAstCommand, [], ConcreteTe
     const hooksParam = hookTypes.length > 0 ? `[${hookTypes.join(", ")}]` : "[]";
 
     const cls = sf.addClass({ name: key, isExported: true });
-    cls.addImplements(`Template<${commandKey}, ${hooksParam}, ${subsetUnion}>`);
+    cls.addImplements(`Template<${commandKey}, ${hooksParam}, ${suRef}>`);
 
     for (const [propName, cmdRef] of hookEntries) {
       cls.addProperty({
@@ -383,7 +391,7 @@ class ConcreteTemplateEmitter implements Template<EmitAstCommand, [], ConcreteTe
       name: "execute",
       isAsync: cmdEntry.config.returnAsync === true,
     });
-    executeMethod.addParameter({ name: "subject", type: subsetUnion });
+    executeMethod.addParameter({ name: "subject", type: suRef });
     executeMethod.addParameter({
       name: "object",
       type: `Readonly<${cmdEntry.config.objectType}>`,

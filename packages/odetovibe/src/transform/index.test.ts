@@ -387,7 +387,7 @@ describe("AbstractTemplateEmitter", () => {
     expect(t).toContain("Template<AccessBuildingCommand, [], SU>");
   });
 
-  it("implements Template<Command, [], SubjectUnion> in the non-parameterized case", () => {
+  it("implements Template<Command, [], CommandSubjectUnion<Command>> in the non-parameterized case", () => {
     const nonParam = new AbstractTemplateEntry("FlatTemplate", "AccessBuildingCommand", {
       isParameterized: false,
       strategies: { StratA: {} },
@@ -395,7 +395,9 @@ describe("AbstractTemplateEmitter", () => {
     const project = makeProject();
     emitCmd.run(nonParam, ctx(withCmd, project));
     const t = text(project, "commands/access-building.ts");
-    expect(t).toContain("Template<AccessBuildingCommand, [], Student | Professor>");
+    expect(t).toContain(
+      "Template<AccessBuildingCommand, [], CommandSubjectUnion<AccessBuildingCommand>>",
+    );
   });
 
   it("emits an abstract execute method with correct params and return type", () => {
@@ -439,7 +441,9 @@ describe("AbstractTemplateEmitter", () => {
     emitCmd.run(tplWithHook, ctx(index, project));
     const t = text(project, "commands/access-building.ts");
     expect(t).toContain("readonly audit = new AuditCommand()");
-    expect(t).toContain("Template<AccessBuildingCommand, [AuditCommand], Student | Professor>");
+    expect(t).toContain(
+      "Template<AccessBuildingCommand, [AuditCommand], CommandSubjectUnion<AccessBuildingCommand>>",
+    );
     // AuditCommand must be imported as a value
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const hookImp = sf
@@ -474,11 +478,13 @@ describe("ConcreteTemplateEmitter", () => {
     expect(cls.isAbstract()).toBe(false);
   });
 
-  it("implements Template<Command, [], SubjectUnion> (full union when no subjectSubset)", () => {
+  it("implements Template<Command, [], CommandSubjectUnion<Command>> (full union when no subjectSubset)", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const t = text(project, "commands/access-building.ts");
-    expect(t).toContain("Template<AccessBuildingCommand, [], Student | Professor>");
+    expect(t).toContain(
+      "Template<AccessBuildingCommand, [], CommandSubjectUnion<AccessBuildingCommand>>",
+    );
   });
 
   it("implements Template with narrowed subjectSubset when subjectSubset is declared", () => {
