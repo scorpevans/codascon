@@ -193,7 +193,8 @@ type AnyCommand = Command<any, any, any, any>;
  * to produce `any` rather than the expected union. This is a TypeScript limitation
  * that affects constraint enforcement but not runtime behavior.
  */
-type CommandSubjectUnion<C> = C extends Command<any, any, any, infer CV> ? CV[number] : never;
+export type CommandSubjectUnion<C> =
+  C extends Command<any, any, any, infer CV> ? CV[number] : never;
 
 /**
  * Validates that each Command in the hook tuple `H` has a subject union
@@ -272,6 +273,11 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * If the Command subclass is missing any visit method, the `this` constraint
  * is unsatisfied and `run` becomes uncallable at the call site.
  *
+ * When any Subject in CV has a non-literal `visitName` (i.e. typed as `string`
+ * rather than a string literal), the `this` constraint becomes an impossible
+ * structural requirement — `run` is uncallable at the call site with a
+ * descriptive property name explaining the issue.
+ *
  * @example
  * // For Command<Person, Building, Result, [Student, Professor]>:
  * // CommandSubjectStrategies<C> = {
@@ -283,6 +289,34 @@ type CommandSubjectStrategies<C extends AnyCommand> =
   C extends Command<any, any, any, infer CV>
     ? UnionToIntersection<{ [K in keyof CV]: Visit<C, CV[K]> }[number]>
     : never;
+
+/**
+ * Produces an impossible structural requirement on `run()`'s `this` parameter
+ * when any Subject in `CV` declares `visitName` as the wide `string` type.
+ *
+ * When all `visitName` values are literals this resolves to `Record<never, never>`
+ * (i.e. `{}`), which is trivially satisfied by any type.
+ *
+ * When any `visitName` is non-literal, this resolves to an object type with a
+ * single required property whose key is a descriptive error message and whose
+ * value is `never`. Since no class can satisfy `{ "Error:...": never }`, `run()`
+ * becomes uncallable at the call site — a compile-time error with a clear message.
+ *
+ * The `any` case must short-circuit to `Record<never, never>` (via `0 extends
+ * 1 & CV[number]`) to preserve AnyCommand structural compatibility. Without it,
+ * `string extends any["visitName"]` is `true`, which would make AnyCommand's
+ * `run()` uncallable and break all Template hook constraints.
+ */
+type WidenedVisitNameError =
+  "visitName must be a literal. Fix: readonly visitName = 'resolveFoo' as const";
+
+type WithLiteralVisitNames<CV extends Subject[]> =
+  // IsAny guard: 0 extends (1 & T) is only true when T is `any`.
+  0 extends 1 & CV[number]
+    ? Record<never, never>
+    : string extends CV[number]["visitName"]
+      ? { [K in WidenedVisitNameError]: never }
+      : Record<never, never>;
 
 /**
  * Maps a tuple of hook Commands to an object type keyed by their `commandName`.
@@ -378,7 +412,7 @@ export abstract class Command<B, O, R, CV extends (B & Subject)[]> {
   abstract readonly commandName: string;
 
   run<T extends CommandSubjectUnion<Command<B, O, R, CV>>>(
-    this: this & CommandSubjectStrategies<Command<B, O, R, CV>>,
+    this: this & CommandSubjectStrategies<Command<B, O, R, CV>> & WithLiteralVisitNames<CV>,
     subject: T,
     object: O,
   ): R {
