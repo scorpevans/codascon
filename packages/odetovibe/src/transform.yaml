@@ -125,7 +125,7 @@ commands:
         subjectSubset: [CommandEntry]
         strategies: {}
 
-      # Emits: abstract class FooTemplate<SU extends S1 | S2>
+      # Emits: abstract class FooTemplate<SU extends CommandSubjectUnion<FooCommand>>
       #          implements Template<FooCommand, [HookCmd], SU> {
       #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
       #          abstract execute(subject: SU, object: Readonly<O>): R;

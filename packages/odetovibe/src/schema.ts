@@ -295,7 +295,7 @@ export type Command = {
  *
  *   When `true`, the Template class is generic over SU:
  *   ```ts
- *   abstract class AccessTemplate<SU extends Student | Professor>
+ *   abstract class AccessTemplate<SU extends CommandSubjectUnion<AccessCmd>>
  *     implements Template<AccessCmd, [AuditCmd], SU> { ... }
  *   ```
  *   Strategies extend it with a concrete SU:

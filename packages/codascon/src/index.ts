@@ -72,7 +72,7 @@
  *
  * **Template as abstract class with Strategies:**
  * ```ts
- * abstract class AccessTemplate<SU extends Student | Professor>
+ * abstract class AccessTemplate<SU extends CommandSubjectUnion<AccessCommand>>
  *   implements Template<AccessCommand, [AuditCommand], SU>
  * {
  *   abstract readonly audit: AuditCommand;  // hook — instantiated by Strategy
@@ -514,7 +514,7 @@ export abstract class Subject {
  *          **This CAN be parameterized** on the Template class, allowing
  *          Strategies to narrow which Subjects they handle:
  *          ```ts
- *          abstract class AccessTemplate<SU extends Student | Professor>
+ *          abstract class AccessTemplate<SU extends CommandSubjectUnion<AccessCmd>>
  *            implements Template<AccessCmd, [AuditCmd], SU> { ... }
  *
  *          class GrantAccess extends AccessTemplate<Student> { ... }
@@ -529,7 +529,7 @@ export abstract class Subject {
  *
  * **Abstract Template with Strategies:**
  * ```ts
- * abstract class AccessTemplate<SU extends Student | Professor>
+ * abstract class AccessTemplate<SU extends CommandSubjectUnion<AccessCmd>>
  *   implements Template<AccessCmd, [AuditCmd], SU>
  * {
  *   // Hook — concrete (shared across Strategies)
@@ -553,7 +553,7 @@ export abstract class Subject {
  * **Concrete Template (no Strategies):**
  * ```ts
  * class DenyAccess implements Template<AccessCmd> {
- *   execute(subject: Student | Professor, object: Building): AccessResult {
+ *   execute(subject: CommandSubjectUnion<AccessCmd>, object: Building): AccessResult {
  *     return { granted: false, reason: "Access denied" };
  *   }
  * }

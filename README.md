@@ -169,7 +169,7 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 A `Template` can leave its subject union as a type parameter, letting `Strategy` classes narrow which `Subject`s they handle:
 
 ```typescript
-abstract class CheckoutTemplate<SU extends Student | Professor> implements Template<
+abstract class CheckoutTemplate<SU extends CommandSubjectUnion<CheckoutCmd>> implements Template<
   CheckoutCmd,
   [AccessBuildingCommand],
   SU
