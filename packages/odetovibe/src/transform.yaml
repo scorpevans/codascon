@@ -125,10 +125,10 @@ commands:
         subjectSubset: [CommandEntry]
         strategies: {}
 
-      # Emits: abstract class FooTemplate<CSU extends S1 | S2>
-      #          implements Template<FooCommand, [HookCmd], CSU> {
+      # Emits: abstract class FooTemplate<SU extends S1 | S2>
+      #          implements Template<FooCommand, [HookCmd], SU> {
       #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
-      #          abstract execute(subject: CSU, object: Readonly<O>): R;
+      #          abstract execute(subject: SU, object: Readonly<O>): R;
       #        }
       # Target: commands/<parent-cmd-name>.ts (same file as CommandClassEmitter)
       AbstractTemplateEmitter:
@@ -136,9 +136,9 @@ commands:
         subjectSubset: [AbstractTemplateEntry]
         strategies: {}
 
-      # Emits: class FooTemplate implements Template<FooCommand, [HookCmd], CSU> {
+      # Emits: class FooTemplate implements Template<FooCommand, [HookCmd], S1 | S2> {
       #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
-      #          execute(subject: CSU, object: Readonly<O>): R { ... }
+      #          execute(subject: S1 | S2, object: Readonly<O>): R { ... }
       #        }
       # Target: commands/<parent-cmd-name>.ts
       ConcreteTemplateEmitter:
