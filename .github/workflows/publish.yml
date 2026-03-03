@@ -12,14 +12,16 @@ jobs:
     permissions:
       contents: write # to create tags and push changelog commits
       pull-requests: write # to open the Changesets version PR
-      id-token: write # for OIDC trusted publishing — no NPM_TOKEN needed
+      id-token: write # for npm provenance attestation
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -36,7 +38,7 @@ jobs:
       - name: Create release PR or publish to npm
         uses: changesets/action@v1
         with:
-          publish: pnpm changeset:publish
+          publish: pnpm changeset:publish --provenance
           title: "chore: release packages"
           commit: "chore: release packages"
         env:
