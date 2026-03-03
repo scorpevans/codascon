@@ -50,7 +50,7 @@ All memory files live in `.claude/projects/.../memory/` (user-level, not checked
 
 **Consider this on every prompt, before taking any action. Never skip for convenience — feeling confident or certain is not a reason to skip this step; it is a signal to apply it more carefully.**
 
-**Step 1: Understand the intention.** An instruction is a means to an end — not the end itself. Before thinking about _how_ to answer or implement, ask _why_: what is the user trying to achieve? Form a concrete guesses at the underlying intention. These guesses are the lens through which better alternatives become visible. Without it, you optimise within the instruction's frame rather than toward the user's actual goal.
+**Step 1: Understand the intention.** An instruction is a means to an end — not the end itself. Before thinking about _how_ to answer or implement, ask _why_: what is the user trying to achieve? Form concrete guesses at the underlying intention. These guesses are the lens through which better alternatives become visible. Without it, you optimise within the instruction's frame rather than toward the user's actual goal.
 
 If your guesses at the intention are divergent — the instruction could plausibly mean very different things — ask for clarification before proceeding.
 
