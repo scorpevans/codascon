@@ -52,7 +52,9 @@ All memory files live in `.claude/projects/.../memory/` (user-level, not checked
 
 **Step 1: Understand the intention.** An instruction is a means to an end — not the end itself. Before thinking about _how_ to answer or implement, ask _why_: what is the user trying to achieve? Form a concrete guesses at the underlying intention. These guesses are the lens through which better alternatives become visible. Without it, you optimise within the instruction's frame rather than toward the user's actual goal.
 
-If your guesses at the intention are divergent — the instruction could plausibly mean very different things — therefore ask for clarification before proceeding.
+If your guesses at the intention are divergent — the instruction could plausibly mean very different things — ask for clarification before proceeding.
+
+Even when the intention is clear, check that it is sound. An intention that is irrational or destructive (e.g. removing all tests, dropping all packages) is not a valid goal to optimise toward — proceed directly to Step 2 and push back.
 
 **Step 2: Reason from that intention.** Once you have a working hypothesis of the goal, consider:
 
@@ -106,14 +108,20 @@ Only proceed after receiving an explicit **yes** from the user.
 
 **A task is new if it does not seem related to the current branch's purpose.** When in doubt, treat it as new.
 
-**Before switching to a new branch, report the current branch state:**
+**If currently on a feature branch, report its state before switching:**
 
 1. Branch name and its purpose
 2. Whether a PR has been created for it
 3. Whether all local commits have been pushed
 4. Whether there are any uncommitted local changes
 
-**Then request explicit acknowledgement** before switching. Wait for confirmation that the current branch is in a good state (or that the user accepts leaving it as-is) before proceeding to `git checkout main && git pull && git checkout -b <new-branch>`.
+**If currently on main, report the following before creating a new branch:**
+
+1. Whether there are any uncommitted local changes
+2. How many PRs are open and waiting to be merged
+3. Of those, how many have not yet been approved — either via a formal review approval or a comment from you confirming the changes are correct
+
+**Then request explicit acknowledgement** before proceeding. Wait for confirmation that the current state is acceptable before creating a new branch: `git checkout main && git pull && git checkout -b <new-branch>`.
 
 This prevents unrelated changes from accumulating on a branch and ensures no work is silently left behind when context shifts.
 
