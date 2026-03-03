@@ -620,13 +620,18 @@ describe("StrategyClassEmitter", () => {
     expect(sf.getClassOrThrow("StratA").getExtends()?.getText()).toBe("FlatTemplate");
   });
 
-  it("emits an empty class body when there are no hook overrides", () => {
+  it("emits an execute stub with correct signature and no hook properties", () => {
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("DepartmentMatch");
     expect(cls.getProperties()).toHaveLength(0);
-    expect(cls.getMethods()).toHaveLength(0);
+    const execute = cls.getMethodOrThrow("execute");
+    expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
+    expect(execute.getParameters()[1].getTypeNode()?.getText()).toBe("Readonly<Building>");
+    expect(execute.getReturnTypeNode()?.getText()).toBe("AccessResult");
+    expect(execute.getBodyText()).toContain("throw new Error");
+    expect(execute.getBodyText()).toContain("@odetovibe-generated");
   });
 
   it("emits hook override properties when strategy declares commandHooks", () => {
