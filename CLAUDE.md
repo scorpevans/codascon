@@ -92,6 +92,23 @@ This applies to: error message formats, type machinery approaches, naming conven
 
 Only proceed after receiving an explicit **yes** from the user.
 
+## Top Priority: New Tasks Go on New Branches
+
+**Consider this on every prompt that involves implementation work. Never skip for convenience — starting a new task on an existing branch conflates unrelated changes and makes PRs harder to review.**
+
+**A task is new if it does not seem related to the current branch's purpose.** When in doubt, treat it as new.
+
+**Before switching to a new branch, report the current branch state:**
+
+1. Branch name and its purpose
+2. Whether a PR has been created for it
+3. Whether all local commits have been pushed
+4. Whether there are any uncommitted local changes
+
+**Then request explicit acknowledgement** before switching. Wait for confirmation that the current branch is in a good state (or that the user accepts leaving it as-is) before proceeding to `git checkout main && git pull && git checkout -b <new-branch>`.
+
+This prevents unrelated changes from accumulating on a branch and ensures no work is silently left behind when context shifts.
+
 ## Top Priority: Clean Slate Before New Approaches
 
 **Consider this on every prompt where you pivot approach. Never skip for convenience — do not carry forward changes just because reverting them feels like lost work.**
