@@ -45,3 +45,26 @@ jobs:
 
       - name: Format check
         run: pnpm format:check
+
+      - name: Pack packages
+        run: |
+          (cd packages/codascon && pnpm pack --pack-destination /tmp)
+          (cd packages/odetovibe && pnpm pack --pack-destination /tmp)
+
+      - name: Smoke test — codascon
+        run: |
+          mkdir -p /tmp/smoke-codascon
+          cd /tmp/smoke-codascon
+          npm init -y
+          npm install /tmp/codascon-*.tgz
+          node --input-type=module -e "import { Subject, Command } from 'codascon'; console.log('ESM: OK')"
+          node -e "const { Subject, Command } = require('codascon'); console.log('CJS: OK')"
+
+      - name: Smoke test — odetovibe
+        run: |
+          mkdir -p /tmp/smoke-odetovibe
+          cd /tmp/smoke-odetovibe
+          npm init -y
+          npm install /tmp/codascon-*.tgz /tmp/odetovibe-*.tgz
+          node --input-type=module -e "import { parseYaml, validateYaml, emitAst, writeFiles } from 'odetovibe'; console.log('ESM: OK')"
+          test -x ./node_modules/.bin/odetovibe && echo "CLI binary: OK"
