@@ -1,0 +1,9 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "codascon": "2026.3.2-beta",
+    "odetovibe": "2026.3.2-beta"
+  },
+  "changesets": ["exclude-sourcemaps"]
+}
