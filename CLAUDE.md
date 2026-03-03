@@ -8,11 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **When first encountering a topic area within a conversation, read the relevant memory topic files before answering or writing any code or forming a plan.**
 
+In deciding whether a question or task relates to a topic file, be optimistic and rule a topic file out if and only if you are sure it is not needed to fulfill the question or task. Hence load all closely related topic files.
+
 MEMORY.md is auto-loaded but contains only a concise index. The detail lives in topic files that must be read explicitly.
 
-**Once the conversation or task has been accomplished, compact your context window**
+**Once the conversation or task relating to the topic has been accomplished, compact your context window**
 
-The conversation or task is done when the next prompt is an unrelated task or question.
+The conversation or task is done when the next prompt is not related to any of the topics in context.
 
 ## Top Priority: Keep This File and other Memory Files Current
 
