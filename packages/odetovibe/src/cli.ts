@@ -13,7 +13,7 @@ export function printUsage(): void {
   console.log("");
   console.log("Arguments:");
   console.log("  <code_config.yaml>    Path to the code's YAML-config file");
-  console.log("  --out <dir>      Output directory (default: ./generated)");
+  console.log("  --out <dir>      Output directory (default: ./odetovibe)");
   console.log("  --overwrite      Unconditionally replace existing files");
   console.log("  --no-overwrite   Strict merge: abort to .ode.ts on conflict (default: merge)");
 }
@@ -28,7 +28,7 @@ async function main(): Promise<void> {
 
   const schemaPath = resolve(args[0]);
   const outIndex = args.indexOf("--out");
-  const outDir = resolve(outIndex !== -1 ? args[outIndex + 1] : "./generated");
+  const outDir = resolve(outIndex !== -1 ? args[outIndex + 1] : "./odetovibe");
   const mode = args.includes("--overwrite")
     ? ("overwrite" as const)
     : args.includes("--no-overwrite")
