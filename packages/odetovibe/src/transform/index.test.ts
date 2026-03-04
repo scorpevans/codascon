@@ -314,6 +314,68 @@ describe("CommandClassEmitter", () => {
     );
   });
 
+  it("produces correct file name for a single-word key with 'Command' suffix (FeedCommand → feed.ts)", () => {
+    const feedCmd = new CommandEntry("FeedCommand", {
+      commandName: "feed",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student"],
+      dispatch: { Student: "GrantAccess" },
+      templates: { GrantAccess: { isParameterized: false, strategies: {} } },
+    });
+    const project = makeProject();
+    emitCmd.run(feedCmd, ctx(withTypes, project));
+    expect(project.getSourceFile("commands/feed.ts")).toBeDefined();
+    expect(project.getSourceFile("commands/feed-command.ts")).toBeUndefined();
+  });
+
+  it("produces correct file name when key has no 'Command' suffix", () => {
+    const accessCmd = new CommandEntry("AccessBuilding", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student"],
+      dispatch: { Student: "GrantAccess" },
+      templates: { GrantAccess: { isParameterized: false, strategies: {} } },
+    });
+    const project = makeProject();
+    emitCmd.run(accessCmd, ctx(withTypes, project));
+    expect(project.getSourceFile("commands/access-building.ts")).toBeDefined();
+  });
+
+  it("imports a type from its declared import source when present in configIndex.imports", () => {
+    // When configIndex.imports maps a type name to a package specifier,
+    // buildImportSourceMap routes that type's import to the declared source
+    // instead of domain-types.js (covers the buildImportSourceMap loop body).
+    const index = idx({
+      imports: { "person-module": ["Person"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    // Person is imported from "person-module", not from domain-types.js
+    const personImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "person-module");
+    expect(personImp?.getNamedImports().map((n) => n.getName())).toContain("Person");
+    // Person must NOT appear in the domain-types.js import
+    const dtImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue().includes("domain-types"));
+    expect(dtImp?.getNamedImports().map((n) => n.getName()) ?? []).not.toContain("Person");
+  });
+
   it("imports bare returnType (not Promise<T>) from domain-types when returnAsync is true", () => {
     const asyncCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
@@ -366,6 +428,19 @@ describe("AbstractTemplateEmitter", () => {
     expect(typeParams).toHaveLength(1);
     expect(typeParams[0].getName()).toBe("SU");
     expect(typeParams[0].getConstraint()?.getText()).toBe("Student");
+  });
+
+  it("constrains SU to a union type when subjectSubset has multiple members", () => {
+    const multiSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: ["Student", "Professor"],
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(multiSubsetTpl, ctx(withCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const typeParams = sf.getClassOrThrow("AccessTemplate").getTypeParameters();
+    expect(typeParams[0].getConstraint()?.getText()).toBe("Student | Professor");
   });
 
   it("has no type parameter when not isParameterized", () => {
@@ -620,6 +695,28 @@ describe("StrategyClassEmitter", () => {
     expect(sf.getClassOrThrow("StratA").getExtends()?.getText()).toBe("FlatTemplate");
   });
 
+  it("extends with union type arg and uses union as execute subject when subjectSubset has multiple members", () => {
+    const multiSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: ["Student", "Professor"],
+      strategies: { StratA: {} },
+    });
+    // Strategy inherits parent template's subjectSubset (no override)
+    const multiStrat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {});
+    const index: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", multiSubsetTpl]]),
+    };
+    const project = makeProject();
+    emitCmd.run(multiStrat, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const cls = sf.getClassOrThrow("StratA");
+    expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student | Professor>");
+    expect(cls.getMethodOrThrow("execute").getParameters()[0].getTypeNode()?.getText()).toBe(
+      "Student | Professor",
+    );
+  });
+
   it("emits an execute stub with correct signature and no hook properties", () => {
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
@@ -757,6 +854,31 @@ describe("emitAst", () => {
     expect(sf.getClass("AccessTemplate")).toBeDefined();
     expect(sf.getClass("GrantAccess")).toBeDefined();
     expect(sf.getClass("DepartmentMatch")).toBeDefined();
+  });
+
+  it("routes two commands into two separate files", () => {
+    const feedCmd = new CommandEntry("FeedCommand", {
+      commandName: "feed",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student"],
+      dispatch: { Student: "GrantAccess" },
+      templates: { GrantAccess: { isParameterized: false, strategies: {} } },
+    });
+    const index: ConfigIndex = {
+      ...withTypes,
+      commands: new Map([
+        ["AccessBuildingCommand", cmdEntry],
+        ["FeedCommand", feedCmd],
+      ]),
+    };
+    const project = makeProject();
+    // subjectTypes(2) + plainTypes(3) + commands(2) = 7 results
+    const results = emitAst(index, { configIndex: index, project });
+    expect(results).toHaveLength(7);
+    expect(project.getSourceFile("commands/access-building.ts")).toBeDefined();
+    expect(project.getSourceFile("commands/feed.ts")).toBeDefined();
   });
 
   it("uses the namespace when routing command files", () => {
