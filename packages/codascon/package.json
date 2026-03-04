@@ -56,7 +56,7 @@
   ],
   "scripts": {
     "build": "tsc --build && tsup",
-    "build:cjs": "tsup && cp dist/index.d.ts dist/index.d.cts",
+    "build:js": "tsup && cp dist/index.d.ts dist/index.d.cts",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "prepublishOnly": "pnpm build && pnpm test"
