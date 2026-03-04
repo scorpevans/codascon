@@ -249,6 +249,37 @@ describe("writeFiles", () => {
 
     expect(await writeFiles(project, ctx(tmpDir))).toHaveLength(0);
   });
+
+  it("preserves user-added classes when mode is 'merge'", async () => {
+    const project = makeProject({ "f.ts": "export class Generated {}" });
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Generated {}\nexport class UserClass {}",
+    );
+
+    await writeFiles(project, ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("UserClass");
+    expect(written).toContain("Generated");
+  });
+
+  it("merges in-place and preserves user classes when mode is 'strict' and no conflict exists", async () => {
+    const project = makeProject({ "f.ts": "export class Generated {}" });
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Generated {}\nexport class UserClass {}",
+    );
+
+    const results = await writeFiles(project, ctx(tmpDir, "strict"));
+
+    expect(results[0].conflicted).toBeFalsy();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("UserClass");
+    expect(written).toContain("Generated");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
