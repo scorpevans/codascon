@@ -90,7 +90,7 @@ jobs:
           type _CN = CommandName<ProcessCmd>;
           TSEOF
           echo '{"compilerOptions":{"strict":true,"module":"esnext","moduleResolution":"bundler","target":"es2022","noEmit":true}}' > tsconfig.json
-          npx tsc --noEmit
+          npx tsc
           echo "Consumer type-check: OK"
 
       - name: Smoke test — odetovibe
