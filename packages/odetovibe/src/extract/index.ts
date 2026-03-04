@@ -16,6 +16,7 @@
  *     for (const e of r.errors) console.error(e.message);
  *   }
  * }
+ * ```
  */
 
 import * as fs from "node:fs";
