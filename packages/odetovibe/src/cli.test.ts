@@ -155,4 +155,29 @@ describe("main", () => {
     expect((err as ExitError).code).toBe(1);
     expect(errorLines.join("\n")).toContain("ENOENT");
   });
+
+  it("exits 1 and prints validation errors for an invalid schema", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    vi.mocked(validateYaml).mockReturnValue({
+      valid: false,
+      configIndex: fakeConfigIndex,
+      validationResults: [
+        {
+          valid: false,
+          errors: [
+            {
+              entryKey: "GreetCommand",
+              rule: "baseType-ref",
+              message: 'baseType "Foo" does not reference a known domainType',
+            },
+          ],
+        },
+      ],
+    });
+    const err = await main().catch((e) => e);
+    expect(err).toBeInstanceOf(ExitError);
+    expect((err as ExitError).code).toBe(1);
+    expect(errorLines.join("\n")).toContain("[baseType-ref]");
+    expect(errorLines.join("\n")).toContain("GreetCommand");
+  });
 });
