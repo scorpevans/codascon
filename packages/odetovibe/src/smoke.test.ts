@@ -9,7 +9,7 @@
  * package first.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,41 @@ describe("smoke", () => {
       tmpDir = undefined;
     }
   });
+
+  it("merge mode preserves user method bodies across re-generation", async () => {
+    tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
+
+    const configIndex = parseYaml(resolve(fixturesDir, "smoke.yaml"));
+    expect(validateYaml(configIndex).valid, "smoke.yaml must be valid").toBe(true);
+
+    // First run: create files in overwrite mode
+    const project1 = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project: project1 });
+    await writeFiles(project1, { targetDir: tmpDir, mode: "overwrite" });
+
+    // Simulate user implementation: replace the generated stub body with custom code
+    const commandFile = resolve(tmpDir, "greet/commands/greet.ts");
+    const original = readFileSync(commandFile, "utf8");
+    writeFileSync(
+      commandFile,
+      original.replace(
+        'throw new Error("Not implemented"); // @odetovibe-generated',
+        "return object; // user implementation",
+      ),
+    );
+
+    // Second run: merge — user body must survive
+    const project2 = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project: project2 });
+    const written = await writeFiles(project2, { targetDir: tmpDir, mode: "merge" });
+
+    for (const r of written) {
+      expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
+      expect(r.conflicted, `${r.path} has no conflict`).toBeFalsy();
+    }
+    const merged = readFileSync(commandFile, "utf8");
+    expect(merged).toContain("return object; // user implementation");
+  }, 20_000);
 
   it("generates golden output for smoke.yaml", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
