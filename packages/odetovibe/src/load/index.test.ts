@@ -638,6 +638,38 @@ export class Foo {
     const count = (written.match(/\* @odetovibe-generated \*\//g) ?? []).length;
     expect(count).toBe(1);
   });
+
+  // ── prettier ──────────────────────────────────────────────────────
+
+  it("applies Prettier formatting when creating a new file (no-existing fallback)", async () => {
+    const body = "export interface Foo { name: string; }";
+    const project = makeProject({ "f.ts": body });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ name: string; }");
+    expect(written).toContain("name: string;");
+  });
+
+  it("applies Prettier formatting to the merged result when file already exists", async () => {
+    const body = "export interface Foo { name: string; }";
+    const project = makeProject({ "f.ts": body });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport interface Foo { name: string; }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ name: string; }");
+    expect(written).toContain("name: string;");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -811,6 +843,40 @@ describe("StrictMergeWriter", () => {
     const odeContent = fs.readFileSync(path.join(tmpDir, "f.ode.ts"), "utf-8");
     expect(odeContent.startsWith("/* @odetovibe-generated */")).toBe(true);
     expect(odeContent).toContain("extends Error");
+  });
+
+  // ── prettier ──────────────────────────────────────────────────────
+
+  it("applies Prettier formatting when creating a new file (no-existing fallback)", async () => {
+    const body = "export interface Foo { name: string; }";
+    const project = makeProject({ "f.ts": body });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ name: string; }");
+    expect(written).toContain("name: string;");
+  });
+
+  it("applies Prettier formatting when merging in-place (no-conflict path)", async () => {
+    // The no-conflict path applies formatCode to the merged text before writing.
+    // An unformatted interface in the existing file (user-owned, preserved through
+    // merge) must be expanded by Prettier in the final output.
+    const project = makeProject({ "f.ts": "export class Foo {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo {}\nexport interface Bar { x: number; }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ x: number; }");
+    expect(written).toContain("x: number;");
   });
 });
 
