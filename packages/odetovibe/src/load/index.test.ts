@@ -728,6 +728,50 @@ export class Foo {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// compileErrors — pre-write type-check gate
+//
+// Each writer calls checkDiagnostics on the final text before writing.
+// When errors are found the file is NOT written and compileErrors is
+// populated in the returned WriteResult.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("compileErrors", () => {
+  it("returns compileErrors when generated content has undeclared names", async () => {
+    // "UndeclaredBase" is not imported and not defined — produces TS2304 in the
+    // isolated in-memory type-checker (TS2304 is not in FALLBACK_FILTERED_CODES).
+    const project = makeProject({ "f.ts": "export class Foo extends UndeclaredBase {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+  });
+
+  it("does not write the file when compileErrors are present", async () => {
+    const project = makeProject({ "f.ts": "export class Foo extends UndeclaredBase {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir));
+
+    expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(false);
+  });
+
+  it("returns compileErrors in merge mode when generated content has undeclared names", async () => {
+    const project = makeProject({ "f.ts": "export class Foo extends UndeclaredBase {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // WriteFileCommand routing
 // ═══════════════════════════════════════════════════════════════════
 
