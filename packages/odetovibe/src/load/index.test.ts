@@ -944,8 +944,6 @@ describe("StrictMergeWriter", () => {
     expect(odeContent).toContain("extends Error");
   });
 
-  // ── prettier ──────────────────────────────────────────────────────
-
   it("writes .ode.ts when an import changes from type-only to value import", async () => {
     // A type-only → value import change is a codegen-owned structural change:
     // codegen has decided the import must be a value import, not erased at runtime.
@@ -987,6 +985,8 @@ describe("StrictMergeWriter", () => {
     const original = fs.readFileSync(path.join(tmpDir, "access-building.test.ts"), "utf-8");
     expect(original).toContain("RegExp");
   });
+
+  // ── prettier ──────────────────────────────────────────────────────
 
   it("applies Prettier formatting when creating a new file (no-existing fallback)", async () => {
     const body = "export interface Foo { name: string; }";
