@@ -61,6 +61,38 @@ jobs:
           node --input-type=module -e "import { Subject, Command } from 'codascon'; console.log('ESM: OK')"
           node -e "const { Subject, Command } = require('codascon'); console.log('CJS: OK')"
 
+      - name: Consumer type-check — codascon
+        run: |
+          cd /tmp/smoke-codascon
+          npm install --save-dev typescript
+          cat > consumer.ts << 'TSEOF'
+          import {
+            Subject, Command, Template,
+            CommandSubjectUnion, CommandObject, CommandReturn,
+            SubjectVisitName, CommandName,
+          } from "codascon";
+          class Foo extends Subject { readonly visitName = "resolveFoo" as const; }
+          class Bar extends Subject { readonly visitName = "resolveBar" as const; }
+          interface Item {}
+          interface Result {}
+          class ProcessCmd extends Command<object, Item, Result, [Foo, Bar]> {
+            readonly commandName = "process" as const;
+            resolveFoo(s: Foo, o: Readonly<Item>): Template<ProcessCmd, [], Foo> { throw new Error(); }
+            resolveBar(s: Bar, o: Readonly<Item>): Template<ProcessCmd, [], Bar> { throw new Error(); }
+          }
+          class FooProcessor implements Template<ProcessCmd, [], Foo> {
+            execute(s: Foo, o: Item): Result { return {}; }
+          }
+          type _SU = CommandSubjectUnion<ProcessCmd>;
+          type _O  = CommandObject<ProcessCmd>;
+          type _R  = CommandReturn<ProcessCmd>;
+          type _VN = SubjectVisitName<Foo>;
+          type _CN = CommandName<ProcessCmd>;
+          TSEOF
+          echo '{"compilerOptions":{"strict":true,"module":"esnext","moduleResolution":"bundler","target":"es2022","noEmit":true}}' > tsconfig.json
+          npx tsc --noEmit
+          echo "Consumer type-check: OK"
+
       - name: Smoke test — odetovibe
         run: |
           mkdir -p /tmp/smoke-odetovibe
