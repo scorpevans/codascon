@@ -847,6 +847,26 @@ describe("StrictMergeWriter", () => {
 
   // ── prettier ──────────────────────────────────────────────────────
 
+  it("writes .ode.ts when an import changes from type-only to value import", async () => {
+    // A type-only → value import change is a codegen-owned structural change:
+    // codegen has decided the import must be a value import, not erased at runtime.
+    // StrictMergeWriter must detect this and write to .ode.ts rather than merging.
+    const project = makeProject({
+      "f.ts": `import { Foo } from "./types.js";\nexport class Bar {}`,
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      `/* @odetovibe-generated */\nimport type { Foo } from "./types.js";\nexport class Bar {}`,
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+
   it("applies Prettier formatting when creating a new file (no-existing fallback)", async () => {
     const body = "export interface Foo { name: string; }";
     const project = makeProject({ "f.ts": body });
