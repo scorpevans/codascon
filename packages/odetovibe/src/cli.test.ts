@@ -180,4 +180,16 @@ describe("main", () => {
     expect(errorLines.join("\n")).toContain("[baseType-ref]");
     expect(errorLines.join("\n")).toContain("GreetCommand");
   });
+
+  it("exits 0 and reports created/updated files on a valid schema", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    vi.mocked(writeFiles).mockResolvedValue([
+      { path: "/out/domain-types.ts", created: true },
+      { path: "/out/commands/greet.ts", created: false },
+    ]);
+    await main(); // must not throw — no process.exit on success
+    expect(exitCodes).toEqual([]); // exit 0 is implicit: process.exit never called
+    expect(logLines.join("\n")).toContain("created /out/domain-types.ts");
+    expect(logLines.join("\n")).toContain("updated /out/commands/greet.ts");
+  });
 });
