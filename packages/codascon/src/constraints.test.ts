@@ -8,7 +8,6 @@ import {
   type CommandName,
   type SubjectVisitName,
   type CommandSubjectUnion,
-  type CommandSubjectStrategies,
 } from "./index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
@@ -256,49 +255,20 @@ type _T16 = Expect<Equal<CommandObject<string>, never>>;
 type _T17 = Expect<Equal<CommandReturn<string>, never>>;
 type _T18 = Expect<Equal<CommandSubjectUnion<string>, never>>;
 
-// CommandSubjectStrategies produces one visit method per Subject in the CSU.
+// CommandSubjectStrategies is an internal type (not exported) used as the `this`
+// constraint on Command.run(). It cannot be directly imported or asserted against
+// here — doing so would require exporting it, which would strip it from the .d.ts
+// via @internal + stripInternal and create a dangling reference in run()'s signature.
 //
-// IMPORTANT: Must use the base class form Command<B, O, R, CSU>, not the concrete
-// subclass (e.g. FeedCommand). When TypeScript evaluates CommandSubjectStrategies<FeedCommand>,
-// it infers CSU from FeedCommand's structural type. The `run` method's `this` constraint
-// involves CommandSubjectStrategies<Command<B, O, R, CSU>> — a recursive reference —
-// causing TypeScript to short-circuit and return {} instead of the expected intersection.
-// CommandSubjectStrategies<Command<B, O, R, CSU>> resolves correctly because TypeScript
-// matches the explicit type arguments directly, without structural inference.
+// The constraint is proven indirectly:
+// - _CSS3 below: a correctly implemented Command satisfies the constraint
+//   (cmd.run() compiles; if any visit method were missing, the call site would fail)
+// - §14: incorrect implementations are rejected (missing visit method, wrong types, etc.)
 //
-// Return types use Template<C, [], S> (hooks-free). Visit<C, SU> erases hooks to any[]
-// in its declared return type, but both Template<C, any[], S> and Template<C, [], S>
-// expand to the same structural type when there are no hooks (CommandHooks<any[]> = {}
-// because CommandName<any> = never). Using [] avoids comparison issues.
-type _CSS1 = Expect<
-  CommandSubjectStrategies<
-    Command<Person, { time: string }, FeedResult, [Dog, Cat, Bird]>
-  > extends {
-    resolveDog: (
-      subject: Dog,
-      object: Readonly<{ time: string }>,
-    ) => Template<FeedCommand, [], Dog>;
-    resolveCat: (
-      subject: Cat,
-      object: Readonly<{ time: string }>,
-    ) => Template<FeedCommand, [], Cat>;
-    resolveBird: (
-      subject: Bird,
-      object: Readonly<{ time: string }>,
-    ) => Template<FeedCommand, [], Bird>;
-  }
-    ? true
-    : false
->;
-
-// Single-subject command produces a single-method constraint (same base class form required)
-type _CSS2 = Expect<
-  CommandSubjectStrategies<Command<Person, string, number, [Dog]>> extends {
-    resolveDog: (subject: Dog, object: Readonly<string>) => Template<DogOnlyCommand, [], Dog>;
-  }
-    ? true
-    : false
->;
+// Shape note (documented in typescript-gotchas.md): CommandSubjectStrategies<FeedCommand>
+// (concrete class) evaluates to {} due to circular inference in run()'s this constraint.
+// The base class form Command<B, O, R, CSU> evaluates correctly to the expected
+// intersection of per-subject visit methods, but requires the type to be importable.
 
 // A correctly implemented Command satisfies its own CommandSubjectStrategies —
 // proved by the function body compiling: if FeedCommand violated the this constraint,
@@ -310,8 +280,8 @@ type _CSS3 = Expect<
 
 describe("§11 type-level assertions", () => {
   it("type assertions verified by tsc --build (compile-time proof)", () => {
-    // All type assertions above (_T1–_T18, _T13_notAny, _T14_notAny, _CSS1–_CSS3) are
-    // verified at compile time by tsc --build, which includes constraints.test.ts via tsconfig.json
+    // All type assertions above (_T1–_T18, _T13_notAny, _T14_notAny, _CSS3) are verified at
+    // compile time by tsc --build, which includes constraints.test.ts via tsconfig.json
     // include: ["src"]. If any assertion fails, tsc fails — no runtime check needed.
     void 0;
   });
