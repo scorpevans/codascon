@@ -209,6 +209,18 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-extra");
   });
 
+  it("[dispatch-coverage + dispatch-extra] both fire when dispatch has wrong subjects", () => {
+    // Professor is in subjectUnion but missing from dispatch → dispatch-coverage
+    // Ghost is in dispatch but not in subjectUnion → dispatch-extra
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccess", Ghost: "GrantAccess" },
+    });
+    const result = validateCmd.run(entry, indexWithCmd(entry));
+    expect(rules(result)).toContain("dispatch-coverage");
+    expect(rules(result)).toContain("dispatch-extra");
+  });
+
   it("[dispatch-target-ref] fails when a bare Template name is not in templates", () => {
     const entry = makeCmd({ dispatch: { Student: "NoSuchTemplate" }, templates: {} });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
