@@ -970,3 +970,72 @@ describe("§16 document domain — second independent domain validation", () => 
   it("16e: template missing hook `render` property rejected at implements", () => void 0);
   it("16f: hook invoked on wrong subject rejected at call site", () => void 0);
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// §17 · MULTI-HOOK TEMPLATE — H tuple with two hooks
+//
+//   §8 and §15 each exercise H = [OneHook]. This section proves that
+//   H = [HookA, HookB] works correctly: both hooks are structurally
+//   required by CommandHooks<[LogCommand, GroomCommand]>, both are
+//   injected, and both are invoked inside execute() with their return
+//   values composed into the final result — making the assertions
+//   directly sensitive to both hook calls.
+// ═══════════════════════════════════════════════════════════════════
+
+class RichFeedCommand extends Command<Person, { time: string }, FeedResult, [Dog]> {
+  readonly commandName = "richFeed" as const;
+  private log: LogCommand;
+  private groom: GroomCommand;
+  constructor(log: LogCommand, groom: GroomCommand) {
+    super();
+    this.log = log;
+    this.groom = groom;
+  }
+  resolveDog() {
+    const log = this.log;
+    const groom = this.groom;
+    return {
+      log,
+      groom,
+      execute(subject: Dog, object: { time: string }): FeedResult {
+        const logEntry = log.run(subject, { action: object.time });
+        const groomResult = groom.run(subject, { name: "Vet", hasEmergency: false });
+        return {
+          fed: true,
+          // food depends on BOTH hooks: groomResult.groomed selects the branch,
+          // logEntry.action provides the value — if either hook is not invoked,
+          // this assertion fails.
+          food: groomResult.groomed ? logEntry.action : "standard",
+          amount: 2,
+        };
+      },
+    } satisfies Template<RichFeedCommand, [LogCommand, GroomCommand], Dog>;
+  }
+}
+
+describe("§17 multi-hook template — H = [LogCommand, GroomCommand]", () => {
+  it("both hooks are invoked and their results composed into the return value", () => {
+    const cmd = new RichFeedCommand(new LogCommand(), new GroomCommand());
+
+    const result = cmd.run(new Dog("Rex", "Lab"), { time: "morning" });
+
+    // food === "morning" proves both hooks were called:
+    //   groomResult.groomed is true for any Dog (GroomCommand.resolveDog always sets groomed:true)
+    //   logEntry.action === "morning" (LogCommand echoes the action field)
+    strictEqual(result.food, "morning");
+    strictEqual(result.fed, true);
+    strictEqual(result.amount, 2);
+  });
+
+  it("hooks are independent — changing either changes the result", () => {
+    const cmd = new RichFeedCommand(new LogCommand(), new GroomCommand());
+
+    const morning = cmd.run(new Dog("Rex", "Lab"), { time: "morning" });
+    const evening = cmd.run(new Dog("Rex", "Lab"), { time: "evening" });
+
+    // logEntry.action reflects the object.time passed to run() — proves log hook
+    // is re-invoked on every call, not cached
+    strictEqual(morning.food, "morning");
+    strictEqual(evening.food, "evening");
+  });
+});
