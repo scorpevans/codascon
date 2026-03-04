@@ -9,7 +9,7 @@ export default defineConfig({
   // inlines non-exported types in exported signatures, whereas tsup's
   // rollup-plugin-dts strips @internal declarations but leaves dangling name
   // references, breaking consumer type-checking. dist/index.d.cts is copied
-  // from dist/index.d.ts in the build:cjs script (types are identical for
+  // from dist/index.d.ts in the build:js script (types are identical for
   // CJS and ESM since the module has no imports).
   format: ["cjs", "esm"],
   dts: false,
