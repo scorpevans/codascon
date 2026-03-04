@@ -1,6 +1,6 @@
 ---
-"codascon": minor
-"odetovibe": minor
+"codascon": patch
+"odetovibe": patch
 ---
 
 Add CJS support to codascon; trim internal types from published .d.ts files.
