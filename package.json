@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --build && pnpm --filter codascon run build:cjs && chmod +x packages/odetovibe/dist/cli.js",
+    "build": "tsc --build && pnpm --filter codascon run build:cjs && pnpm --filter odetovibe run build:js && chmod +x packages/odetovibe/dist/cli.js",
     "clean": "tsc --build --clean",
     "test": "vitest",
     "lint": "eslint packages/*/src",
