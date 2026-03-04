@@ -29,4 +29,19 @@ describe("printUsage", () => {
     const { output } = capture();
     expect(output).toContain("Path to the code's YAML-config file");
   });
+
+  it("lists the --out flag in usage", () => {
+    const { output } = capture();
+    expect(output).toContain("--out");
+  });
+
+  it("lists the --overwrite flag in usage", () => {
+    const { output } = capture();
+    expect(output).toContain("--overwrite");
+  });
+
+  it("lists the --no-overwrite flag in usage", () => {
+    const { output } = capture();
+    expect(output).toContain("--no-overwrite");
+  });
 });
