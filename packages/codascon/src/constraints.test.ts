@@ -8,6 +8,7 @@ import {
   type CommandName,
   type SubjectVisitName,
   type CommandSubjectUnion,
+  type CommandSubjectStrategies,
 } from "./index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
@@ -230,11 +231,63 @@ type _T12 = Expect<
 type _T13 = Expect<Equal<CommandSubjectUnion<FeedCommand>, Dog | Cat | Bird>>;
 type _T14 = Expect<Equal<CommandSubjectUnion<GroomCommand>, Dog | Cat>>;
 
+// CommandSubjectStrategies produces one visit method per Subject in the CSU.
+//
+// IMPORTANT: Must use the base class form Command<B, O, R, CSU>, not the concrete
+// subclass (e.g. FeedCommand). When TypeScript evaluates CommandSubjectStrategies<FeedCommand>,
+// it infers CSU from FeedCommand's structural type. The `run` method's `this` constraint
+// involves CommandSubjectStrategies<Command<B, O, R, CSU>> — a recursive reference —
+// causing TypeScript to short-circuit and return {} instead of the expected intersection.
+// CommandSubjectStrategies<Command<B, O, R, CSU>> resolves correctly because TypeScript
+// matches the explicit type arguments directly, without structural inference.
+//
+// Return types use Template<C, [], S> (hooks-free). Visit<C, SU> erases hooks to any[]
+// in its declared return type, but both Template<C, any[], S> and Template<C, [], S>
+// expand to the same structural type when there are no hooks (CommandHooks<any[]> = {}
+// because CommandName<any> = never). Using [] avoids comparison issues.
+type _CSS1 = Expect<
+  CommandSubjectStrategies<
+    Command<Person, { time: string }, FeedResult, [Dog, Cat, Bird]>
+  > extends {
+    resolveDog: (
+      subject: Dog,
+      object: Readonly<{ time: string }>,
+    ) => Template<FeedCommand, [], Dog>;
+    resolveCat: (
+      subject: Cat,
+      object: Readonly<{ time: string }>,
+    ) => Template<FeedCommand, [], Cat>;
+    resolveBird: (
+      subject: Bird,
+      object: Readonly<{ time: string }>,
+    ) => Template<FeedCommand, [], Bird>;
+  }
+    ? true
+    : false
+>;
+
+// Single-subject command produces a single-method constraint (same base class form required)
+type _CSS2 = Expect<
+  CommandSubjectStrategies<Command<Person, string, number, [Dog]>> extends {
+    resolveDog: (subject: Dog, object: Readonly<string>) => Template<DogOnlyCommand, [], Dog>;
+  }
+    ? true
+    : false
+>;
+
+// A correctly implemented Command satisfies its own CommandSubjectStrategies —
+// proved by the function body compiling: if FeedCommand violated the this constraint,
+// tsc would reject cmd.run() at the call site.
+const _css3Proof = (cmd: FeedCommand, dog: Dog) => cmd.run(dog, { time: "x" });
+type _CSS3 = Expect<
+  typeof _css3Proof extends (cmd: FeedCommand, dog: Dog) => FeedResult ? true : false
+>;
+
 describe("§11 type-level assertions", () => {
   it("type assertions verified by tsc --build (compile-time proof)", () => {
-    // All type assertions above (_T1–_T14) are verified at compile time by tsc --build,
-    // which includes constraints.test.ts via tsconfig.json include: ["src"].
-    // If any assertion fails, tsc fails — no runtime check needed.
+    // All type assertions above (_T1–_T14, _CSS1–_CSS3) are verified at compile
+    // time by tsc --build, which includes constraints.test.ts via tsconfig.json
+    // include: ["src"]. If any assertion fails, tsc fails — no runtime check needed.
     void 0;
   });
 });
