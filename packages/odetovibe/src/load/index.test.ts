@@ -602,6 +602,30 @@ export class Foo {
     expect(written).toContain("x: number");
   });
 
+  it("drops generated interface properties when the interface already exists (user owns interface content)", async () => {
+    // The merge contract: if an interface already exists, its content is entirely
+    // user-owned and is never replaced or augmented by generated output.
+    // Even if the generated version has new properties they are silently dropped.
+    const project = makeProject({
+      "f.ts": "export interface Ctx { id: number; label: string; }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing file has an empty stub — user has not added anything yet
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport interface Ctx {}",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    // Generated properties must NOT be injected — user owns the interface body
+    expect(written).not.toContain("id: number");
+    expect(written).not.toContain("label: string");
+    expect(written).toContain("interface Ctx");
+  });
+
   it("leaves an existing interface entirely untouched (user owns all interface content)", async () => {
     // Generated has an empty stub `Ctx {}`; existing has user-written fields and JSDoc.
     // Existing interface must be preserved byte-for-byte — nothing from generated replaces it.
