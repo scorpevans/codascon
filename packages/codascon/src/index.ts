@@ -106,8 +106,6 @@
  * **Async support:**
  * Set `R = Promise<Result>` on the Command. Visit methods (strategy selection)
  * remain synchronous; only `execute` returns the Promise.
- *
- * @module codascon
  */
 // ─── Type Utilities (exported) ───────────────────────────────────
 
