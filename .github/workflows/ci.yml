@@ -68,3 +68,16 @@ jobs:
           npm install /tmp/codascon-*.tgz /tmp/odetovibe-*.tgz
           node --input-type=module -e "import { parseYaml, validateYaml, emitAst, writeFiles } from 'odetovibe'; console.log('ESM: OK')"
           test -x ./node_modules/.bin/odetovibe && echo "CLI binary: OK"
+
+          # --help must exit 0 and mention the positional arg
+          ./node_modules/.bin/odetovibe --help | grep -q "code_config.yaml" && echo "CLI --help: OK"
+
+          # End-to-end: convert smoke.yaml fixture and assert generated output
+          smoke_yaml="${GITHUB_WORKSPACE}/packages/odetovibe/fixtures/smoke.yaml"
+          output=$(./node_modules/.bin/odetovibe "$smoke_yaml" --out /tmp/smoke-out 2>&1)
+          echo "$output"
+          echo "$output" | grep -q "Parsed 1 command(s), namespace: greet" && echo "CLI codegen parse: OK"
+          test -f /tmp/smoke-out/greet/domain-types.ts && echo "domain-types.ts: OK"
+          test -f /tmp/smoke-out/greet/commands/greet.ts && echo "commands/greet.ts: OK"
+          grep -q "User" /tmp/smoke-out/greet/domain-types.ts && echo "domain-types contains User: OK"
+          grep -q "GreetCommand" /tmp/smoke-out/greet/commands/greet.ts && echo "commands contains GreetCommand: OK"
