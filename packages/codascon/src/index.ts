@@ -1,4 +1,4 @@
-/**
+/*
  * codascon — code as config
  *
  * A structural protocol for code organization with exhaustive compile-time type checking.
@@ -109,10 +109,9 @@
  *
  * @module codascon
  */
-
 // ─── Type Utilities (exported) ───────────────────────────────────
 
-/**
+/*
  * Extracts the `visitName` string literal type from a Subject.
  *
  * Returns `never` if the Subject's `visitName` is the wide `string` type
@@ -127,13 +126,14 @@
  * class Bad extends Subject { readonly visitName: string = "oops"; }
  * type T = SubjectVisitName<Bad>;  // never
  */
+/** Extracts the `visitName` string literal type from a Subject. Returns `never` for non-literal visitName. */
 export type SubjectVisitName<S> = S extends { visitName: infer K extends string }
   ? string extends K
     ? never
     : K
   : never;
 
-/**
+/*
  * Extracts the `commandName` string literal type from a Command.
  *
  * Returns `never` if the Command's `commandName` is the wide `string` type.
@@ -143,13 +143,14 @@ export type SubjectVisitName<S> = S extends { visitName: infer K extends string 
  * class FeedCmd extends Command<...> { readonly commandName = "feed" as const; }
  * type T = CommandName<FeedCmd>;  // "feed"
  */
+/** Extracts the `commandName` string literal type from a Command. */
 export type CommandName<C> = C extends { commandName: infer K extends string }
   ? string extends K
     ? never
     : K
   : never;
 
-/**
+/*
  * Extracts the object type (`O`) from a Command's generic parameters.
  *
  * The object is the context/payload passed alongside the Subject when
@@ -160,9 +161,10 @@ export type CommandName<C> = C extends { commandName: infer K extends string }
  * class AccessCmd extends Command<Person, Building, Result, [Student]> { ... }
  * type T = CommandObject<AccessCmd>;  // Building
  */
+/** Extracts the object type (`O`) from a Command — the context/payload passed to visit methods and `execute`. */
 export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : never;
 
-/**
+/*
  * Extracts the return type (`R`) from a Command's generic parameters.
  *
  * This is the type returned by both `command.run(...)` and `template.execute(...)`.
@@ -172,6 +174,7 @@ export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : n
  * class AccessCmd extends Command<Person, Building, AccessResult, [Student]> { ... }
  * type T = CommandReturn<AccessCmd>;  // AccessResult
  */
+/** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. */
 export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : never;
 
 // ─── Internal Type Utilities ─────────────────────────────────────
@@ -179,10 +182,11 @@ export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : n
 /**
  * Shorthand for the fully-open Command type.
  * Used as a constraint throughout the type machinery.
+ * @internal
  */
 type AnyCommand = Command<any, any, any, any>;
 
-/**
+/*
  * Extracts the Subject union from a Command's `CSU` tuple parameter.
  *
  * Given `Command<B, O, R, [Student, Professor]>`, produces `Student | Professor`.
@@ -193,6 +197,7 @@ type AnyCommand = Command<any, any, any, any>;
  * to produce `any` rather than the expected union. This is a TypeScript limitation
  * that affects constraint enforcement but not runtime behavior.
  */
+/** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. */
 export type CommandSubjectUnion<C> =
   C extends Command<any, any, any, infer CSU> ? CSU[number] : never;
 
@@ -214,6 +219,7 @@ export type CommandSubjectUnion<C> =
  *    requires the hook as a property, catching missing wiring.
  * 2. **Invocation** — `hookCmd.run(subject)` checks the hook Command's own
  *    `this & CommandSubjectStrategies` constraint, catching subject mismatches.
+ * @internal
  */
 type SubjectUnionVisitors<SU extends Subject, H extends AnyCommand[]> = {
   [K in keyof H]: SU extends CommandSubjectUnion<H[K]> ? H[K] : never;
@@ -238,6 +244,7 @@ type SubjectUnionVisitors<SU extends Subject, H extends AnyCommand[]> = {
  * @example
  * // For Command<Person, Building, Result, [Student, Professor]> and SU = Student:
  * // Visit<C, Student> = { resolveStudent: (s: Student, o: Readonly<Building>) => Template<C, any[], Student> }
+ * @internal
  */
 type Visit<C extends AnyCommand, SU extends CommandSubjectUnion<C>> = {
   [K in SubjectVisitName<SU>]: (
@@ -256,6 +263,7 @@ type Visit<C extends AnyCommand, SU extends CommandSubjectUnion<C>> = {
  * This is also the mechanism that catches duplicate `visitName` values:
  * two Subjects with the same visitName produce conflicting function signatures
  * in the intersection, making the handler unimplementable.
+ * @internal
  */
 type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (k: infer I) => void
   ? I
@@ -284,6 +292,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * //   resolveStudent: (s: Student, o: Readonly<Building>) => Template<...>;
  * //   resolveProfessor: (s: Professor, o: Readonly<Building>) => Template<...>;
  * // }
+ * @internal
  */
 type CommandSubjectStrategies<C extends AnyCommand> =
   C extends Command<any, any, any, infer CSU>
@@ -306,10 +315,13 @@ type CommandSubjectStrategies<C extends AnyCommand> =
  * 1 & CSU[number]`) to preserve AnyCommand structural compatibility. Without it,
  * `string extends any["visitName"]` is `true`, which would make AnyCommand's
  * `run()` uncallable and break all Template hook constraints.
+ * @internal
  */
 type WidenedVisitNameError =
   "visitName must be a literal. Fix: readonly visitName = 'resolveFoo' as const";
 
+/** @internal */
+// IsAny guard: 0 extends (1 & T) is only true when T is `any`.
 type WithLiteralVisitNames<CSU extends Subject[]> =
   // IsAny guard: 0 extends (1 & T) is only true when T is `any`.
   0 extends 1 & CSU[number]
@@ -334,6 +346,7 @@ type WithLiteralVisitNames<CSU extends Subject[]> =
  *
  * @example
  * // CommandHooks<[AuditCommand]> = { audit: AuditCommand }
+ * @internal
  */
 type CommandHooks<H extends AnyCommand[]> = {
   [Cmd in H[number] as CommandName<Cmd>]: Cmd;
@@ -341,7 +354,7 @@ type CommandHooks<H extends AnyCommand[]> = {
 
 // ─── Core Classes ────────────────────────────────────────────────
 
-/**
+/*
  * Abstract base class for all Commands.
  *
  * A Command represents an operation that can be performed on a set of Subjects.
@@ -408,6 +421,11 @@ type CommandHooks<H extends AnyCommand[]> = {
  *
  * const result = accessCmd.run(student, building);
  */
+/**
+ * Abstract base class for Commands. Declare `readonly commandName` as a string literal
+ * and implement one visit method per Subject (named after that Subject's `visitName`).
+ * Call `run(subject, object)` to dispatch.
+ */
 export abstract class Command<B, O, R, CSU extends (B & Subject)[]> {
   abstract readonly commandName: string;
 
@@ -421,7 +439,7 @@ export abstract class Command<B, O, R, CSU extends (B & Subject)[]> {
   }
 }
 
-/**
+/*
  * Abstract base class for all Subjects.
  *
  * A Subject is an entity that participates in double dispatch. Each Subject
@@ -466,9 +484,18 @@ export abstract class Command<B, O, R, CSU extends (B & Subject)[]> {
  *   ) { super(); }
  * }
  */
+/**
+ * Abstract base class for Subjects. Declare `readonly visitName` as a string literal
+ * (e.g. `readonly visitName = "resolveStudent" as const`) to participate in dispatch.
+ */
 export abstract class Subject {
   abstract readonly visitName: string;
 
+  /**
+   * Performs the Subject's half of double dispatch. Called by `Command.run()` —
+   * not intended for direct use by consumers.
+   * @internal
+   */
   getCommandStrategy<C extends AnyCommand, SU extends CommandSubjectUnion<C>>(
     this: this & SU,
     command: Visit<C, SU>,
@@ -481,7 +508,7 @@ export abstract class Subject {
 
 // ─── Template ────────────────────────────────────────────────────
 
-/**
+/*
  * The strategy type. Defines the contract for executing a Command's
  * operation on a Subject.
  *
@@ -585,6 +612,10 @@ export abstract class Subject {
  * enforcement occurs when the hook is actually invoked in `execute` — calling
  * `this.audit.run(subject)` where `subject` is outside the hook's union
  * produces a compile error via the hook Command's own `this` constraint.
+ */
+/**
+ * Strategy interface. Implement `execute(subject, object)` and declare a property
+ * for each hook Command in `H` (keyed by `commandName`).
  */
 export type Template<
   C extends AnyCommand,
