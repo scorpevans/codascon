@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Project } from "ts-morph";
 import { parseYaml, validateYaml } from "./extract/index.js";
 import { emitAst } from "./transform/index.js";
 import { writeFiles } from "./load/index.js";
 
-function printUsage(): void {
+export function printUsage(): void {
   console.log("Usage: odetovibe <code_config.yaml> [--out <dir>] [--overwrite | --no-overwrite]");
   console.log("");
   console.log("  Generate TypeScript code from a codascon YAML schema.");
@@ -73,7 +74,9 @@ async function main(): Promise<void> {
   if (hasCompileErrors) process.exit(1);
 }
 
-main().catch((err: unknown) => {
-  console.error(err);
-  process.exit(1);
-});
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err: unknown) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
