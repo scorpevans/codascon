@@ -1,4 +1,4 @@
-/**
+/*
  * codascon YAML Configuration Schema
  *
  * Declarative schema for describing a codascon domain — the Subjects, Commands,
@@ -158,7 +158,6 @@
  *         strategies: {}
  * ```
  *
- * @module codascon/schema
  */
 
 // ─── Primitives ──────────────────────────────────────────────────
@@ -180,7 +179,7 @@ export type StrategyRef = string;
 
 // ─── Domain Types ────────────────────────────────────────────────
 
-/**
+/*
  * A type referenced in the codascon protocol — as a base type, object type,
  * return type, or Subject (dispatch participant).
  *
@@ -193,13 +192,14 @@ export type StrategyRef = string;
  * **Without `visitName`**: This is a plain type — an interface, result type,
  * context object, or base type. It does not participate in dispatch.
  */
+/** A domain type: plain type (no `visitName`) or Subject (has `visitName`). */
 export type DomainType = {
   visitName?: string;
 };
 
 // ─── Command ─────────────────────────────────────────────────────
 
-/**
+/*
  * An operation that can be performed on Subjects.
  *
  * Maps directly to a class extending `Command<B, O, R, CSU>` in the
@@ -261,6 +261,7 @@ export type DomainType = {
  *                            Template with `strategies: {}` is concrete
  *                            and may be referenced directly.
  */
+/** A Command entry in the YAML config — declares generic params, dispatch map, and templates. */
 export type Command = {
   commandName: string;
   baseType: DomainTypeRef;
@@ -278,7 +279,7 @@ export type Command = {
 
 // ─── Template ────────────────────────────────────────────────────
 
-/**
+/*
  * The strategy interface / abstract class.
  *
  * Maps to a class implementing `Template<C, H, SU>` in the framework.
@@ -345,6 +346,7 @@ export type Command = {
  *                            dispatch targets. Required — explicit emptiness
  *                            signals intent.
  */
+/** A Template entry — declares `isParameterized`, hook dependencies, subject narrowing, and strategies. */
 export type Template = {
   isParameterized: boolean;
   commandHooks?: {
@@ -358,7 +360,7 @@ export type Template = {
 
 // ─── Strategy ────────────────────────────────────────────────────
 
-/**
+/*
  * A concrete extension of a Template.
  *
  * Strategies extend their parent Template class. For parameterized
@@ -394,6 +396,7 @@ export type Template = {
  *                            declares the hook as abstract and the Strategy
  *                            must supply it).
  */
+/** A Strategy entry — concrete extension of a Template, optionally narrowing subject subset or overriding hooks. */
 export type Strategy = {
   subjectSubset?: SubjectRef[];
   commandHooks?: {
@@ -403,7 +406,7 @@ export type Strategy = {
 
 // ─── Root Schema ─────────────────────────────────────────────────
 
-/**
+/*
  * Root configuration schema for a codascon domain.
  *
  * A single YAML file conforming to this schema describes one bounded
@@ -446,6 +449,7 @@ export type Strategy = {
  *                            dispatch map, and its Templates (with nested
  *                            Strategies).
  */
+/** Root schema for a codascon domain YAML config — declares namespace, imports, domain types, and commands. */
 export interface YamlConfig {
   namespace?: string;
   imports?: {

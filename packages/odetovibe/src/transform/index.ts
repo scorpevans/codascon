@@ -1,4 +1,4 @@
-/**
+/*
  * @codascon/odetovibe — Transform Domain: Public API
  *
  * Exposes `emitAst(configIndex, ctx)` — iterates all entries in a
@@ -20,8 +20,6 @@
  * emitAst(configIndex, { configIndex, project });
  * // project now contains populated SourceFiles ready for the Load phase
  * ```
- *
- * @module odetovibe/transform
  */
 
 import type { ConfigIndex } from "../extract/domain-types.js";
@@ -33,7 +31,7 @@ export type { EmitContext, EmitResult } from "./domain-types.js";
 
 const emitCmd = new EmitAstCommand();
 
-/**
+/*
  * Emits TypeScript AST for all entries in a `ConfigIndex`.
  *
  * Iterates all 6 entry maps in dependency order (types → commands →
@@ -46,6 +44,7 @@ const emitCmd = new EmitAstCommand();
  *              `configIndex` for cross-entry lookups.
  * @returns Array of `EmitResult`, one per entry, in iteration order.
  */
+/** Emit TypeScript AST for all entries in a `ConfigIndex` into `ctx.project`. No disk I/O. */
 export function emitAst(configIndex: ConfigIndex, ctx: EmitContext): EmitResult[] {
   const results: EmitResult[] = [];
 

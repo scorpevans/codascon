@@ -1,4 +1,4 @@
-/**
+/*
  * @codascon/odetovibe — Load Domain: Public API
  *
  * Exposes `writeFiles(project, context)` — iterates all SourceFiles in
@@ -24,8 +24,6 @@
  *   else console.log(r.created ? "created" : "updated", r.path);
  * }
  * ```
- *
- * @module odetovibe/load
  */
 
 import type { Project } from "ts-morph";
@@ -39,7 +37,7 @@ export type { WriteContext, WriteResult, WriteMode } from "./domain-types.js";
 
 const writeCmd = new WriteFileCommand();
 
-/**
+/*
  * Writes all SourceFiles in a ts-morph Project to disk.
  *
  * Each SourceFile's virtual path is resolved relative to `context.targetDir`.
@@ -51,6 +49,7 @@ const writeCmd = new WriteFileCommand();
  * @param context — Write context: target directory and write mode.
  * @returns Promise resolving to an array of `WriteResult`, one per SourceFile.
  */
+/** Write all SourceFiles in a ts-morph Project to disk under `context.targetDir`. */
 export async function writeFiles(project: Project, context: WriteContext): Promise<WriteResult[]> {
   return Promise.all(
     project.getSourceFiles().map((sf) => writeCmd.run(new SourceFileEntry(sf), context)),

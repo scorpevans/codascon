@@ -1,5 +1,5 @@
 /* @odetovibe-generated */
-/**
+/*
  * @codascon/odetovibe — Transform Domain: EmitAstCommand
  *
  * Dispatches each ConfigEntry to its emitter Template. Each emitter
@@ -11,8 +11,6 @@
  *   AbstractTemplateEntry              →  same file as parent Command
  *   ConcreteTemplateEntry              →  same file as parent Command
  *   StrategyEntry                      →  same file as grandparent Command
- *
- * @module odetovibe/transform/emit-ast
  */
 
 import { Command } from "codascon";
@@ -511,6 +509,7 @@ const abstractTemplateEmitter = new AbstractTemplateEmitter();
 const concreteTemplateEmitter = new ConcreteTemplateEmitter();
 const strategyClassEmitter = new StrategyClassEmitter();
 
+/** Dispatches each config entry to its TypeScript AST emitter via double dispatch. */
 export class EmitAstCommand extends Command<
   ConfigEntry,
   EmitContext,

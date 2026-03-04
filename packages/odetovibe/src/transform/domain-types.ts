@@ -1,17 +1,15 @@
 /* @odetovibe-generated */
-/**
+/*
  * @codascon/odetovibe — Transform Domain: Shared Types
  *
  * Context and result types for the transform phase.
  * Emitters receive an `EmitContext` and return an `EmitResult`.
- *
- * @module odetovibe/transform/domain-types
  */
 
 import type { Project } from "ts-morph";
 import type { ConfigIndex } from "../extract/domain-types.js";
 
-/**
+/*
  * Context passed to every emitter.
  *
  * `configIndex` enables cross-entry lookups — e.g., an AbstractTemplate
@@ -22,12 +20,13 @@ import type { ConfigIndex } from "../extract/domain-types.js";
  * or `project.createSourceFile` to obtain the SourceFile they write to,
  * then add declarations directly to it.
  */
+/** Context passed to every emitter — provides the `ConfigIndex` for cross-entry lookups and the ts-morph `Project`. */
 export interface EmitContext {
   readonly configIndex: ConfigIndex;
   readonly project: Project;
 }
 
-/**
+/*
  * Result returned by every emitter.
  *
  * `targetFile` is the path of the in-memory ts-morph SourceFile the emitter
@@ -37,6 +36,7 @@ export interface EmitContext {
  * The Load phase reads these paths from `project.getSourceFiles()` and
  * writes them to disk.
  */
+/** Result returned by every emitter — the virtual path of the ts-morph SourceFile declarations were added to. */
 export interface EmitResult {
   readonly targetFile: string;
 }
