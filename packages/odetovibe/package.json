@@ -46,8 +46,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc --build && tsup && chmod +x dist/cli.js",
-    "build:js": "tsup",
+    "build": "tsc --build && pnpm run build:js",
+    "build:js": "tsup && chmod +x dist/cli.js",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "prepublishOnly": "pnpm build && pnpm test"
