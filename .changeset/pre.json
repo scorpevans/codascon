@@ -7,6 +7,7 @@
   },
   "changesets": [
     "cli-main-guard-realpathsync",
+    "dual-cjs-esm-and-clean-types",
     "exclude-sourcemaps",
     "strategy-execute-and-cli-fixes"
   ]
