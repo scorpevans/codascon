@@ -1,0 +1,23 @@
+namespace: greet
+
+domainTypes:
+  Person:
+  User:
+    visitName: resolveUser
+  Greeting:
+
+commands:
+  GreetCommand:
+    commandName: greet
+    baseType: Person
+    objectType: Greeting
+    returnType: Greeting
+    subjectUnion:
+      - User
+    dispatch:
+      User: UserGreeter
+    templates:
+      UserGreeter:
+        isParameterized: false
+        subjectSubset: [User]
+        strategies: {}

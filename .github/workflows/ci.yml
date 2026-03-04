@@ -68,3 +68,14 @@ jobs:
           npm install /tmp/codascon-*.tgz /tmp/odetovibe-*.tgz
           node --input-type=module -e "import { parseYaml, validateYaml, emitAst, writeFiles } from 'odetovibe'; console.log('ESM: OK')"
           test -x ./node_modules/.bin/odetovibe && echo "CLI binary: OK"
+
+          # --help must exit 0 and mention the positional arg
+          ./node_modules/.bin/odetovibe --help | grep -q "code_config.yaml" && echo "CLI --help: OK"
+
+          # End-to-end: convert smoke.yaml and diff output against golden files
+          smoke_yaml="${GITHUB_WORKSPACE}/packages/odetovibe/fixtures/smoke.yaml"
+          smoke_expected="${GITHUB_WORKSPACE}/packages/odetovibe/fixtures/smoke-expected"
+          output=$(./node_modules/.bin/odetovibe "$smoke_yaml" --out /tmp/smoke-out 2>&1)
+          echo "$output"
+          echo "$output" | grep -q "Parsed 1 command(s), namespace: greet" && echo "CLI codegen parse: OK"
+          diff -r "$smoke_expected" /tmp/smoke-out && echo "CLI codegen output matches golden files: OK"
