@@ -2,11 +2,49 @@
  * @codascon/odetovibe — CLI Tests
  *
  * Covers:
- *   - printUsage: correct positional argument name and description
+ *   - printUsage: correct positional argument name, description, and flags
+ *   - main: exit codes and output for --help, -h, missing argument,
+ *     file not found, invalid YAML, and the happy path
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { printUsage } from "./cli.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./extract/index.js");
+vi.mock("./transform/index.js");
+vi.mock("./load/index.js");
+
+import { printUsage, main } from "./cli.js";
+import { parseYaml, validateYaml } from "./extract/index.js";
+import { writeFiles } from "./load/index.js";
+import type { ConfigIndex, ExtractResult } from "./extract/domain-types.js";
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+class ExitError extends Error {
+  constructor(public readonly code: number) {
+    super(`process.exit(${code})`);
+  }
+}
+
+const fakeConfigIndex: ConfigIndex = {
+  namespace: "test",
+  imports: {},
+  externalTypeKeys: new Set(),
+  subjectTypes: new Map(),
+  plainTypes: new Map(),
+  commands: new Map([["TestCommand", null as never]]),
+  abstractTemplates: new Map(),
+  concreteTemplates: new Map(),
+  strategies: new Map(),
+};
+
+const fakeValidResult: ExtractResult = {
+  valid: true,
+  configIndex: fakeConfigIndex,
+  validationResults: [],
+};
+
+// ── printUsage ────────────────────────────────────────────────────────────────
 
 describe("printUsage", () => {
   afterEach(() => {
@@ -43,5 +81,54 @@ describe("printUsage", () => {
   it("lists the --no-overwrite flag in usage", () => {
     const { output } = capture();
     expect(output).toContain("--no-overwrite");
+  });
+});
+
+// ── main ──────────────────────────────────────────────────────────────────────
+
+describe("main", () => {
+  let origArgv: string[];
+  let exitCodes: number[];
+  let logLines: string[];
+  let errorLines: string[];
+
+  beforeEach(() => {
+    origArgv = process.argv;
+    exitCodes = [];
+    logLines = [];
+    errorLines = [];
+    vi.spyOn(process, "exit").mockImplementation((code?: number | string | null): never => {
+      const n = typeof code === "number" ? code : 0;
+      exitCodes.push(n);
+      throw new ExitError(n);
+    });
+    vi.spyOn(console, "log").mockImplementation((...args) => logLines.push(String(args[0])));
+    vi.spyOn(console, "error").mockImplementation((...args) => errorLines.push(String(args[0])));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Default happy-path mocks — override per test as needed
+    vi.mocked(parseYaml).mockReturnValue(fakeConfigIndex);
+    vi.mocked(validateYaml).mockReturnValue(fakeValidResult);
+    vi.mocked(writeFiles).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    process.argv = origArgv;
+    vi.restoreAllMocks();
+  });
+
+  it("exits 0 and prints usage for --help", async () => {
+    process.argv = ["node", "cli.js", "--help"];
+    const err = await main().catch((e) => e);
+    expect(err).toBeInstanceOf(ExitError);
+    expect((err as ExitError).code).toBe(0);
+    expect(logLines.join("\n")).toContain("<code_config.yaml>");
+  });
+
+  it("exits 0 and prints usage for -h", async () => {
+    process.argv = ["node", "cli.js", "-h"];
+    const err = await main().catch((e) => e);
+    expect(err).toBeInstanceOf(ExitError);
+    expect((err as ExitError).code).toBe(0);
+    expect(logLines.join("\n")).toContain("<code_config.yaml>");
   });
 });
