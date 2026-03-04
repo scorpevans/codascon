@@ -319,7 +319,6 @@ type WidenedVisitNameError =
   "visitName must be a literal. Fix: readonly visitName = 'resolveFoo' as const";
 
 /** @internal */
-// IsAny guard: 0 extends (1 & T) is only true when T is `any`.
 type WithLiteralVisitNames<CSU extends Subject[]> =
   // IsAny guard: 0 extends (1 & T) is only true when T is `any`.
   0 extends 1 & CSU[number]
