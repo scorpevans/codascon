@@ -131,4 +131,12 @@ describe("main", () => {
     expect((err as ExitError).code).toBe(0);
     expect(logLines.join("\n")).toContain("<code_config.yaml>");
   });
+
+  it("exits 1 and prints usage when no argument is provided", async () => {
+    process.argv = ["node", "cli.js"];
+    const err = await main().catch((e) => e);
+    expect(err).toBeInstanceOf(ExitError);
+    expect((err as ExitError).code).toBe(1);
+    expect(logLines.join("\n")).toContain("<code_config.yaml>");
+  });
 });
