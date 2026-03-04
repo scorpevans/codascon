@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Project } from "ts-morph";
@@ -74,7 +75,7 @@ async function main(): Promise<void> {
   if (hasCompileErrors) process.exit(1);
 }
 
-if (fileURLToPath(import.meta.url) === process.argv[1]) {
+if (realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   main().catch((err: unknown) => {
     console.error(err);
     process.exit(1);
