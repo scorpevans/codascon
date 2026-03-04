@@ -177,7 +177,7 @@ export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : n
 
 // ─── Internal Type Utilities ─────────────────────────────────────
 
-/**
+/*
  * Shorthand for the fully-open Command type.
  * Used as a constraint throughout the type machinery.
  */
@@ -198,7 +198,7 @@ type AnyCommand = Command<any, any, any, any>;
 export type CommandSubjectUnion<C> =
   C extends Command<any, any, any, infer CSU> ? CSU[number] : never;
 
-/**
+/*
  * Validates that each Command in the hook tuple `H` has a subject union
  * that covers `SU` (the Template's subject union).
  *
@@ -221,7 +221,7 @@ type SubjectUnionVisitors<SU extends Subject, H extends AnyCommand[]> = {
   [K in keyof H]: SU extends CommandSubjectUnion<H[K]> ? H[K] : never;
 };
 
-/**
+/*
  * Defines the signature of a single visit method on a Command.
  *
  * For a given Command `C` and Subject type `SU`, produces an object type
@@ -248,7 +248,7 @@ type Visit<C extends AnyCommand, SU extends CommandSubjectUnion<C>> = {
   ) => Template<C, any[], SU>;
 };
 
-/**
+/*
  * Converts a union type to an intersection type.
  *
  * Used to merge per-Subject visit method types into a single object type
@@ -263,7 +263,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
   ? I
   : never;
 
-/**
+/*
  * Computes the full set of visit methods a Command must implement.
  *
  * Maps each Subject in the Command's `CSU` tuple to a `Visit<C, Subject>` type,
@@ -292,7 +292,7 @@ type CommandSubjectStrategies<C extends AnyCommand> =
     ? UnionToIntersection<{ [K in keyof CSU]: Visit<C, CSU[K]> }[number]>
     : never;
 
-/**
+/*
  * Produces an impossible structural requirement on `run()`'s `this` parameter
  * when any Subject in `CSU` declares `visitName` as the wide `string` type.
  *
@@ -320,7 +320,7 @@ type WithLiteralVisitNames<CSU extends Subject[]> =
       ? { [K in WidenedVisitNameError]: never }
       : Record<never, never>;
 
-/**
+/*
  * Maps a tuple of hook Commands to an object type keyed by their `commandName`.
  *
  * This produces the structural requirement that a Template implementation
