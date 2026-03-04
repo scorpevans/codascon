@@ -249,6 +249,37 @@ describe("writeFiles", () => {
 
     expect(await writeFiles(project, ctx(tmpDir))).toHaveLength(0);
   });
+
+  it("preserves user-added classes when mode is 'merge'", async () => {
+    const project = makeProject({ "f.ts": "export class Generated {}" });
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Generated {}\nexport class UserClass {}",
+    );
+
+    await writeFiles(project, ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("UserClass");
+    expect(written).toContain("Generated");
+  });
+
+  it("merges in-place and preserves user classes when mode is 'strict' and no conflict exists", async () => {
+    const project = makeProject({ "f.ts": "export class Generated {}" });
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Generated {}\nexport class UserClass {}",
+    );
+
+    const results = await writeFiles(project, ctx(tmpDir, "strict"));
+
+    expect(results[0].conflicted).toBeFalsy();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("UserClass");
+    expect(written).toContain("Generated");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -602,6 +633,30 @@ export class Foo {
     expect(written).toContain("x: number");
   });
 
+  it("drops generated interface properties when the interface already exists (user owns interface content)", async () => {
+    // The merge contract: if an interface already exists, its content is entirely
+    // user-owned and is never replaced or augmented by generated output.
+    // Even if the generated version has new properties they are silently dropped.
+    const project = makeProject({
+      "f.ts": "export interface Ctx { id: number; label: string; }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing file has an empty stub — user has not added anything yet
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport interface Ctx {}",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    // Generated properties must NOT be injected — user owns the interface body
+    expect(written).not.toContain("id: number");
+    expect(written).not.toContain("label: string");
+    expect(written).toContain("interface Ctx");
+  });
+
   it("leaves an existing interface entirely untouched (user owns all interface content)", async () => {
     // Generated has an empty stub `Ctx {}`; existing has user-written fields and JSDoc.
     // Existing interface must be preserved byte-for-byte — nothing from generated replaces it.
@@ -637,6 +692,82 @@ export class Foo {
     const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
     const count = (written.match(/\* @odetovibe-generated \*\//g) ?? []).length;
     expect(count).toBe(1);
+  });
+
+  // ── prettier ──────────────────────────────────────────────────────
+
+  it("applies Prettier formatting when creating a new file (no-existing fallback)", async () => {
+    const body = "export interface Foo { name: string; }";
+    const project = makeProject({ "f.ts": body });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ name: string; }");
+    expect(written).toContain("name: string;");
+  });
+
+  it("applies Prettier formatting to the merged result when file already exists", async () => {
+    const body = "export interface Foo { name: string; }";
+    const project = makeProject({ "f.ts": body });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport interface Foo { name: string; }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ name: string; }");
+    expect(written).toContain("name: string;");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// compileErrors — pre-write type-check gate
+//
+// Each writer calls checkDiagnostics on the final text before writing.
+// When errors are found the file is NOT written and compileErrors is
+// populated in the returned WriteResult.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("compileErrors", () => {
+  it("returns compileErrors when generated content has undeclared names", async () => {
+    // "UndeclaredBase" is not imported and not defined — produces TS2304 in the
+    // isolated in-memory type-checker (TS2304 is not in FALLBACK_FILTERED_CODES).
+    const project = makeProject({ "f.ts": "export class Foo extends UndeclaredBase {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+  });
+
+  it("does not write the file when compileErrors are present", async () => {
+    const project = makeProject({ "f.ts": "export class Foo extends UndeclaredBase {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir));
+
+    expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(false);
+  });
+
+  it("returns compileErrors in merge mode when generated content has undeclared names", async () => {
+    const project = makeProject({ "f.ts": "export class Foo extends UndeclaredBase {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
   });
 });
 
@@ -811,6 +942,82 @@ describe("StrictMergeWriter", () => {
     const odeContent = fs.readFileSync(path.join(tmpDir, "f.ode.ts"), "utf-8");
     expect(odeContent.startsWith("/* @odetovibe-generated */")).toBe(true);
     expect(odeContent).toContain("extends Error");
+  });
+
+  it("writes .ode.ts when an import changes from type-only to value import", async () => {
+    // A type-only → value import change is a codegen-owned structural change:
+    // codegen has decided the import must be a value import, not erased at runtime.
+    // StrictMergeWriter must detect this and write to .ode.ts rather than merging.
+    const project = makeProject({
+      "f.ts": `import { Foo } from "./types.js";\nexport class Bar {}`,
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      `/* @odetovibe-generated */\nimport type { Foo } from "./types.js";\nexport class Bar {}`,
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+
+  it("inserts .ode before the final extension for multi-dot filenames", async () => {
+    // conflictPath("access-building.test.ts") must produce "access-building.test.ode.ts",
+    // NOT "access-building.ode.test.ts" — .ode is always inserted before the last extension.
+    const project = makeProject({
+      "access-building.test.ts": "export class Foo extends Error {}",
+    });
+    const sf = project.getSourceFileOrThrow("access-building.test.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "access-building.test.ts"),
+      "/* @odetovibe-generated */\nexport class Foo extends RegExp {}",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "access-building.test.ode.ts"));
+    expect(fs.existsSync(path.join(tmpDir, "access-building.test.ode.ts"))).toBe(true);
+    const original = fs.readFileSync(path.join(tmpDir, "access-building.test.ts"), "utf-8");
+    expect(original).toContain("RegExp");
+  });
+
+  // ── prettier ──────────────────────────────────────────────────────
+
+  it("applies Prettier formatting when creating a new file (no-existing fallback)", async () => {
+    const body = "export interface Foo { name: string; }";
+    const project = makeProject({ "f.ts": body });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ name: string; }");
+    expect(written).toContain("name: string;");
+  });
+
+  it("applies Prettier formatting when merging in-place (no-conflict path)", async () => {
+    // The no-conflict path applies formatCode to the merged text before writing.
+    // An unformatted interface in the existing file (user-owned, preserved through
+    // merge) must be expanded by Prettier in the final output.
+    const project = makeProject({ "f.ts": "export class Foo {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo {}\nexport interface Bar { x: number; }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).not.toContain("{ x: number; }");
+    expect(written).toContain("x: number;");
   });
 });
 
