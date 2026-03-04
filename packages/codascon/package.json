@@ -55,7 +55,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc --build && pnpm run build:js",
+    "build": "rm -rf dist tsconfig.tsbuildinfo && tsc --build && pnpm run build:js",
     "build:js": "tsup && cp dist/index.d.ts dist/index.d.cts",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
