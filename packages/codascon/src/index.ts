@@ -180,7 +180,6 @@ export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : n
 /**
  * Shorthand for the fully-open Command type.
  * Used as a constraint throughout the type machinery.
- * @internal
  */
 type AnyCommand = Command<any, any, any, any>;
 
@@ -217,7 +216,6 @@ export type CommandSubjectUnion<C> =
  *    requires the hook as a property, catching missing wiring.
  * 2. **Invocation** — `hookCmd.run(subject)` checks the hook Command's own
  *    `this & CommandSubjectStrategies` constraint, catching subject mismatches.
- * @internal
  */
 type SubjectUnionVisitors<SU extends Subject, H extends AnyCommand[]> = {
   [K in keyof H]: SU extends CommandSubjectUnion<H[K]> ? H[K] : never;
@@ -242,7 +240,6 @@ type SubjectUnionVisitors<SU extends Subject, H extends AnyCommand[]> = {
  * @example
  * // For Command<Person, Building, Result, [Student, Professor]> and SU = Student:
  * // Visit<C, Student> = { resolveStudent: (s: Student, o: Readonly<Building>) => Template<C, any[], Student> }
- * @internal
  */
 type Visit<C extends AnyCommand, SU extends CommandSubjectUnion<C>> = {
   [K in SubjectVisitName<SU>]: (
@@ -261,7 +258,6 @@ type Visit<C extends AnyCommand, SU extends CommandSubjectUnion<C>> = {
  * This is also the mechanism that catches duplicate `visitName` values:
  * two Subjects with the same visitName produce conflicting function signatures
  * in the intersection, making the handler unimplementable.
- * @internal
  */
 type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (k: infer I) => void
   ? I
@@ -290,7 +286,6 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * //   resolveStudent: (s: Student, o: Readonly<Building>) => Template<...>;
  * //   resolveProfessor: (s: Professor, o: Readonly<Building>) => Template<...>;
  * // }
- * @internal
  */
 type CommandSubjectStrategies<C extends AnyCommand> =
   C extends Command<any, any, any, infer CSU>
@@ -313,12 +308,10 @@ type CommandSubjectStrategies<C extends AnyCommand> =
  * 1 & CSU[number]`) to preserve AnyCommand structural compatibility. Without it,
  * `string extends any["visitName"]` is `true`, which would make AnyCommand's
  * `run()` uncallable and break all Template hook constraints.
- * @internal
  */
 type WidenedVisitNameError =
   "visitName must be a literal. Fix: readonly visitName = 'resolveFoo' as const";
 
-/** @internal */
 type WithLiteralVisitNames<CSU extends Subject[]> =
   // IsAny guard: 0 extends (1 & T) is only true when T is `any`.
   0 extends 1 & CSU[number]
@@ -343,7 +336,6 @@ type WithLiteralVisitNames<CSU extends Subject[]> =
  *
  * @example
  * // CommandHooks<[AuditCommand]> = { audit: AuditCommand }
- * @internal
  */
 type CommandHooks<H extends AnyCommand[]> = {
   [Cmd in H[number] as CommandName<Cmd>]: Cmd;
