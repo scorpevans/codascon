@@ -86,6 +86,44 @@ describe("smoke", () => {
     }
   }, 20_000);
 
+  it("validateYaml reports errors for a YAML with broken domain-type references", async () => {
+    tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
+
+    // A YAML that parses cleanly but violates the baseType-ref / objectType-ref /
+    // returnType-ref validation rules. The pipeline must detect this and the caller
+    // must not proceed to emitAst / writeFiles.
+    const invalidYaml = [
+      "domainTypes:",
+      "  User:",
+      "    visitName: resolveUser",
+      "commands:",
+      "  GreetCommand:",
+      "    commandName: greet",
+      "    baseType: NonExistent",
+      "    objectType: AlsoNonExistent",
+      "    returnType: AndThisOneToo",
+      "    subjectUnion: [User]",
+      "    dispatch:",
+      "      User: UserGreeter",
+      "    templates:",
+      "      UserGreeter:",
+      "        isParameterized: false",
+      "        strategies: {}",
+    ].join("\n");
+
+    writeFileSync(resolve(tmpDir, "invalid.yaml"), invalidYaml);
+    const configIndex = parseYaml(resolve(tmpDir, "invalid.yaml"));
+    const result = validateYaml(configIndex);
+
+    expect(result.valid).toBe(false);
+    const allErrors = result.validationResults.flatMap((r) => r.errors);
+    expect(allErrors.length).toBeGreaterThan(0);
+    const ruleIds = allErrors.map((e) => e.rule);
+    expect(ruleIds).toContain("baseType-ref");
+    expect(ruleIds).toContain("objectType-ref");
+    expect(ruleIds).toContain("returnType-ref");
+  }, 20_000);
+
   it("generates golden output for smoke.yaml", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
