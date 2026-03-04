@@ -1,4 +1,4 @@
-import { it } from "vitest";
+import { describe, it } from "vitest";
 import {
   Command,
   Subject,
@@ -7,6 +7,7 @@ import {
   type CommandReturn,
   type CommandName,
   type SubjectVisitName,
+  type CommandSubjectUnion,
 } from "./index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
@@ -142,121 +143,119 @@ class GroomCommand extends Command<Person, Clinic, GroomResult, [Dog, Cat]> {
 // §1 · BASIC DISPATCH
 // ═══════════════════════════════════════════════════════════════════
 
-function testBasicDispatchDog() {
-  const feed = new FeedCommand();
-  const rex = new Dog("Rex", "Labrador");
-  const result = feed.run(rex, { time: "morning" });
+describe("§1 basic dispatch", () => {
+  it("dispatches to Dog", () => {
+    const feed = new FeedCommand();
+    const rex = new Dog("Rex", "Labrador");
+    const result = feed.run(rex, { time: "morning" });
 
-  strictEqual(result.fed, true);
-  strictEqual(result.food, "large kibble");
-  strictEqual(result.amount, 3);
-  console.log("  ✓ Dog dispatch");
-}
+    strictEqual(result.fed, true);
+    strictEqual(result.food, "large kibble");
+    strictEqual(result.amount, 3);
+  });
 
-function testBasicDispatchCat() {
-  const feed = new FeedCommand();
-  const whiskers = new Cat("Whiskers", true);
-  const result = feed.run(whiskers, { time: "evening" });
+  it("dispatches to Cat", () => {
+    const feed = new FeedCommand();
+    const whiskers = new Cat("Whiskers", true);
+    const result = feed.run(whiskers, { time: "evening" });
 
-  strictEqual(result.fed, true);
-  strictEqual(result.food, "indoor formula");
-  strictEqual(result.amount, 1);
-  console.log("  ✓ Cat dispatch");
-}
+    strictEqual(result.fed, true);
+    strictEqual(result.food, "indoor formula");
+    strictEqual(result.amount, 1);
+  });
 
-function testBasicDispatchBird() {
-  const feed = new FeedCommand();
-  const tweety = new Bird("Tweety", true);
-  const result = feed.run(tweety, { time: "noon" });
+  it("dispatches to Bird", () => {
+    const feed = new FeedCommand();
+    const tweety = new Bird("Tweety", true);
+    const result = feed.run(tweety, { time: "noon" });
 
-  strictEqual(result.fed, true);
-  strictEqual(result.food, "seed mix");
-  strictEqual(result.amount, 0.2);
-  console.log("  ✓ Bird dispatch");
-}
+    strictEqual(result.fed, true);
+    strictEqual(result.food, "seed mix");
+    strictEqual(result.amount, 0.2);
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §2 · STRATEGY SELECTION — same subject, different data
 // ═══════════════════════════════════════════════════════════════════
 
-function testStrategyVariesBySubjectState() {
-  const feed = new FeedCommand();
+describe("§2 strategy selection — same subject, different data", () => {
+  it("strategy varies by Dog breed", () => {
+    const feed = new FeedCommand();
 
-  const lab = new Dog("Buddy", "Labrador");
-  const chihuahua = new Dog("Tiny", "Chihuahua");
+    const lab = new Dog("Buddy", "Labrador");
+    const chihuahua = new Dog("Tiny", "Chihuahua");
 
-  const r1 = feed.run(lab, { time: "morning" });
-  const r2 = feed.run(chihuahua, { time: "morning" });
+    const r1 = feed.run(lab, { time: "morning" });
+    const r2 = feed.run(chihuahua, { time: "morning" });
 
-  strictEqual(r1.food, "large kibble");
-  strictEqual(r1.amount, 3);
-  strictEqual(r2.food, "small kibble");
-  strictEqual(r2.amount, 1.5);
-  console.log("  ✓ Strategy varies by subject state");
-}
+    strictEqual(r1.food, "large kibble");
+    strictEqual(r1.amount, 3);
+    strictEqual(r2.food, "small kibble");
+    strictEqual(r2.amount, 1.5);
+  });
 
-function testStrategyVariesByCatIndoor() {
-  const feed = new FeedCommand();
+  it("strategy varies by Cat indoor/outdoor", () => {
+    const feed = new FeedCommand();
 
-  const indoor = new Cat("Mimi", true);
-  const outdoor = new Cat("Tom", false);
+    const indoor = new Cat("Mimi", true);
+    const outdoor = new Cat("Tom", false);
 
-  const r1 = feed.run(indoor, { time: "morning" });
-  const r2 = feed.run(outdoor, { time: "morning" });
+    const r1 = feed.run(indoor, { time: "morning" });
+    const r2 = feed.run(outdoor, { time: "morning" });
 
-  strictEqual(r1.food, "indoor formula");
-  strictEqual(r2.food, "outdoor mix");
-  console.log("  ✓ Strategy varies by Cat indoor/outdoor");
-}
+    strictEqual(r1.food, "indoor formula");
+    strictEqual(r2.food, "outdoor mix");
+  });
 
-function testFlightlessBirdNotFed() {
-  const feed = new FeedCommand();
-  const penguin = new Bird("Penny", false);
-  const result = feed.run(penguin, { time: "morning" });
+  it("flightless Bird gets pellets and is not fed", () => {
+    const feed = new FeedCommand();
+    const penguin = new Bird("Penny", false);
+    const result = feed.run(penguin, { time: "morning" });
 
-  strictEqual(result.fed, false);
-  strictEqual(result.food, "pellets");
-  console.log("  ✓ Flightless bird gets pellets, not fed");
-}
+    strictEqual(result.fed, false);
+    strictEqual(result.food, "pellets");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §3 · MULTIPLE COMMANDS — same subjects, different operations
 // ═══════════════════════════════════════════════════════════════════
 
-function testGroomDog() {
-  const groom = new GroomCommand();
-  const clinic: Clinic = { name: "PetCare", hasEmergency: true };
+describe("§3 multiple commands — same subjects, different operations", () => {
+  it("GroomCommand dispatches to Dog with breed-specific strategy", () => {
+    const groom = new GroomCommand();
+    const clinic: Clinic = { name: "PetCare", hasEmergency: true };
 
-  const poodle = new Dog("Fifi", "Poodle");
-  const mutt = new Dog("Max", "Mixed");
+    const poodle = new Dog("Fifi", "Poodle");
+    const mutt = new Dog("Max", "Mixed");
 
-  const r1 = groom.run(poodle, clinic);
-  const r2 = groom.run(mutt, clinic);
+    const r1 = groom.run(poodle, clinic);
+    const r2 = groom.run(mutt, clinic);
 
-  strictEqual(r1.groomed, true);
-  strictEqual(r1.service, "full clip");
-  strictEqual(r1.cost, 80);
-  strictEqual(r2.service, "bath & brush");
-  strictEqual(r2.cost, 40);
-  console.log("  ✓ Groom Dog — breed-specific strategy");
-}
+    strictEqual(r1.groomed, true);
+    strictEqual(r1.service, "full clip");
+    strictEqual(r1.cost, 80);
+    strictEqual(r2.service, "bath & brush");
+    strictEqual(r2.cost, 40);
+  });
 
-function testGroomCat() {
-  const groom = new GroomCommand();
-  const clinic: Clinic = { name: "PetCare", hasEmergency: true };
+  it("GroomCommand dispatches to Cat — indoor vs outdoor", () => {
+    const groom = new GroomCommand();
+    const clinic: Clinic = { name: "PetCare", hasEmergency: true };
 
-  const indoor = new Cat("Luna", true);
-  const outdoor = new Cat("Stray", false);
+    const indoor = new Cat("Luna", true);
+    const outdoor = new Cat("Stray", false);
 
-  const r1 = groom.run(indoor, clinic);
-  const r2 = groom.run(outdoor, clinic);
+    const r1 = groom.run(indoor, clinic);
+    const r2 = groom.run(outdoor, clinic);
 
-  strictEqual(r1.groomed, true);
-  strictEqual(r1.cost, 25);
-  strictEqual(r2.groomed, false);
-  strictEqual(r2.cost, 0);
-  console.log("  ✓ Groom Cat — indoor vs outdoor");
-}
+    strictEqual(r1.groomed, true);
+    strictEqual(r1.cost, 25);
+    strictEqual(r2.groomed, false);
+    strictEqual(r2.cost, 0);
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §4 · STRATEGY AS REUSABLE CLASS
@@ -287,17 +286,18 @@ class UniformFeedCommand extends Command<Person, { time: string }, FeedResult, [
   }
 }
 
-function testReusableStrategyClasses() {
-  const cmd = new UniformFeedCommand();
-  const rex = new Dog("Rex", "Lab");
-  const whiskers = new Cat("Whiskers", true);
-  const tweety = new Bird("Tweety", true);
+describe("§4 strategy as reusable class", () => {
+  it("reusable strategy class instances shared across subjects", () => {
+    const cmd = new UniformFeedCommand();
+    const rex = new Dog("Rex", "Lab");
+    const whiskers = new Cat("Whiskers", true);
+    const tweety = new Bird("Tweety", true);
 
-  strictEqual(cmd.run(rex, { time: "am" }).food, "universal blend");
-  strictEqual(cmd.run(whiskers, { time: "am" }).food, "universal blend");
-  strictEqual(cmd.run(tweety, { time: "am" }).fed, false);
-  console.log("  ✓ Reusable strategy classes shared across subjects");
-}
+    strictEqual(cmd.run(rex, { time: "am" }).food, "universal blend");
+    strictEqual(cmd.run(whiskers, { time: "am" }).food, "universal blend");
+    strictEqual(cmd.run(tweety, { time: "am" }).fed, false);
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §5 · PARAMETERIZED STRATEGIES
@@ -326,14 +326,15 @@ class DietFeedCommand extends Command<Person, { time: string }, FeedResult, [Dog
   }
 }
 
-function testParameterizedStrategies() {
-  const cmd = new DietFeedCommand();
+describe("§5 parameterized strategies", () => {
+  it("strategies with constructor args produce per-subject portions", () => {
+    const cmd = new DietFeedCommand();
 
-  strictEqual(cmd.run(new Dog("D", "Lab"), { time: "am" }).amount, 1.0);
-  strictEqual(cmd.run(new Cat("C", true), { time: "am" }).amount, 0.5);
-  strictEqual(cmd.run(new Bird("B", true), { time: "am" }).amount, 0.1);
-  console.log("  ✓ Parameterized strategies with constructor args");
-}
+    strictEqual(cmd.run(new Dog("D", "Lab"), { time: "am" }).amount, 1.0);
+    strictEqual(cmd.run(new Cat("C", true), { time: "am" }).amount, 0.5);
+    strictEqual(cmd.run(new Bird("B", true), { time: "am" }).amount, 0.1);
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §6 · VISITOR USES SUBJECT + OBJECT TO SELECT STRATEGY
@@ -354,30 +355,30 @@ class TimeAwareFeedCommand extends Command<Person, { time: string }, FeedResult,
   }
 }
 
-function testVisitorUsesObjectToSelect() {
-  const cmd = new TimeAwareFeedCommand();
-  const dog = new Dog("Rex", "Lab");
+describe("§6 visitor uses subject + object to select strategy", () => {
+  it("object (time) changes strategy for Dog", () => {
+    const cmd = new TimeAwareFeedCommand();
+    const dog = new Dog("Rex", "Lab");
 
-  const morning = cmd.run(dog, { time: "morning" });
-  const evening = cmd.run(dog, { time: "evening" });
+    const morning = cmd.run(dog, { time: "morning" });
+    const evening = cmd.run(dog, { time: "evening" });
 
-  strictEqual(morning.food, "breakfast kibble");
-  strictEqual(morning.amount, 2);
-  strictEqual(evening.food, "dinner kibble");
-  strictEqual(evening.amount, 1.5);
-  console.log("  ✓ Visitor uses both subject and object for selection");
-}
+    strictEqual(morning.food, "breakfast kibble");
+    strictEqual(morning.amount, 2);
+    strictEqual(evening.food, "dinner kibble");
+    strictEqual(evening.amount, 1.5);
+  });
 
-function testVisitorUsesBothSubjectAndObject() {
-  const cmd = new TimeAwareFeedCommand();
+  it("visitor combines subject state (indoor) with object (time) for Cat", () => {
+    const cmd = new TimeAwareFeedCommand();
 
-  const indoorMorning = cmd.run(new Cat("Mi", true), { time: "morning" });
-  const outdoorMorning = cmd.run(new Cat("To", false), { time: "morning" });
+    const indoorMorning = cmd.run(new Cat("Mi", true), { time: "morning" });
+    const outdoorMorning = cmd.run(new Cat("To", false), { time: "morning" });
 
-  strictEqual(indoorMorning.food, "indoor breakfast");
-  strictEqual(outdoorMorning.food, "standard");
-  console.log("  ✓ Visitor combines subject state + object for selection");
-}
+    strictEqual(indoorMorning.food, "indoor breakfast");
+    strictEqual(outdoorMorning.food, "standard");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §7 · ASYNC SUPPORT
@@ -406,22 +407,22 @@ class AsyncFeedCommand extends Command<Person, { time: string }, Promise<FeedRes
   }
 }
 
-async function testAsyncCommand() {
-  const cmd = new AsyncFeedCommand();
-  const result = await cmd.run(new Dog("Rex", "Lab"), { time: "am" });
+describe("§7 async support", () => {
+  it("command returns Promise<FeedResult> for Dog", async () => {
+    const cmd = new AsyncFeedCommand();
+    const result = await cmd.run(new Dog("Rex", "Lab"), { time: "am" });
 
-  strictEqual(result.fed, true);
-  strictEqual(result.food, "async kibble");
-  console.log("  ✓ Async command returns Promise<FeedResult>");
-}
+    strictEqual(result.fed, true);
+    strictEqual(result.food, "async kibble");
+  });
 
-async function testAsyncCat() {
-  const cmd = new AsyncFeedCommand();
-  const result = await cmd.run(new Cat("Mimi", true), { time: "pm" });
+  it("async dispatch works for Cat", async () => {
+    const cmd = new AsyncFeedCommand();
+    const result = await cmd.run(new Cat("Mimi", true), { time: "pm" });
 
-  strictEqual(result.food, "async wet food");
-  console.log("  ✓ Async dispatch to Cat");
-}
+    strictEqual(result.food, "async wet food");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §8 · TEMPLATE WITH COMMAND HOOKS
@@ -490,29 +491,29 @@ class LoggingFeedCommand extends Command<Person, { time: string }, FeedResult, [
   }
 }
 
-function testTemplateWithHooks() {
-  const logCmd = new LogCommand();
-  const cmd = new LoggingFeedCommand(logCmd);
+describe("§8 template with command hooks", () => {
+  it("template with hook invokes hooked command", () => {
+    const logCmd = new LogCommand();
+    const cmd = new LoggingFeedCommand(logCmd);
 
-  const result = cmd.run(new Dog("Rex", "Lab"), { time: "am" });
-  strictEqual(result.fed, true);
-  strictEqual(result.food, "logged(Rex):universal");
-  console.log("  ✓ Template with command hooks invokes hooked command");
-}
+    const result = cmd.run(new Dog("Rex", "Lab"), { time: "am" });
+    strictEqual(result.fed, true);
+    strictEqual(result.food, "logged(Rex):universal");
+  });
 
-function testTemplateHooksDifferentSubjects() {
-  const logCmd = new LogCommand();
-  const cmd = new LoggingFeedCommand(logCmd);
+  it("hooked template dispatches correctly per subject", () => {
+    const logCmd = new LogCommand();
+    const cmd = new LoggingFeedCommand(logCmd);
 
-  const r1 = cmd.run(new Dog("Rex", "Lab"), { time: "am" });
-  const r2 = cmd.run(new Cat("Mimi", true), { time: "am" });
-  const r3 = cmd.run(new Bird("Tweety", true), { time: "am" });
+    const r1 = cmd.run(new Dog("Rex", "Lab"), { time: "am" });
+    const r2 = cmd.run(new Cat("Mimi", true), { time: "am" });
+    const r3 = cmd.run(new Bird("Tweety", true), { time: "am" });
 
-  strictEqual(r1.food, "logged(Rex):universal");
-  strictEqual(r2.food, "logged(Mimi):universal");
-  strictEqual(r3.food, "logged(Tweety):universal");
-  console.log("  ✓ Hooked template dispatches correctly per subject");
-}
+    strictEqual(r1.food, "logged(Rex):universal");
+    strictEqual(r2.food, "logged(Mimi):universal");
+    strictEqual(r3.food, "logged(Tweety):universal");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §9 · COMMAND PRESERVES `this` IN VISIT METHODS
@@ -548,18 +549,19 @@ class StatefulFeedCommand extends Command<Person, { time: string }, FeedResult, 
   }
 }
 
-function testCommandThisPreserved() {
-  const cmd = new StatefulFeedCommand();
+describe("§9 command preserves `this` in visit methods", () => {
+  it("stateful visit methods access command instance correctly", () => {
+    const cmd = new StatefulFeedCommand();
 
-  const r1 = cmd.run(new Dog("A", "Lab"), { time: "am" });
-  const r2 = cmd.run(new Cat("B", true), { time: "am" });
-  const r3 = cmd.run(new Dog("C", "Pug"), { time: "pm" });
+    const r1 = cmd.run(new Dog("A", "Lab"), { time: "am" });
+    const r2 = cmd.run(new Cat("B", true), { time: "am" });
+    const r3 = cmd.run(new Dog("C", "Pug"), { time: "pm" });
 
-  strictEqual(r1.food, "feed#1");
-  strictEqual(r2.food, "feed#2");
-  strictEqual(r3.food, "feed#3");
-  console.log("  ✓ Command `this` preserved — stateful visit methods work");
-}
+    strictEqual(r1.food, "feed#1");
+    strictEqual(r2.food, "feed#2");
+    strictEqual(r3.food, "feed#3");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §10 · COMMAND.RUN OVERRIDING
@@ -582,15 +584,16 @@ class AuditedFeedCommand extends Command<Person, { time: string }, FeedResult, [
   }
 }
 
-function testRunOverride() {
-  const cmd = new AuditedFeedCommand();
+describe("§10 Command.run overriding", () => {
+  it("run can be overridden with super.run() while intercepting calls", () => {
+    const cmd = new AuditedFeedCommand();
 
-  cmd.run(new Dog("Rex", "Lab"), { time: "morning" });
-  cmd.run(new Cat("Mimi", true), { time: "evening" });
+    cmd.run(new Dog("Rex", "Lab"), { time: "morning" });
+    cmd.run(new Cat("Mimi", true), { time: "evening" });
 
-  deepEqual(cmd.auditLog, ["resolveDog:Rex@morning", "resolveCat:Mimi@evening"]);
-  console.log("  ✓ Command.run can be overridden with super.run()");
-}
+    deepEqual(cmd.auditLog, ["resolveDog:Rex@morning", "resolveCat:Mimi@evening"]);
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §11 · TYPE-LEVEL ASSERTIONS
@@ -635,10 +638,18 @@ type _T12 = Expect<
   >
 >;
 
-function testTypeLevelAssertions() {
-  // If this file compiles, all type assertions pass.
-  console.log("  ✓ All type-level assertions pass (compilation = proof)");
-}
+// CommandSubjectUnion extracts the subject union
+type _T13 = Expect<Equal<CommandSubjectUnion<FeedCommand>, Dog | Cat | Bird>>;
+type _T14 = Expect<Equal<CommandSubjectUnion<GroomCommand>, Dog | Cat>>;
+
+describe("§11 type-level assertions", () => {
+  it("type assertions verified by tsc --build (compile-time proof)", () => {
+    // All type assertions above (_T1–_T14) are verified at compile time by tsc --build,
+    // which includes index.test.ts via tsconfig.json include: ["src"].
+    // If any assertion fails, tsc fails — no runtime check needed.
+    void 0;
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §12 · EDGE CASES
@@ -652,13 +663,6 @@ class DogOnlyCommand extends Command<Person, string, number, [Dog]> {
       execute: (s: Dog, o: string): number => s.name.length + o.length,
     };
   }
-}
-
-function testSingleSubjectCommand() {
-  const cmd = new DogOnlyCommand();
-  const result = cmd.run(new Dog("Rex", "Lab"), "hello");
-  strictEqual(result, 8); // "Rex" (3) + "hello" (5)
-  console.log("  ✓ Single-subject command works");
 }
 
 // Primitive object type
@@ -676,13 +680,6 @@ class PrimObjCommand extends Command<Person, number, string, [Dog, Cat]> {
   }
 }
 
-function testPrimitiveObjectType() {
-  const cmd = new PrimObjCommand();
-  strictEqual(cmd.run(new Dog("Rex", "Lab"), 5), "Rex:5");
-  strictEqual(cmd.run(new Cat("Mimi", true), 5), "Mimi:10");
-  console.log("  ✓ Primitive (number) as object type");
-}
-
 // Void return type
 class VoidCommand extends Command<Person, string, void, [Dog]> {
   readonly commandName = "voidCmd" as const;
@@ -695,13 +692,6 @@ class VoidCommand extends Command<Person, string, void, [Dog]> {
       },
     };
   }
-}
-
-function testVoidReturnType() {
-  const cmd = new VoidCommand();
-  cmd.run(new Dog("Rex", "Lab"), "action");
-  strictEqual(cmd.sideEffect, "Rex:action");
-  console.log("  ✓ Void return type — side effect only");
 }
 
 // Same strategy instance returned for different calls
@@ -718,31 +708,51 @@ class SharedStrategyCommand extends Command<Person, string, string, [Dog, Cat]> 
   }
 }
 
-function testSharedStrategyInstance() {
-  const cmd = new SharedStrategyCommand();
-  strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "resolveDog:Rex:x");
-  strictEqual(cmd.run(new Cat("Mimi", true), "y"), "resolveCat:Mimi:y");
-  console.log("  ✓ Shared strategy instance across subjects");
-}
+describe("§12 edge cases", () => {
+  it("single-subject command", () => {
+    const cmd = new DogOnlyCommand();
+    const result = cmd.run(new Dog("Rex", "Lab"), "hello");
+    strictEqual(result, 8); // "Rex" (3) + "hello" (5)
+  });
+
+  it("primitive (number) as object type", () => {
+    const cmd = new PrimObjCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), 5), "Rex:5");
+    strictEqual(cmd.run(new Cat("Mimi", true), 5), "Mimi:10");
+  });
+
+  it("void return type — side effect only", () => {
+    const cmd = new VoidCommand();
+    cmd.run(new Dog("Rex", "Lab"), "action");
+    strictEqual(cmd.sideEffect, "Rex:action");
+  });
+
+  it("shared strategy instance across subjects", () => {
+    const cmd = new SharedStrategyCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "resolveDog:Rex:x");
+    strictEqual(cmd.run(new Cat("Mimi", true), "y"), "resolveCat:Mimi:y");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §13 · MULTIPLE COMMANDS ON SAME SUBJECT SET
 // ═══════════════════════════════════════════════════════════════════
 
-function testMultipleCommandsSameSubjects() {
-  const feed = new FeedCommand();
-  const groom = new GroomCommand();
-  const clinic: Clinic = { name: "Vet", hasEmergency: false };
+describe("§13 multiple commands on same subject set", () => {
+  it("same subject dispatched correctly through different commands", () => {
+    const feed = new FeedCommand();
+    const groom = new GroomCommand();
+    const clinic: Clinic = { name: "Vet", hasEmergency: false };
 
-  const dog = new Dog("Rex", "Poodle");
+    const dog = new Dog("Rex", "Poodle");
 
-  const feedResult = feed.run(dog, { time: "morning" });
-  const groomResult = groom.run(dog, clinic);
+    const feedResult = feed.run(dog, { time: "morning" });
+    const groomResult = groom.run(dog, clinic);
 
-  strictEqual(feedResult.food, "small kibble");
-  strictEqual(groomResult.service, "full clip");
-  console.log("  ✓ Same subject dispatched through different commands");
-}
+    strictEqual(feedResult.food, "small kibble");
+    strictEqual(groomResult.service, "full clip");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §14 · COMPILE-TIME CONSTRAINT TESTS
@@ -819,51 +829,8 @@ function testMultipleCommandsSameSubjects() {
 //     2. Hook invocation — this.hook.run(subject, ...) checks the hook command's
 //        own `this & CommandSubjectStrategies` constraint, catching wrong subjects
 //
-//   This test verifies enforcement at the invocation site (the stronger check).
+//   The compile-time proof below verifies enforcement at the invocation site.
 
-function testHookSubjectMismatchAtInvocation() {
-  class CatOnlyCommand extends Command<Person, string, string, [Cat]> {
-    readonly commandName = "catOnly" as const;
-    resolveCat() {
-      return { execute: (s: Cat, o: string): string => "cat" };
-    }
-  }
-
-  // CatOnlyCommand only visits Cat, but we wire it as a hook into a
-  // Dog template.  Structurally valid: the template has `catOnly` property
-  // satisfying CommandHooks<[CatOnlyCommand]>.
-  class MiswiredTemplate implements Template<DogOnlyCommand, [CatOnlyCommand], Dog> {
-    catOnly: CatOnlyCommand;
-    constructor(c: CatOnlyCommand) {
-      this.catOnly = c;
-    }
-    execute(subject: Dog, object: string): number {
-      // If we tried to invoke the hook on the wrong subject:
-      //   this.catOnly.run(subject, "data")
-      // TypeScript catches it — Dog is not assignable to Cat (the hook's subject union).
-      return subject.name.length;
-    }
-  }
-
-  // Template works fine when it doesn't invoke the mismatched hook
-  class HookedDogCmd extends Command<Person, string, number, [Dog]> {
-    readonly commandName = "hookedDog" as const;
-    private catCmd: CatOnlyCommand;
-    constructor(c: CatOnlyCommand) {
-      super();
-      this.catCmd = c;
-    }
-    resolveDog() {
-      return new MiswiredTemplate(this.catCmd);
-    }
-  }
-  const cmd = new HookedDogCmd(new CatOnlyCommand());
-  strictEqual(cmd.run(new Dog("Rex", "Lab"), "test"), 3);
-
-  console.log("  ✓ 14d: Hook-subject mismatch caught at hook invocation site");
-}
-
-// Compile-time proof: invoking the hook on the wrong subject errors
 {
   class CatOnlyCommand extends Command<Person, string, string, [Cat]> {
     readonly commandName = "catOnly" as const;
@@ -985,17 +952,62 @@ function testHookSubjectMismatchAtInvocation() {
   };
 }
 
-function testCompileTimeConstraints() {
-  console.log("  ✓ 14a: Missing visit method rejected at call site");
-  console.log("  ✓ 14b: Unsupported subject rejected at call site");
-  console.log("  ✓ 14c: Template missing hook dependency rejected at implements");
-  testHookSubjectMismatchAtInvocation();
-  console.log("  ✓ 14e: Non-literal visitName — run() rejected at call site");
-  console.log("  ✓ 14f: Wrong return type from execute rejected at call site");
-  console.log("  ✓ 14g: Wrong object type in execute rejected at call site");
-  console.log("  ✓ 14h: Non-Subject in CSU tuple rejected");
-  console.log("  ✓ 14i: Duplicate visitName — conflicting handlers rejected");
-}
+describe("§14 compile-time constraint tests", () => {
+  // All constraints are verified at compile time by tsc --build (which includes
+  // index.test.ts via tsconfig.json include: ["src"]). Each @ts-expect-error
+  // block above proves the framework rejects the invalid usage — if the error
+  // disappears, tsc fails. No runtime assertions are needed; compilation = proof.
+
+  it("14a: missing visit method rejected at call site", () => void 0);
+  it("14b: unsupported subject rejected at call site", () => void 0);
+  it("14c: template missing hook dependency rejected at implements", () => void 0);
+
+  it("14d: hook-subject mismatch caught at hook invocation site (runtime + compile)", () => {
+    // CatOnlyCommand only visits Cat, but we wire it as a hook into a Dog template.
+    // Structurally valid at implements site; error surfaces when the hook is invoked
+    // on the wrong subject (caught at call site by the command's this constraint).
+    class CatOnlyCommand extends Command<Person, string, string, [Cat]> {
+      readonly commandName = "catOnly" as const;
+      resolveCat() {
+        return { execute: (s: Cat, o: string): string => "cat" };
+      }
+    }
+
+    class MiswiredTemplate implements Template<DogOnlyCommand, [CatOnlyCommand], Dog> {
+      catOnly: CatOnlyCommand;
+      constructor(c: CatOnlyCommand) {
+        this.catOnly = c;
+      }
+      execute(subject: Dog, object: string): number {
+        // Invoking this.catOnly.run(subject, "data") here would be a compile error —
+        // Dog is not assignable to Cat (CatOnlyCommand's subject union).
+        return subject.name.length;
+      }
+    }
+
+    class HookedDogCmd extends Command<Person, string, number, [Dog]> {
+      readonly commandName = "hookedDog" as const;
+      private catCmd: CatOnlyCommand;
+      constructor(c: CatOnlyCommand) {
+        super();
+        this.catCmd = c;
+      }
+      resolveDog() {
+        return new MiswiredTemplate(this.catCmd);
+      }
+    }
+
+    // Template works fine when it doesn't invoke the mismatched hook
+    const cmd = new HookedDogCmd(new CatOnlyCommand());
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "test"), 3);
+  });
+
+  it("14e: non-literal visitName — run() rejected at call site", () => void 0);
+  it("14f: wrong return type from execute rejected at call site", () => void 0);
+  it("14g: wrong object type in execute rejected at call site", () => void 0);
+  it("14h: non-Subject in CSU tuple rejected", () => void 0);
+  it("14i: duplicate visitName — conflicting handlers rejected", () => void 0);
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §15 · NESTED COMMAND HOOKS — end-to-end runtime
@@ -1029,65 +1041,63 @@ class ExportCommand extends Command<Person, { format: string }, string, [Dog, Ca
   }
 }
 
-function testNestedHookExecution() {
-  const feedCmd = new FeedCommand();
-  const exportCmd = new ExportCommand(feedCmd);
+describe("§15 nested command hooks — end-to-end runtime", () => {
+  it("export template invokes feed command via hook", () => {
+    const feedCmd = new FeedCommand();
+    const exportCmd = new ExportCommand(feedCmd);
 
-  const r1 = exportCmd.run(new Dog("Rex", "Labrador"), { format: "CSV" });
-  const r2 = exportCmd.run(new Cat("Mimi", true), { format: "JSON" });
+    const r1 = exportCmd.run(new Dog("Rex", "Labrador"), { format: "CSV" });
+    const r2 = exportCmd.run(new Cat("Mimi", true), { format: "JSON" });
 
-  strictEqual(r1, "[CSV] resolveDog:Rex → large kibble");
-  strictEqual(r2, "[JSON] resolveCat:Mimi → indoor formula");
-  console.log("  ✓ Nested hook: export template invokes feed command");
-}
+    strictEqual(r1, "[CSV] resolveDog:Rex → large kibble");
+    strictEqual(r2, "[JSON] resolveCat:Mimi → indoor formula");
+  });
 
-function testNestedHookDifferentStrategies() {
-  const feedCmd = new FeedCommand();
-  const exportCmd = new ExportCommand(feedCmd);
+  it("underlying strategy selection preserved through hooks", () => {
+    const feedCmd = new FeedCommand();
+    const exportCmd = new ExportCommand(feedCmd);
 
-  const lab = exportCmd.run(new Dog("Buddy", "Labrador"), { format: "XML" });
-  const chi = exportCmd.run(new Dog("Tiny", "Chihuahua"), { format: "XML" });
+    const lab = exportCmd.run(new Dog("Buddy", "Labrador"), { format: "XML" });
+    const chi = exportCmd.run(new Dog("Tiny", "Chihuahua"), { format: "XML" });
 
-  strictEqual(lab, "[XML] resolveDog:Buddy → large kibble");
-  strictEqual(chi, "[XML] resolveDog:Tiny → small kibble");
-  console.log("  ✓ Nested hook: underlying strategy selection preserved through hooks");
-}
+    strictEqual(lab, "[XML] resolveDog:Buddy → large kibble");
+    strictEqual(chi, "[XML] resolveDog:Tiny → small kibble");
+  });
 
-function testNestedHookChaining() {
-  // Three-level chain: AuditExport → Export → Feed
-  class AuditExportTemplate implements Template<AuditExportCommand, [ExportCommand], Dog> {
-    export: ExportCommand;
-    constructor(exportCmd: ExportCommand) {
-      this.export = exportCmd;
+  it("three-level hook chain: audit → export → feed", () => {
+    class AuditExportTemplate implements Template<AuditExportCommand, [ExportCommand], Dog> {
+      export: ExportCommand;
+      constructor(exportCmd: ExportCommand) {
+        this.export = exportCmd;
+      }
+
+      execute(subject: Dog, object: { format: string }): string {
+        const exported = this.export.run(subject, object);
+        return `[AUDIT] ${exported}`;
+      }
     }
 
-    execute(subject: Dog, object: { format: string }): string {
-      const exported = this.export.run(subject, object);
-      return `[AUDIT] ${exported}`;
+    class AuditExportCommand extends Command<Person, { format: string }, string, [Dog]> {
+      readonly commandName = "auditExport" as const;
+      private exportCmd: ExportCommand;
+      constructor(exportCmd: ExportCommand) {
+        super();
+        this.exportCmd = exportCmd;
+      }
+
+      resolveDog() {
+        return new AuditExportTemplate(this.exportCmd);
+      }
     }
-  }
 
-  class AuditExportCommand extends Command<Person, { format: string }, string, [Dog]> {
-    readonly commandName = "auditExport" as const;
-    private exportCmd: ExportCommand;
-    constructor(exportCmd: ExportCommand) {
-      super();
-      this.exportCmd = exportCmd;
-    }
+    const feedCmd = new FeedCommand();
+    const exportCmd = new ExportCommand(feedCmd);
+    const auditCmd = new AuditExportCommand(exportCmd);
 
-    resolveDog() {
-      return new AuditExportTemplate(this.exportCmd);
-    }
-  }
-
-  const feedCmd = new FeedCommand();
-  const exportCmd = new ExportCommand(feedCmd);
-  const auditCmd = new AuditExportCommand(exportCmd);
-
-  const result = auditCmd.run(new Dog("Rex", "Labrador"), { format: "CSV" });
-  strictEqual(result, "[AUDIT] [CSV] resolveDog:Rex → large kibble");
-  console.log("  ✓ Three-level hook chain: audit → export → feed");
-}
+    const result = auditCmd.run(new Dog("Rex", "Labrador"), { format: "CSV" });
+    strictEqual(result, "[AUDIT] [CSV] resolveDog:Rex → large kibble");
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // §16 · DOCUMENT DOMAIN — second independent domain validation
@@ -1160,32 +1170,6 @@ class DocExportCommand extends Command<Subject, AppContext, string, [TextNode]> 
   resolveTextNode(subject: TextNode, object: Readonly<AppContext>) {
     return new DocExportTextTemplate(this.render);
   }
-}
-
-// ── 16a. Runtime: double-dispatch routes to correct template ─────
-
-function testDocDomainDoubleDispatch() {
-  const ctx: AppContext = { theme: "dark-mode" };
-  const renderCmd = new RenderCommand();
-
-  const textResult = renderCmd.run(new TextNode("Hello World"), ctx);
-  const imageResult = renderCmd.run(new ImageNode("hero.png"), ctx);
-
-  strictEqual(textResult, '<span class="dark-mode">Hello World</span>');
-  strictEqual(imageResult, '<img src="hero.png" class="dark-mode" />');
-  console.log("  ✓ Double-dispatch routes TextNode and ImageNode to correct templates");
-}
-
-// ── 16b. Runtime: this context preserved + nested command hooks ──
-
-function testDocDomainNestedHooks() {
-  const ctx: AppContext = { theme: "dark-mode" };
-  const renderCmd = new RenderCommand();
-  const exportCmd = new DocExportCommand(renderCmd);
-
-  const result = exportCmd.run(new TextNode("Nested Context"), ctx);
-  strictEqual(result, '[EXPORTED] <span class="dark-mode">Nested Context</span>');
-  console.log("  ✓ Nested hook: DocExportCommand → RenderCommand via template DI");
 }
 
 // ── 16c. Compile: missing visit method on RenderCommand variant ──
@@ -1280,86 +1264,29 @@ function testDocDomainNestedHooks() {
   };
 }
 
-function testDocDomainCompileTimeConstraints() {
-  console.log("  ✓ 16c: Missing resolveImageNode rejected at call site");
-  console.log("  ✓ 16d: ImageNode rejected by TextNode-only DocExportCommand");
-  console.log("  ✓ 16e: Template missing hook `render` property rejected at implements");
-  console.log("  ✓ 16f: Hook invoked on wrong subject rejected at call site");
-}
+describe("§16 document domain — second independent domain validation", () => {
+  it("double-dispatch routes TextNode and ImageNode to correct templates", () => {
+    const ctx: AppContext = { theme: "dark-mode" };
+    const renderCmd = new RenderCommand();
 
-// ═══════════════════════════════════════════════════════════════════
-// §17 · RUN
-// ═══════════════════════════════════════════════════════════════════
+    const textResult = renderCmd.run(new TextNode("Hello World"), ctx);
+    const imageResult = renderCmd.run(new ImageNode("hero.png"), ctx);
 
-async function main() {
-  console.log("\n§1 Basic dispatch");
-  testBasicDispatchDog();
-  testBasicDispatchCat();
-  testBasicDispatchBird();
+    strictEqual(textResult, '<span class="dark-mode">Hello World</span>');
+    strictEqual(imageResult, '<img src="hero.png" class="dark-mode" />');
+  });
 
-  console.log("\n§2 Strategy selection");
-  testStrategyVariesBySubjectState();
-  testStrategyVariesByCatIndoor();
-  testFlightlessBirdNotFed();
+  it("nested hook: DocExportCommand → RenderCommand via template DI", () => {
+    const ctx: AppContext = { theme: "dark-mode" };
+    const renderCmd = new RenderCommand();
+    const exportCmd = new DocExportCommand(renderCmd);
 
-  console.log("\n§3 Multiple commands");
-  testGroomDog();
-  testGroomCat();
+    const result = exportCmd.run(new TextNode("Nested Context"), ctx);
+    strictEqual(result, '[EXPORTED] <span class="dark-mode">Nested Context</span>');
+  });
 
-  console.log("\n§4 Reusable strategies");
-  testReusableStrategyClasses();
-
-  console.log("\n§5 Parameterized strategies");
-  testParameterizedStrategies();
-
-  console.log("\n§6 Visitor uses subject + object");
-  testVisitorUsesObjectToSelect();
-  testVisitorUsesBothSubjectAndObject();
-
-  console.log("\n§7 Async support");
-  await testAsyncCommand();
-  await testAsyncCat();
-
-  console.log("\n§8 Template with hooks");
-  testTemplateWithHooks();
-  testTemplateHooksDifferentSubjects();
-
-  console.log("\n§9 Command this preservation");
-  testCommandThisPreserved();
-
-  console.log("\n§10 Command.run override");
-  testRunOverride();
-
-  console.log("\n§11 Type-level assertions");
-  testTypeLevelAssertions();
-
-  console.log("\n§12 Edge cases");
-  testSingleSubjectCommand();
-  testPrimitiveObjectType();
-  testVoidReturnType();
-  testSharedStrategyInstance();
-
-  console.log("\n§13 Multiple commands, same subjects");
-  testMultipleCommandsSameSubjects();
-
-  console.log("\n§14 Compile-time constraints");
-  testCompileTimeConstraints();
-
-  console.log("\n§15 Nested command hooks");
-  testNestedHookExecution();
-  testNestedHookDifferentStrategies();
-  testNestedHookChaining();
-
-  console.log("\n§16 Document domain — second domain validation");
-  testDocDomainDoubleDispatch();
-  testDocDomainNestedHooks();
-  testDocDomainCompileTimeConstraints();
-
-  console.log("\n══════════════════════════════════════════");
-  console.log("  All tests passed.");
-  console.log("══════════════════════════════════════════\n");
-}
-
-it("codascon full test suite", async () => {
-  await main();
+  it("16c: missing resolveImageNode rejected at call site", () => void 0);
+  it("16d: ImageNode rejected by TextNode-only DocExportCommand", () => void 0);
+  it("16e: template missing hook `render` property rejected at implements", () => void 0);
+  it("16f: hook invoked on wrong subject rejected at call site", () => void 0);
 });
