@@ -421,6 +421,9 @@ class ConcreteTemplateEmitter implements Template<EmitAstCommand, [], ConcreteTe
 //
 // Emits: export class FooStrategy extends FooTemplate<S1> {
 //          readonly hookCmd = new OverrideCmd(); // if hook override declared
+//          execute(subject: S1, object: Readonly<O>): R {
+//            throw new Error("Not implemented"); // @odetovibe-generated
+//          }
 //        }
 // Target: <namespace>/commands/<grandparent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
@@ -447,6 +450,15 @@ class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry
       ensureTypeImport(sf, src, ref);
     }
 
+    const retSrc = importSrc.has(cmdEntry.config.returnType)
+      ? toCommandDepth(importSrc.get(cmdEntry.config.returnType)!)
+      : dtPath;
+    const objSrc = importSrc.has(cmdEntry.config.objectType)
+      ? toCommandDepth(importSrc.get(cmdEntry.config.objectType)!)
+      : dtPath;
+    ensureTypeImport(sf, retSrc, cmdEntry.config.returnType);
+    ensureTypeImport(sf, objSrc, cmdEntry.config.objectType);
+
     const hookOverrides = Object.entries(config.commandHooks ?? {});
     for (const [, cmdRef] of hookOverrides) {
       ensureValueImport(sf, hookImportPath(cmdRef, namespace), cmdRef);
@@ -469,6 +481,20 @@ class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry
         initializer: `new ${cmdRef}()`, // @odetovibe-generated
       });
     }
+
+    const executeMethod = cls.addMethod({
+      name: "execute",
+      isAsync: cmdEntry.config.returnAsync === true,
+    });
+    executeMethod.addParameter({ name: "subject", type: subsetUnion });
+    executeMethod.addParameter({
+      name: "object",
+      type: `Readonly<${cmdEntry.config.objectType}>`,
+    });
+    executeMethod.setReturnType(
+      maybeAsync(cmdEntry.config.returnType, cmdEntry.config.returnAsync),
+    );
+    executeMethod.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
 
     return { targetFile: filePath };
   }

@@ -6,12 +6,12 @@ import { emitAst } from "./transform/index.js";
 import { writeFiles } from "./load/index.js";
 
 function printUsage(): void {
-  console.log("Usage: odetovibe <schema.yaml> [--out <dir>] [--overwrite | --no-overwrite]");
+  console.log("Usage: odetovibe <code_config.yaml> [--out <dir>] [--overwrite | --no-overwrite]");
   console.log("");
   console.log("  Generate TypeScript code from a codascon YAML schema.");
   console.log("");
   console.log("Arguments:");
-  console.log("  <schema.yaml>    Path to the YAML schema file");
+  console.log("  <code_config.yaml>    Path to the code's YAML-config file");
   console.log("  --out <dir>      Output directory (default: ./generated)");
   console.log("  --overwrite      Unconditionally replace existing files");
   console.log("  --no-overwrite   Strict merge: abort to .ode.ts on conflict (default: merge)");

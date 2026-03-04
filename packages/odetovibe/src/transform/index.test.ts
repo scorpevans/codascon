@@ -7,7 +7,7 @@
  *   - CommandClassEmitter: class generics, commandName, visit methods, file path, imports
  *   - AbstractTemplateEmitter: abstract class, type parameter, implements, hooks, execute
  *   - ConcreteTemplateEmitter: concrete class, implements, hooks, execute stub
- *   - StrategyClassEmitter: extends clause, hook overrides, file path
+ *   - StrategyClassEmitter: extends clause, hook overrides, execute stub (sync + async), file path
  *   - emitAst: orchestration, file accumulation, namespace routing
  */
 
@@ -620,13 +620,35 @@ describe("StrategyClassEmitter", () => {
     expect(sf.getClassOrThrow("StratA").getExtends()?.getText()).toBe("FlatTemplate");
   });
 
-  it("emits an empty class body when there are no hook overrides", () => {
+  it("emits an execute stub with correct signature and no hook properties", () => {
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("DepartmentMatch");
     expect(cls.getProperties()).toHaveLength(0);
-    expect(cls.getMethods()).toHaveLength(0);
+    const execute = cls.getMethodOrThrow("execute");
+    expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
+    expect(execute.getParameters()[1].getTypeNode()?.getText()).toBe("Readonly<Building>");
+    expect(execute.getReturnTypeNode()?.getText()).toBe("AccessResult");
+    expect(execute.getBodyText()).toContain("throw new Error");
+    expect(execute.getBodyText()).toContain("@odetovibe-generated");
+  });
+
+  it("execute is async and returns Promise<T> when returnAsync is true", () => {
+    const asyncCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      returnAsync: true,
+    });
+    const asyncWithCmdAndTpl: ConfigIndex = {
+      ...withCmdAndTpl,
+      commands: new Map([["AccessBuildingCommand", asyncCmd]]),
+    };
+    const project = makeProject();
+    emitCmd.run(stratEntry, ctx(asyncWithCmdAndTpl, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const execute = sf.getClassOrThrow("DepartmentMatch").getMethodOrThrow("execute");
+    expect(execute.isAsync()).toBe(true);
+    expect(execute.getReturnTypeNode()?.getText()).toBe("Promise<AccessResult>");
   });
 
   it("emits hook override properties when strategy declares commandHooks", () => {
@@ -666,6 +688,12 @@ describe("StrategyClassEmitter", () => {
     emitCmd.run(stratWithOverride, ctx(index, project));
     const t = text(project, "commands/access-building.ts");
     expect(t).toContain("readonly audit = new StrictAuditCommand()");
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("DepartmentMatch");
+    const execute = cls.getMethodOrThrow("execute");
+    expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
+    expect(execute.getBodyText()).toContain("@odetovibe-generated");
   });
 });
 

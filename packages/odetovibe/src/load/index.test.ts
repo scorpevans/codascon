@@ -17,7 +17,13 @@ import { describe, it, expect, afterEach } from "vitest";
 import { Project } from "ts-morph";
 import { WriteFileCommand, SourceFileEntry, writeFiles } from "./index.js";
 import type { WriteContext, WriteMode } from "./index.js";
-import { SubjectTypeEntry } from "../extract/domain-types.js";
+import {
+  SubjectTypeEntry,
+  PlainTypeEntry,
+  CommandEntry,
+  AbstractTemplateEntry,
+  StrategyEntry,
+} from "../extract/domain-types.js";
 import type { ConfigIndex } from "../extract/domain-types.js";
 import { emitAst } from "../transform/index.js";
 
@@ -842,6 +848,56 @@ function makeConfigIndexWithExternalType(imports: Record<string, string[]>): Con
 describe("TypeScript diagnostics", () => {
   it("no unresolved names when imports are declared", async () => {
     const configIndex = makeConfigIndexWithExternalType({ "external-module": ["ExternalType"] });
+    const project = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project });
+
+    const diagnostics = project
+      .getPreEmitDiagnostics()
+      .filter((d) => d.getCode() !== MODULE_NOT_FOUND);
+
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("no type errors when a full command + abstract template + strategy are emitted", () => {
+    // Regression guard: StrategyClassEmitter must emit execute with correct imports.
+    // Without the execute stub, TypeScript emits TS2515 (non-abstract class does not
+    // implement inherited abstract member) — not TS2307, so it survives the filter.
+    const cmd = new CommandEntry("AccessBuildingCommand", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student"],
+      dispatch: { Student: "AccessTemplate" },
+      templates: {
+        AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
+      },
+    });
+    const abstractTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: ["Student"],
+      strategies: { DepartmentMatch: {} },
+    });
+    const strat = new StrategyEntry("DepartmentMatch", "AccessTemplate", "AccessBuildingCommand", {
+      subjectSubset: ["Student"],
+    });
+    const configIndex: ConfigIndex = {
+      namespace: undefined,
+      imports: {},
+      externalTypeKeys: new Set(),
+      subjectTypes: new Map([
+        ["Student", new SubjectTypeEntry("Student", { visitName: "resolveStudent" })],
+      ]),
+      plainTypes: new Map([
+        ["Person", new PlainTypeEntry("Person", {})],
+        ["Building", new PlainTypeEntry("Building", {})],
+        ["AccessResult", new PlainTypeEntry("AccessResult", {})],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmd]]),
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
+      concreteTemplates: new Map(),
+      strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", strat]]),
+    };
     const project = new Project({ useInMemoryFileSystem: true });
     emitAst(configIndex, { configIndex, project });
 
