@@ -46,7 +46,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc --build && chmod +x dist/cli.js",
+    "build": "rm -rf dist tsconfig.tsbuildinfo && tsc --build && chmod +x dist/cli.js",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "prepublishOnly": "pnpm build && pnpm test"

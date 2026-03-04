@@ -1,11 +1,9 @@
 /* @odetovibe-generated */
-/**
+/*
  * @codascon/odetovibe — Extract Domain: ValidateEntryCommand
  *
  * Dispatches each config entry to the appropriate validator Template.
  * Each validator checks schema rules specific to its Subject type.
- *
- * @module odetovibe/extract/validate
  */
 
 import { Command } from "codascon";
@@ -450,6 +448,7 @@ const abstractTemplateValidator = new AbstractTemplateValidator();
 const concreteTemplateValidator = new ConcreteTemplateValidator();
 const strategyValidator = new StrategyValidator();
 
+/** Dispatches each config entry to its schema validator via double dispatch. */
 export class ValidateEntryCommand extends Command<
   ConfigEntry,
   ConfigIndex,

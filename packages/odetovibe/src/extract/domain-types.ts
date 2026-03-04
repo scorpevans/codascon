@@ -1,11 +1,9 @@
 /* @odetovibe-generated */
-/**
+/*
  * @codascon/odetovibe — Extract Domain: Shared Types
  *
  * Subject types, domain interfaces, and result types used across
  * the extract domain and shared with transform and load.
- *
- * @module odetovibe/extract/domain-types
  */
 
 import { Subject } from "codascon";
@@ -113,7 +111,7 @@ export class StrategyEntry extends Subject implements ConfigEntry {
 // OBJECT TYPE
 // ═══════════════════════════════════════════════════════════════════
 
-/**
+/*
  * The fully resolved config — maps of all parsed entries.
  * Passed as the object to `ValidateEntryCommand` so validators
  * can perform cross-reference checks.
@@ -121,6 +119,7 @@ export class StrategyEntry extends Subject implements ConfigEntry {
  * Template keys are qualified as `"CommandName.TemplateName"`.
  * Strategy keys are qualified as `"CommandName.TemplateName.StrategyName"`.
  */
+/** Fully resolved config index — maps of all parsed config entries, ready for validation or transformation. */
 export interface ConfigIndex {
   readonly namespace: string | undefined;
   /** External type-only imports for the generated domain-types.ts. From `YamlConfig.imports`. */
@@ -152,13 +151,14 @@ export interface ValidationResult {
   readonly errors: ValidationError[];
 }
 
-/**
+/*
  * Result of the extract phase.
  *
  * `configIndex` is the parsed and indexed config — ready for the
  * transform domain. `validationResults` contains per-entry results;
  * `valid` is `true` only if every entry passed validation.
  */
+/** Result of the extract phase — parsed `configIndex` plus per-entry validation results. */
 export interface ExtractResult {
   readonly valid: boolean;
   readonly configIndex: ConfigIndex;

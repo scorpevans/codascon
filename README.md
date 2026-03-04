@@ -359,9 +359,9 @@ Mimic the file structure and patterns from these real-world files exactly:
 - SUBJECTS: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/domain-types.ts
 - COMMAND: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/commands/validate-entry.ts
 - SCHEMA: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/schema.ts
-- YAML (extract): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract.yaml
-- YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/transform.yaml
-- YAML (load): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/load.yaml
+- YAML (extract): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/extract.yaml
+- YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/transform.yaml
+- YAML (load): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/load.yaml
 
 ### Step 3: Apply These Structural Rules
 
@@ -418,10 +418,11 @@ codascon/                        # monorepo root
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
 │       │   ├── cli.ts           # bin entry: odetovibe <schema.yaml> --out <dir>
-│       │   ├── extract.yaml     # extract phase domain config
 │       │   ├── index.ts         # library entry
+│       │   └── schema.ts        # YamlConfig type definitions
+│       ├── specs/               # odetovibe's own codascon domain specs
+│       │   ├── extract.yaml     # extract phase domain config
 │       │   ├── load.yaml        # load phase domain config
-│       │   ├── schema.ts        # YamlConfig type definitions
 │       │   └── transform.yaml   # transform phase domain config
 │       └── README.md
 └── README.md

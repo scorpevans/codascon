@@ -1,5 +1,5 @@
 /* @odetovibe-generated */
-/**
+/*
  * @codascon/odetovibe — Load Domain: WriteFileCommand
  *
  * Dispatches each SourceFileEntry to its writer Template, selected by
@@ -29,8 +29,6 @@
  *   - JSDoc (all nodes) → user owns; always preserved.
  *   - Imports → union: generated imports added, user extras kept.
  *   - Declarations absent from generated output → preserved untouched.
- *
- * @module odetovibe/load/write-file
  */
 
 import * as fs from "node:fs";
@@ -699,6 +697,7 @@ const WRITER_BY_MODE: Record<WriteMode, Template<WriteFileCommand, [], SourceFil
   strict: strictMergeWriter,
 };
 
+/** Dispatches each `SourceFileEntry` to the writer Template selected by `WriteContext.mode`. */
 export class WriteFileCommand extends Command<
   SourceFileEntry,
   WriteContext,

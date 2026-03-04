@@ -1,4 +1,4 @@
-/**
+/*
  * @codascon/odetovibe — Extract Domain: Public API
  *
  * Exposes two routines:
@@ -17,8 +17,6 @@
  *   }
  * }
  * ```
- *
- * @module odetovibe/extract
  */
 
 import * as fs from "node:fs";
@@ -58,7 +56,7 @@ export { ValidateEntryCommand } from "./commands/validate-entry.js";
 // parseYaml
 // ═══════════════════════════════════════════════════════════════════
 
-/**
+/*
  * Parses a YAML config file into a typed `ConfigIndex`.
  *
  * Reads the file, parses via `js-yaml`, and builds Maps of all
@@ -78,6 +76,7 @@ export { ValidateEntryCommand } from "./commands/validate-entry.js";
  * @param yamlPath — Path to the YAML config file.
  * @returns A `ConfigIndex` ready for validation or transformation.
  */
+/** Parse a YAML config file into a `ConfigIndex`. Does not validate — call `validateYaml` on the result. */
 export function parseYaml(yamlPath: string): ConfigIndex {
   const raw = fs.readFileSync(yamlPath, "utf-8");
   const parsed = yaml.load(raw) as YamlConfig;
@@ -163,7 +162,7 @@ export function parseYaml(yamlPath: string): ConfigIndex {
 // validateYaml
 // ═══════════════════════════════════════════════════════════════════
 
-/**
+/*
  * Validates all entries in a `ConfigIndex` against the schema rules.
  *
  * Uses the codascon protocol — `ValidateEntryCommand` dispatches
@@ -173,6 +172,7 @@ export function parseYaml(yamlPath: string): ConfigIndex {
  * @param configIndex — The parsed config index from `parseYaml`.
  * @returns An `ExtractResult` with per-entry validation results.
  */
+/** Validate all entries in a `ConfigIndex` against the schema rules. Returns per-entry results. */
 export function validateYaml(configIndex: ConfigIndex): ExtractResult {
   const validateCmd = new ValidateEntryCommand();
   const results: ValidationResult[] = [];
