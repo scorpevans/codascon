@@ -1,5 +1,11 @@
 # odetovibe
 
+## 2026.3.2-beta.2
+
+### Patch Changes
+
+- 769f526: Fix CLI silently doing nothing on macOS global installs due to symlink mismatch in main-module guard.
+
 ## 2026.3.2-beta.1
 
 ### Patch Changes
