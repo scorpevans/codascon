@@ -153,7 +153,7 @@ Read `workflows.md` before executing any workflow listed there. Then:
 - **Ask once** — request permission at the start of the workflow, not before each individual step.
 - **Re-ask mid-workflow** if an event forces a deviation from the documented steps — for example: a step fails, an unexpected error requires a recovery action, or completing the workflow would require interleaving steps not listed in the workflow. State what happened, what you propose to do instead, and wait for approval before continuing.
 - **Document any new learning in the relevant files** when the workflow doesn't follow the documented steps, and new decisions had to be made.
-- **Execute without interruption** — once started, run all steps in sequence without prompting, unless there's a deviation as described above.
+- **Execute without interruption** — once started, run all steps in sequence without prompting, unless there's a deviation as described above. Pre-approval covers every command in the workflow regardless of type (git, gh, cat, pnpm, etc.) — do not stop between steps to ask "shall I push?" or "shall I create the PR now?". The tool permission UI is the user's concern and is not a reason for mid-workflow verbal check-ins.
 
 ## Top Priority: Never Reference Untracked Files
 
