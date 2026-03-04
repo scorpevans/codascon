@@ -964,7 +964,39 @@ describe("TypeScript diagnostics (pre-Load AST gate)", () => {
 
     expect(diagnostics).toHaveLength(0);
   });
+
+  it("no unresolved names when emitting a full hierarchy with no imports declared", () => {
+    // Regression guard: field types are not emitted, so referencing a domain type
+    // name should never produce TS2304 ("Cannot find name X"). If a future emitter
+    // starts emitting field-typed content this test will catch it immediately.
+    const abstractTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: ["Student"],
+      strategies: { DepartmentMatch: {} },
+    });
+    const concreteTpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+      isParameterized: false,
+      strategies: {},
+    });
+    const stratEntry = new StrategyEntry(
+      "DepartmentMatch",
+      "AccessTemplate",
+      "AccessBuildingCommand",
+      {},
+    );
+    const fullIndex: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
+      concreteTemplates: new Map([["AccessBuildingCommand.GrantAccess", concreteTpl]]),
+      strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", stratEntry]]),
+    };
+    const project = makeProject();
+    emitAst(fullIndex, { configIndex: fullIndex, project });
+
+    const diagnostics = project
+      .getPreEmitDiagnostics()
+      .filter((d) => d.getCode() !== MODULE_NOT_FOUND);
+
+    expect(diagnostics).toHaveLength(0);
+  });
 });
-// Note: the "unresolved type when imports omitted" regression test was removed because
-// domain type field content is no longer emitted — field types never appear in generated
-// code, so there is no code path that could produce TS2304 for a missing domain type import.
