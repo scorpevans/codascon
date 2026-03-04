@@ -124,6 +124,65 @@ describe("smoke", () => {
     expect(ruleIds).toContain("returnType-ref");
   }, 20_000);
 
+  it("full pipeline handles abstract templates with strategies", async () => {
+    tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
+
+    // smoke.yaml has only a concrete template; this covers the abstract template +
+    // strategy code path: parameterized abstract class, two strategies with
+    // distinct subjectSubsets, dispatch via Template.Strategy dotted format.
+    const strategyYaml = [
+      "namespace: access",
+      "",
+      "domainTypes:",
+      "  Person:",
+      "  User:",
+      "    visitName: resolveUser",
+      "  Admin:",
+      "    visitName: resolveAdmin",
+      "  AccessResult:",
+      "",
+      "commands:",
+      "  AccessCommand:",
+      "    commandName: access",
+      "    baseType: Person",
+      "    objectType: AccessResult",
+      "    returnType: AccessResult",
+      "    subjectUnion: [User, Admin]",
+      "    dispatch:",
+      "      User: AccessTemplate.UserGrant",
+      "      Admin: AccessTemplate.AdminGrant",
+      "    templates:",
+      "      AccessTemplate:",
+      "        isParameterized: true",
+      "        strategies:",
+      "          UserGrant:",
+      "            subjectSubset: [User]",
+      "          AdminGrant:",
+      "            subjectSubset: [Admin]",
+    ].join("\n");
+
+    writeFileSync(resolve(tmpDir, "strategy.yaml"), strategyYaml);
+    const configIndex = parseYaml(resolve(tmpDir, "strategy.yaml"));
+    const result = validateYaml(configIndex);
+    expect(result.valid, "strategy YAML must be valid").toBe(true);
+
+    const project = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project });
+    const written = await writeFiles(project, { targetDir: tmpDir, mode: "overwrite" });
+
+    expect(written.length, "pipeline should write at least one file").toBeGreaterThan(0);
+    for (const r of written) {
+      expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
+    }
+
+    const commandFile = written.find((r) => r.path.includes("/commands/access.ts"));
+    expect(commandFile, "command file should be written").toBeDefined();
+    const content = readFileSync(commandFile!.path, "utf8");
+    expect(content).toContain("abstract class AccessTemplate");
+    expect(content).toContain("class UserGrant");
+    expect(content).toContain("class AdminGrant");
+  }, 20_000);
+
   it("generates golden output for smoke.yaml", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
