@@ -78,4 +78,4 @@ jobs:
           output=$(./node_modules/.bin/odetovibe "$smoke_yaml" --out /tmp/smoke-out 2>&1)
           echo "$output"
           echo "$output" | grep -q "Parsed 1 command(s), namespace: greet" && echo "CLI codegen parse: OK"
-          diff -r "$smoke_expected" /tmp/smoke-out/greet && echo "CLI codegen output matches golden files: OK"
+          diff -r "$smoke_expected" /tmp/smoke-out && echo "CLI codegen output matches golden files: OK"
