@@ -856,6 +856,44 @@ describe("emitAst", () => {
     expect(sf.getClass("DepartmentMatch")).toBeDefined();
   });
 
+  it("each strategy adds exactly one result and routes to the grandparent command's file", () => {
+    const abstractTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: ["Student"],
+      strategies: { DepartmentMatch: {} },
+    });
+    const stratEntry = new StrategyEntry(
+      "DepartmentMatch",
+      "AccessTemplate",
+      "AccessBuildingCommand",
+      { subjectSubset: ["Student"] },
+    );
+    const baseIndex: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
+    };
+    const indexWithStrat: ConfigIndex = {
+      ...baseIndex,
+      strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", stratEntry]]),
+    };
+
+    const baseResults = emitAst(baseIndex, { configIndex: baseIndex, project: makeProject() });
+    const stratProject = makeProject();
+    const stratResults = emitAst(indexWithStrat, {
+      configIndex: indexWithStrat,
+      project: stratProject,
+    });
+
+    // Strategy adds exactly one result
+    expect(stratResults).toHaveLength(baseResults.length + 1);
+    // That result routes to the grandparent command's file (strategies are emitted last)
+    expect(stratResults.at(-1)!.targetFile).toBe("commands/access-building.ts");
+    // The class was written to that file
+    expect(
+      stratProject.getSourceFileOrThrow("commands/access-building.ts").getClass("DepartmentMatch"),
+    ).toBeDefined();
+  });
+
   it("routes two commands into two separate files", () => {
     const feedCmd = new CommandEntry("FeedCommand", {
       commandName: "feed",
