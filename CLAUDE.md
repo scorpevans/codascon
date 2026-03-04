@@ -121,7 +121,7 @@ Only proceed after receiving an explicit **yes** from the user.
 2. How many PRs are open and waiting to be merged
 3. Of those, how many have not yet been approved — either via a formal review approval or a comment from you confirming the changes are correct
 
-**Then request explicit acknowledgement** before proceeding. Wait for confirmation that the current state is acceptable before creating a new branch: `git checkout main && git pull && git checkout -b <new-branch>`.
+**Then request explicit acknowledgement** before proceeding. Wait for confirmation that the current state is acceptable before creating a new branch: `git checkout main && git pull && git checkout -b <type>/YYYYMMDD-HHMM-caption` (see `workflows.md` → "Branch Naming" for the required format).
 
 This prevents unrelated changes from accumulating on a branch and ensures no work is silently left behind when context shifts.
 
