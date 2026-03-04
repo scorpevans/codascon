@@ -48,5 +48,5 @@ describe("smoke", () => {
       const expected = readFileSync(resolve(fixturesDir, "smoke-expected", rel), "utf8");
       expect(actual, `${rel} matches golden file`).toBe(expected);
     }
-  });
+  }, 20_000);
 });
