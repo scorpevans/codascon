@@ -64,6 +64,28 @@ describe("smoke", () => {
     expect(merged).toContain("return object; // user implementation");
   }, 20_000);
 
+  it("strict mode runs the full pipeline cleanly when there is no structural conflict", async () => {
+    tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
+
+    const configIndex = parseYaml(resolve(fixturesDir, "smoke.yaml"));
+    expect(validateYaml(configIndex).valid, "smoke.yaml must be valid").toBe(true);
+
+    // First run: create files in overwrite mode
+    const project1 = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project: project1 });
+    await writeFiles(project1, { targetDir: tmpDir, mode: "overwrite" });
+
+    // Second run: strict — same generated structure, no conflict expected
+    const project2 = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project: project2 });
+    const written = await writeFiles(project2, { targetDir: tmpDir, mode: "strict" });
+
+    for (const r of written) {
+      expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
+      expect(r.conflicted, `${r.path} must not conflict`).toBeFalsy();
+    }
+  }, 20_000);
+
   it("generates golden output for smoke.yaml", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
