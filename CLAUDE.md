@@ -43,6 +43,7 @@ All memory files live in `.claude/projects/.../memory/` (user-level, not checked
 | `codascon-ops.md`          | No — read on demand          | Build system (dual CJS+ESM, tsup), tooling config, README/npm rendering notes, odetovibe Prettier/formatCode gotchas                                                                                |
 | `typescript-gotchas.md`    | No — read on demand          | TypeScript type system constraints specific to this codebase, failed approaches not to re-introduce                                                                                                 |
 | `workflows.md`             | No — read on demand          | All monorepo commands; pre-approved workflows with exact shell command patterns; single source of truth for commit, PR, push, build, test, and package publishing configuration                     |
+| `test-analysis.md`         | No — read on demand          | Full critical analysis of all test files (gaps by domain, priority table), actual v8 coverage numbers per file, and recommendation to split codascon tests into runtime vs. compile-time files      |
 
 **Keep this table current.** If a new topic area emerges that does not fit existing files, suggest creating a new topic file, and upon approval add it here and add a pointer in MEMORY.md. An out-of-date table defeats the purpose — Claude will not know to look for files it does not know exist.
 
