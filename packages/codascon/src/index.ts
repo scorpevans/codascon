@@ -287,8 +287,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * //   resolveProfessor: (s: Professor, o: Readonly<Building>) => Template<...>;
  * // }
  */
-/** @internal */
-export type CommandSubjectStrategies<C extends AnyCommand> =
+type CommandSubjectStrategies<C extends AnyCommand> =
   C extends Command<any, any, any, infer CSU>
     ? UnionToIntersection<{ [K in keyof CSU]: Visit<C, CSU[K]> }[number]>
     : never;
