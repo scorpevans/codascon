@@ -1,5 +1,11 @@
 # odetovibe
 
+## 2026.3.2-beta.1
+
+### Patch Changes
+
+- 600988a: Fix Strategy classes missing execute stub; rename CLI positional arg to code_config.yaml; default --out to ./odetovibe.
+
 ## 2026.3.2-beta.0
 
 ### Patch Changes
