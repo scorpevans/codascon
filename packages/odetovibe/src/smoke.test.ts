@@ -40,6 +40,7 @@ describe("smoke", () => {
     emitAst(configIndex, { configIndex, project });
 
     const written = await writeFiles(project, { targetDir: tmpDir, mode: "overwrite" });
+    expect(written.length, "pipeline should write at least one file").toBeGreaterThan(0);
     for (const r of written) {
       expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
       const rel = r.path.slice(tmpDir.length + 1);
