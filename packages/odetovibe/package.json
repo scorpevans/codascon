@@ -46,8 +46,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc --build && pnpm run build:js",
-    "build:js": "tsup && chmod +x dist/cli.js",
+    "build": "tsc --build && chmod +x dist/cli.js",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "prepublishOnly": "pnpm build && pnpm test"
@@ -62,7 +61,6 @@
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^25.3.3",
     "@vitest/coverage-v8": "^4.0.18",
-    "tsup": "^8.0.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"
   }
