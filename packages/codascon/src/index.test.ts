@@ -1039,3 +1039,55 @@ describe("§17 multi-hook template — H = [LogCommand, GroomCommand]", () => {
     strictEqual(evening.food, "evening");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// §18 · STRATEGY STATEFULNESS — cached vs. fresh instance lifetime
+//
+//   The visit method controls strategy lifetime. When it returns a new
+//   object on every call (the default pattern), state on that object is
+//   discarded after each run(). When it returns the same cached instance,
+//   state accumulates. The framework is neutral — both are valid — but
+//   the distinction is non-obvious and worth making explicit.
+// ═══════════════════════════════════════════════════════════════════
+
+class CountingStrategy {
+  callCount = 0;
+  execute(subject: Dog, object: string): string {
+    return `${subject.name}:${++this.callCount}`;
+  }
+}
+
+// Cached: resolveDog returns the same CountingStrategy instance every time
+class CachingCommand extends Command<Person, string, string, [Dog]> {
+  readonly commandName = "caching" as const;
+  private readonly strategy = new CountingStrategy();
+  resolveDog() {
+    return this.strategy;
+  }
+}
+
+// Fresh: resolveDog creates a new CountingStrategy on every dispatch
+class FreshCommand extends Command<Person, string, string, [Dog]> {
+  readonly commandName = "fresh" as const;
+  resolveDog() {
+    return new CountingStrategy();
+  }
+}
+
+describe("§18 strategy statefulness — cached vs. fresh instance lifetime", () => {
+  it("cached strategy instance accumulates state across run() calls", () => {
+    const cmd = new CachingCommand();
+
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:2");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:3");
+  });
+
+  it("fresh strategy instance resets state on every run() call", () => {
+    const cmd = new FreshCommand();
+
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+  });
+});
