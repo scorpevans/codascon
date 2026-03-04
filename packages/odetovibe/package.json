@@ -39,11 +39,10 @@
     "odetovibe": "./dist/cli.js"
   },
   "files": [
-    "dist/index.js",
-    "dist/cli.js",
-    "dist/chunk-*.js",
-    "dist/**/*.d.ts",
+    "dist",
+    "!dist/**/*.test.js",
     "!dist/**/*.test.d.ts",
+    "!dist/**/*.map",
     "LICENSE"
   ],
   "scripts": {
