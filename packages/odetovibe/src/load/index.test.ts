@@ -966,6 +966,28 @@ describe("StrictMergeWriter", () => {
     expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
   });
 
+  it("inserts .ode before the final extension for multi-dot filenames", async () => {
+    // conflictPath("access-building.test.ts") must produce "access-building.test.ode.ts",
+    // NOT "access-building.ode.test.ts" — .ode is always inserted before the last extension.
+    const project = makeProject({
+      "access-building.test.ts": "export class Foo extends Error {}",
+    });
+    const sf = project.getSourceFileOrThrow("access-building.test.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "access-building.test.ts"),
+      "/* @odetovibe-generated */\nexport class Foo extends RegExp {}",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "access-building.test.ode.ts"));
+    expect(fs.existsSync(path.join(tmpDir, "access-building.test.ode.ts"))).toBe(true);
+    const original = fs.readFileSync(path.join(tmpDir, "access-building.test.ts"), "utf-8");
+    expect(original).toContain("RegExp");
+  });
+
   it("applies Prettier formatting when creating a new file (no-existing fallback)", async () => {
     const body = "export interface Foo { name: string; }";
     const project = makeProject({ "f.ts": body });
