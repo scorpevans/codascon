@@ -263,6 +263,34 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
   });
 
+  it("[commandName-file-unique] fails when two command keys normalize to the same file name", () => {
+    // "AccessBuildingCommand" and "AccessBuilding" both normalize to "access-building.ts"
+    const cmd1 = new CommandEntry("AccessBuildingCommand", validCmdConfig);
+    const cmd2 = new CommandEntry("AccessBuilding", validCmdConfig);
+    const index: ConfigIndex = {
+      ...withTypes,
+      commands: new Map([
+        ["AccessBuildingCommand", cmd1],
+        ["AccessBuilding", cmd2],
+      ]),
+    };
+    expect(rules(validateCmd.run(cmd1, index))).toContain("commandName-file-unique");
+    expect(rules(validateCmd.run(cmd2, index))).toContain("commandName-file-unique");
+  });
+
+  it("[commandName-file-unique] passes when command keys normalize to distinct file names", () => {
+    const cmd1 = new CommandEntry("AccessBuildingCommand", validCmdConfig);
+    const cmd2 = new CommandEntry("FeedCommand", validCmdConfig);
+    const index: ConfigIndex = {
+      ...withTypes,
+      commands: new Map([
+        ["AccessBuildingCommand", cmd1],
+        ["FeedCommand", cmd2],
+      ]),
+    };
+    expect(validateCmd.run(cmd1, index).valid).toBe(true);
+  });
+
   it("reports multiple rule violations for a single entry", () => {
     // baseType and objectType are both unknown — both errors accumulate; no short-circuit
     const entry = makeCmd({ baseType: "Unknown", objectType: "AlsoUnknown" });
