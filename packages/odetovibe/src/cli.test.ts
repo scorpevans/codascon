@@ -139,4 +139,20 @@ describe("main", () => {
     expect((err as ExitError).code).toBe(1);
     expect(logLines.join("\n")).toContain("<code_config.yaml>");
   });
+
+  it("exits 1 and prints an error message when the schema file is not found", async () => {
+    process.argv = ["node", "cli.js", "/nonexistent/config.yaml"];
+    vi.mocked(parseYaml).mockImplementation(() => {
+      throw Object.assign(
+        new Error("ENOENT: no such file or directory, open '/nonexistent/config.yaml'"),
+        {
+          code: "ENOENT",
+        },
+      );
+    });
+    const err = await main().catch((e) => e);
+    expect(err).toBeInstanceOf(ExitError);
+    expect((err as ExitError).code).toBe(1);
+    expect(errorLines.join("\n")).toContain("ENOENT");
+  });
 });
