@@ -303,16 +303,16 @@ describe("§11 type-level assertions", () => {
 
 // ── 14d. Hook command that doesn't visit the subject union ───────
 //
-//   Template<C, H, SU> declares `H extends AnyCommand[] & SubjectUnionVisitors<SU, H>`.
-//   This constraint is semantically correct but TypeScript can't enforce it
-//   at the type alias instantiation site: `CommandSubjectUnion<H[K]>` uses
-//   `infer CSU` on a class type inside a constraint position, which resolves
-//   to `any`, making `SU extends any` always true.
+//   CommandHooks<H, SU> checks that each hook Command declares visit methods
+//   for every Subject in SU (via `SubjectVisitName<SU>` key presence).
+//   This is a simple structural extends check — no `infer` involved —
+//   so TypeScript evaluates it concretely even inside mapped type bodies.
 //
-//   Enforcement instead happens at TWO other sites:
-//     1. `implements` — CommandHooks<H> requires the hook as a structural property
-//     2. Hook invocation — this.hook.run(subject, ...) checks the hook command's
-//        own `this & CommandSubjectStrategies` constraint, catching wrong subjects
+//   Enforcement happens at TWO sites:
+//     1. `implements` site — if the hook is missing a visit method for any Subject
+//        in SU, the hook property resolves to `never` (proven in the `it` block)
+//     2. Invocation site — calling hook.run(subject) with the wrong subject is
+//        also rejected by the hook Command's own this-constraint (proven below)
 //
 //   The compile-time proof below verifies enforcement at the invocation site.
 
@@ -445,12 +445,15 @@ describe("§14 compile-time constraint tests", () => {
 
   it("14a: missing visit method rejected at call site", () => void 0);
   it("14b: unsupported subject rejected at call site", () => void 0);
-  it("14c: template missing hook dependency rejected at implements", () => void 0);
+  it("14c: template missing hook dependency (absent property) rejected at implements", () =>
+    void 0);
 
-  it("14d: hook-subject mismatch caught at hook invocation site (runtime + compile)", () => {
-    // CatOnlyCommand only visits Cat, but we wire it as a hook into a Dog template.
-    // Structurally valid at implements site; error surfaces when the hook is invoked
-    // on the wrong subject (caught at call site by the command's this constraint).
+  it("14d: hook-subject mismatch rejected at implements site", () => {
+    // CatOnlyCommand only visits Cat (declares only resolveCat, not resolveDog).
+    // Template<DogOnlyCommand, [CatOnlyCommand], Dog> requires the hook to cover
+    // Dog (SU = Dog). CommandHooks checks that CatOnlyCommand has `resolveDog` —
+    // it does not, so the hook property resolves to `never`. The @ts-expect-error
+    // below proves the framework rejects the miswired hook at the implements site.
     class CatOnlyCommand extends Command<Person, string, string, [Cat]> {
       readonly commandName = "catOnly" as const;
       resolveCat() {
@@ -459,13 +462,13 @@ describe("§14 compile-time constraint tests", () => {
     }
 
     class MiswiredTemplate implements Template<DogOnlyCommand, [CatOnlyCommand], Dog> {
+      // @ts-expect-error — CatOnlyCommand doesn't handle Dog (no resolveDog),
+      // so CommandHooks resolves to { catOnly: never }; CatOnlyCommand ≁ never
       catOnly: CatOnlyCommand;
       constructor(c: CatOnlyCommand) {
         this.catOnly = c;
       }
       execute(subject: Dog, object: string): number {
-        // Invoking this.catOnly.run(subject, "data") here would be a compile error —
-        // Dog is not assignable to Cat (CatOnlyCommand's subject union).
         return subject.name.length;
       }
     }
@@ -482,7 +485,7 @@ describe("§14 compile-time constraint tests", () => {
       }
     }
 
-    // Template works fine when it doesn't invoke the mismatched hook
+    // Template works fine at runtime when it doesn't invoke the mismatched hook
     const cmd = new HookedDogCmd(new CatOnlyCommand());
     strictEqual(cmd.run(new Dog("Rex", "Lab"), "test"), 3);
   });
