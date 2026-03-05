@@ -329,7 +329,7 @@ type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
     [K in SubjectVisitName<SU>]: any;
   }
     ? Cmd
-    : never;
+    : "Error: hook Command does not declare visit methods for all subjects in SU";
 };
 
 // ─── Core Classes ────────────────────────────────────────────────

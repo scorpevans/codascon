@@ -463,7 +463,7 @@ describe("§14 compile-time constraint tests", () => {
 
     class MiswiredTemplate implements Template<DogOnlyCommand, [CatOnlyCommand], Dog> {
       // @ts-expect-error — CatOnlyCommand doesn't handle Dog (no resolveDog),
-      // so CommandHooks resolves to { catOnly: never }; CatOnlyCommand ≁ never
+      // so CommandHooks resolves to { catOnly: "Error: hook Command does not declare visit methods for all subjects in SU" }
       catOnly: CatOnlyCommand;
       constructor(c: CatOnlyCommand) {
         this.catOnly = c;

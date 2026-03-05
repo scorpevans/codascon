@@ -924,7 +924,7 @@ class DocExportCommand extends Command<Subject, AppContext, string, [TextNode]> 
     resolveTextNode() {
       return {
         // @ts-expect-error — ImageOnlyCommand lacks resolveTextNode, so CommandHooks
-        // resolves to { imageOnly: never }; ImageOnlyCommand ≁ never
+        // resolves to { imageOnly: "Error: hook Command does not declare visit methods for all subjects in SU" }
         imageOnly: this.imgCmd,
         execute: (subject: TextNode, object: AppContext): string => {
           return subject.text;
