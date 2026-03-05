@@ -970,3 +970,150 @@ describe("§16 document domain — second independent domain validation", () => 
   it("16e: template missing hook `render` property rejected at implements", () => void 0);
   it("16f: hook invoked on wrong subject rejected at call site", () => void 0);
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// §17 · MULTI-HOOK TEMPLATE — H tuple with two hooks
+//
+//   §8 and §15 each exercise H = [OneHook]. This section proves that
+//   H = [HookA, HookB] works correctly: both hooks are structurally
+//   required by CommandHooks<[LogCommand, GroomCommand]>, both are
+//   injected, and both are invoked inside execute() with their return
+//   values composed into the final result — making the assertions
+//   directly sensitive to both hook calls.
+// ═══════════════════════════════════════════════════════════════════
+
+class RichFeedCommand extends Command<Person, { time: string }, FeedResult, [Dog]> {
+  readonly commandName = "richFeed" as const;
+  private log: LogCommand;
+  private groom: GroomCommand;
+  constructor(log: LogCommand, groom: GroomCommand) {
+    super();
+    this.log = log;
+    this.groom = groom;
+  }
+  resolveDog() {
+    const log = this.log;
+    const groom = this.groom;
+    return {
+      log,
+      groom,
+      execute(subject: Dog, object: { time: string }): FeedResult {
+        const logEntry = log.run(subject, { action: object.time });
+        const groomResult = groom.run(subject, { name: "Vet", hasEmergency: false });
+        return {
+          fed: true,
+          // food depends on BOTH hooks: groomResult.groomed selects the branch,
+          // logEntry.action provides the value — if either hook is not invoked,
+          // this assertion fails.
+          food: groomResult.groomed ? logEntry.action : "standard",
+          amount: 2,
+        };
+      },
+    } satisfies Template<RichFeedCommand, [LogCommand, GroomCommand], Dog>;
+  }
+}
+
+describe("§17 multi-hook template — H = [LogCommand, GroomCommand]", () => {
+  it("both hooks are invoked and their results composed into the return value", () => {
+    const cmd = new RichFeedCommand(new LogCommand(), new GroomCommand());
+
+    const result = cmd.run(new Dog("Rex", "Lab"), { time: "morning" });
+
+    // food === "morning" proves both hooks were called:
+    //   groomResult.groomed is true for any Dog (GroomCommand.resolveDog always sets groomed:true)
+    //   logEntry.action === "morning" (LogCommand echoes the action field)
+    strictEqual(result.food, "morning");
+    strictEqual(result.fed, true);
+    strictEqual(result.amount, 2);
+  });
+
+  it("hooks are independent — changing either changes the result", () => {
+    const cmd = new RichFeedCommand(new LogCommand(), new GroomCommand());
+
+    const morning = cmd.run(new Dog("Rex", "Lab"), { time: "morning" });
+    const evening = cmd.run(new Dog("Rex", "Lab"), { time: "evening" });
+
+    // logEntry.action reflects the object.time passed to run() — proves log hook
+    // is re-invoked on every call, not cached
+    strictEqual(morning.food, "morning");
+    strictEqual(evening.food, "evening");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §18 · STRATEGY STATEFULNESS — cached vs. fresh instance lifetime
+//
+//   The visit method controls strategy lifetime. When it returns a new
+//   object on every call (the default pattern), state on that object is
+//   discarded after each run(). When it returns the same cached instance,
+//   state accumulates. The framework is neutral — both are valid — but
+//   the distinction is non-obvious and worth making explicit.
+// ═══════════════════════════════════════════════════════════════════
+
+class CountingStrategy {
+  callCount = 0;
+  execute(subject: Dog, object: string): string {
+    return `${subject.name}:${++this.callCount}`;
+  }
+}
+
+// Cached: resolveDog returns the same CountingStrategy instance every time
+class CachingCommand extends Command<Person, string, string, [Dog]> {
+  readonly commandName = "caching" as const;
+  private readonly strategy = new CountingStrategy();
+  resolveDog() {
+    return this.strategy;
+  }
+}
+
+// Fresh: resolveDog creates a new CountingStrategy on every dispatch
+class FreshCommand extends Command<Person, string, string, [Dog]> {
+  readonly commandName = "fresh" as const;
+  resolveDog() {
+    return new CountingStrategy();
+  }
+}
+
+describe("§18 strategy statefulness — cached vs. fresh instance lifetime", () => {
+  it("cached strategy instance accumulates state across run() calls", () => {
+    const cmd = new CachingCommand();
+
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:2");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:3");
+  });
+
+  it("fresh strategy instance resets state on every run() call", () => {
+    const cmd = new FreshCommand();
+
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "x"), "Rex:1");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §19 · SUBJECT CONSTRUCTOR CONTRACT
+//
+//   Subject's constructor must remain callable with no arguments so
+//   that all downstream subclasses — which call super() with no args —
+//   continue to compile and run without modification.
+//
+//   This test makes that contract explicit and load-bearing: if Subject
+//   ever gains a required constructor parameter, this test fails at
+//   compile time before any downstream package is affected.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("§19 Subject constructor contract — super() takes no required arguments", () => {
+  it("a subclass calling super() with no arguments constructs successfully", () => {
+    class MinimalSubject extends Subject {
+      readonly visitName = "resolveMinimal" as const;
+      constructor() {
+        super();
+      }
+    }
+
+    const subject = new MinimalSubject();
+    strictEqual(subject.visitName, "resolveMinimal");
+  });
+});

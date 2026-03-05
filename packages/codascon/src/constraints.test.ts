@@ -230,11 +230,34 @@ type _T12 = Expect<
 type _T13 = Expect<Equal<CommandSubjectUnion<FeedCommand>, Dog | Cat | Bird>>;
 type _T14 = Expect<Equal<CommandSubjectUnion<GroomCommand>, Dog | Cat>>;
 
+// CommandSubjectStrategies is an internal type (not exported) used as the `this`
+// constraint on Command.run(). It cannot be directly imported or asserted against
+// here — doing so would require exporting it, which would strip it from the .d.ts
+// via @internal + stripInternal and create a dangling reference in run()'s signature.
+//
+// The constraint is proven indirectly:
+// - _CSS3 below: a correctly implemented Command satisfies the constraint
+//   (cmd.run() compiles; if any visit method were missing, the call site would fail)
+// - §14: incorrect implementations are rejected (missing visit method, wrong types, etc.)
+//
+// Shape note (documented in typescript-gotchas.md): CommandSubjectStrategies<FeedCommand>
+// (concrete class) evaluates to {} due to circular inference in run()'s this constraint.
+// The base class form Command<B, O, R, CSU> evaluates correctly to the expected
+// intersection of per-subject visit methods, but requires the type to be importable.
+
+// A correctly implemented Command satisfies its own CommandSubjectStrategies —
+// proved by the function body compiling: if FeedCommand violated the this constraint,
+// tsc would reject cmd.run() at the call site.
+const _css3Proof = (cmd: FeedCommand, dog: Dog) => cmd.run(dog, { time: "x" });
+type _CSS3 = Expect<
+  typeof _css3Proof extends (cmd: FeedCommand, dog: Dog) => FeedResult ? true : false
+>;
+
 describe("§11 type-level assertions", () => {
   it("type assertions verified by tsc --build (compile-time proof)", () => {
-    // All type assertions above (_T1–_T14) are verified at compile time by tsc --build,
-    // which includes constraints.test.ts via tsconfig.json include: ["src"].
-    // If any assertion fails, tsc fails — no runtime check needed.
+    // All type assertions above (_T1–_T14, _CSS3) are verified at compile time
+    // by tsc --build, which includes constraints.test.ts via tsconfig.json
+    // include: ["src"]. If any assertion fails, tsc fails — no runtime check needed.
     void 0;
   });
 });
@@ -492,4 +515,29 @@ describe("§14 compile-time constraint tests", () => {
   it("14g: wrong object type in execute rejected at call site", () => void 0);
   it("14h: non-Subject in CSU tuple rejected", () => void 0);
   it("14i: duplicate visitName — conflicting handlers rejected", () => void 0);
+
+  it("14j: visit method returning wrong-SU template rejected at call site", () => {
+    // A visit method declared to return Template<C, [], Dog> must return a Template
+    // whose execute accepts Dog. Returning a Cat-scoped Template is a compile error
+    // because execute<T extends Cat> is incompatible with execute<T extends Dog>.
+    class WrongSUCommand extends Command<{}, string, string, [Dog, Cat]> {
+      readonly commandName = "wrongSU" as const;
+      resolveDog(d: Dog, o: string): Template<WrongSUCommand, [], Dog> {
+        // @ts-expect-error — CatOnlyTemplate.execute<T extends Cat> is incompatible
+        // with Template<WrongSUCommand, [], Dog> which requires execute<T extends Dog>
+        return new CatOnlyTemplate();
+      }
+      resolveCat(c: Cat, o: string): Template<WrongSUCommand, [], Cat> {
+        return new CatOnlyTemplate();
+      }
+    }
+
+    class CatOnlyTemplate implements Template<WrongSUCommand, [], Cat> {
+      execute(subject: Cat, object: string): string {
+        return subject.name;
+      }
+    }
+
+    void WrongSUCommand;
+  });
 });
