@@ -544,6 +544,31 @@ describe("§14 compile-time constraint tests", () => {
   it("14h: non-Subject in CSU tuple rejected", () => void 0);
   it("14i: duplicate visitName — conflicting handlers rejected", () => void 0);
 
+  it("14j: visit method returning wrong-SU template rejected at call site", () => {
+    // A visit method declared to return Template<C, [], Dog> must return a Template
+    // whose execute accepts Dog. Returning a Cat-scoped Template is a compile error
+    // because execute<T extends Cat> is incompatible with execute<T extends Dog>.
+    class WrongSUCommand extends Command<{}, string, string, [Dog, Cat]> {
+      readonly commandName = "wrongSU" as const;
+      resolveDog(d: Dog, o: string): Template<WrongSUCommand, [], Dog> {
+        // @ts-expect-error — CatOnlyTemplate.execute<T extends Cat> is incompatible
+        // with Template<WrongSUCommand, [], Dog> which requires execute<T extends Dog>
+        return new CatOnlyTemplate();
+      }
+      resolveCat(c: Cat, o: string): Template<WrongSUCommand, [], Cat> {
+        return new CatOnlyTemplate();
+      }
+    }
+
+    class CatOnlyTemplate implements Template<WrongSUCommand, [], Cat> {
+      execute(subject: Cat, object: string): string {
+        return subject.name;
+      }
+    }
+
+    void WrongSUCommand;
+  });
+
   it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {
     // When a hook Command declares commandName as the wide `string` type,
     // CommandName<Cmd> returns the WidenedCommandNameError string rather than `never`.
