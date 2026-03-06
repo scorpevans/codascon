@@ -230,9 +230,30 @@ type _T12 = Expect<
 type _T13 = Expect<Equal<CommandSubjectUnion<FeedCommand>, Dog | Cat | Bird>>;
 type _T14 = Expect<Equal<CommandSubjectUnion<GroomCommand>, Dog | Cat>>;
 
+// CommandName returns an error string (not never) for non-literal commandName —
+// so hook properties keyed by a non-literal name surface an error rather than
+// silently disappearing from the Template's implements check.
+type _T15 = Expect<
+  Equal<
+    CommandName<{ commandName: string }>,
+    "commandName must be a literal. Fix: readonly commandName = 'myHook' as const"
+  >
+>;
+
+// Utility types return descriptive error strings (not never) for non-Command inputs.
+type _T16 = Expect<
+  Equal<CommandObject<string>, "Error: CommandObject<C> requires C to extend Command">
+>;
+type _T17 = Expect<
+  Equal<CommandReturn<string>, "Error: CommandReturn<C> requires C to extend Command">
+>;
+type _T18 = Expect<
+  Equal<CommandSubjectUnion<string>, "Error: CommandSubjectUnion<C> requires C to extend Command">
+>;
+
 describe("§11 type-level assertions", () => {
   it("type assertions verified by tsc --build (compile-time proof)", () => {
-    // All type assertions above (_T1–_T14) are verified at compile time by tsc --build,
+    // All type assertions above (_T1–_T18) are verified at compile time by tsc --build,
     // which includes constraints.test.ts via tsconfig.json include: ["src"].
     // If any assertion fails, tsc fails — no runtime check needed.
     void 0;
@@ -495,4 +516,29 @@ describe("§14 compile-time constraint tests", () => {
   it("14g: wrong object type in execute rejected at call site", () => void 0);
   it("14h: non-Subject in CSU tuple rejected", () => void 0);
   it("14i: duplicate visitName — conflicting handlers rejected", () => void 0);
+
+  it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {
+    // When a hook Command declares commandName as the wide `string` type,
+    // CommandName<Cmd> returns the WidenedCommandNameError string rather than `never`.
+    // The hook property is then keyed by the error string, not silently dropped —
+    // the Template's implements check fails with a readable compile error.
+    class NonLiteralNameHook extends Command<Person, string, string, [Dog]> {
+      readonly commandName: string = "log"; // non-literal — type is `string`, not `"log"`
+      resolveDog() {
+        return { execute: (s: Dog, o: string): string => "" };
+      }
+    }
+
+    // @ts-expect-error — commandName is non-literal; hook property is keyed by the
+    // WidenedCommandNameError string rather than "log", so this class is missing
+    // the required property and fails the implements check.
+    class BrokenHookTemplate implements Template<DogOnlyCommand, [NonLiteralNameHook], Dog> {
+      readonly log: NonLiteralNameHook = new NonLiteralNameHook();
+      execute(subject: Dog, object: string): number {
+        return subject.name.length;
+      }
+    }
+
+    void BrokenHookTemplate;
+  });
 });

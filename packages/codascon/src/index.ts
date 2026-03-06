@@ -128,17 +128,23 @@ export type SubjectVisitName<S> = S extends { visitName: infer K extends string 
 /*
  * Extracts the `commandName` string literal type from a Command.
  *
- * Returns `never` if the Command's `commandName` is the wide `string` type.
- * Used by `CommandHooks<SU, H>` to key hook properties on the Template type.
+ * Returns `never` if `C` does not have a `commandName` property at all.
+ * Returns a descriptive error string if `commandName` is the wide `string`
+ * type rather than a string literal — this causes `CommandHooks` to key
+ * the hook property with the error string, making the `implements` check
+ * fail with a readable compile error instead of silently dropping the hook.
  *
  * @example
  * class FeedCmd extends Command<...> { readonly commandName = "feed" as const; }
  * type T = CommandName<FeedCmd>;  // "feed"
  */
 /** Extracts the `commandName` string literal type from a Command. */
+type WidenedCommandNameError =
+  "commandName must be a literal. Fix: readonly commandName = 'myHook' as const";
+
 export type CommandName<C> = C extends { commandName: infer K extends string }
   ? string extends K
-    ? never
+    ? WidenedCommandNameError
     : K
   : never;
 
@@ -154,7 +160,10 @@ export type CommandName<C> = C extends { commandName: infer K extends string }
  * type T = CommandObject<AccessCmd>;  // Building
  */
 /** Extracts the object type (`O`) from a Command — the context/payload passed to visit methods and `execute`. */
-export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : never;
+export type CommandObject<C> =
+  C extends Command<any, infer O, any, any>
+    ? O
+    : "Error: CommandObject<C> requires C to extend Command";
 
 /*
  * Extracts the return type (`R`) from a Command's generic parameters.
@@ -167,7 +176,10 @@ export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : n
  * type T = CommandReturn<AccessCmd>;  // AccessResult
  */
 /** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. */
-export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : never;
+export type CommandReturn<C> =
+  C extends Command<any, any, infer R, any>
+    ? R
+    : "Error: CommandReturn<C> requires C to extend Command";
 
 // ─── Internal Type Utilities ─────────────────────────────────────
 
@@ -183,6 +195,9 @@ type AnyCommand = Command<any, any, any, any>;
  * Given `Command<B, O, R, [Student, Professor]>`, produces `Student | Professor`.
  * This is the set of Subjects the Command can dispatch to.
  *
+ * Returns a descriptive error string if `C` does not extend `Command` — this
+ * surfaces as a readable compile error rather than a silent `never`.
+ *
  * Note: when used inside type parameter constraints, the `infer CSU` may resolve
  * to `any` for class types. This is a TypeScript limitation that affects constraint
  * enforcement but not runtime behavior. `CommandHooks<SU, H>` avoids this by
@@ -190,7 +205,9 @@ type AnyCommand = Command<any, any, any, any>;
  */
 /** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. */
 export type CommandSubjectUnion<C> =
-  C extends Command<any, any, any, infer CSU> ? CSU[number] : never;
+  C extends Command<any, any, any, infer CSU>
+    ? CSU[number]
+    : "Error: CommandSubjectUnion<C> requires C to extend Command";
 
 /*
  * Defines the signature of a single visit method on a Command.
