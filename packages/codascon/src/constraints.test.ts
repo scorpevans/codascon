@@ -230,9 +230,30 @@ type _T12 = Expect<
 type _T13 = Expect<Equal<CommandSubjectUnion<FeedCommand>, Dog | Cat | Bird>>;
 type _T14 = Expect<Equal<CommandSubjectUnion<GroomCommand>, Dog | Cat>>;
 
+// CommandName returns an error string (not never) for non-literal commandName —
+// so hook properties keyed by a non-literal name surface an error rather than
+// silently disappearing from the Template's implements check.
+type _T15 = Expect<
+  Equal<
+    CommandName<{ commandName: string }>,
+    "commandName must be a literal. Fix: readonly commandName = 'myHook' as const"
+  >
+>;
+
+// Utility types return descriptive error strings (not never) for non-Command inputs.
+type _T16 = Expect<
+  Equal<CommandObject<string>, "Error: CommandObject<C> requires C to extend Command">
+>;
+type _T17 = Expect<
+  Equal<CommandReturn<string>, "Error: CommandReturn<C> requires C to extend Command">
+>;
+type _T18 = Expect<
+  Equal<CommandSubjectUnion<string>, "Error: CommandSubjectUnion<C> requires C to extend Command">
+>;
+
 describe("§11 type-level assertions", () => {
   it("type assertions verified by tsc --build (compile-time proof)", () => {
-    // All type assertions above (_T1–_T14) are verified at compile time by tsc --build,
+    // All type assertions above (_T1–_T18) are verified at compile time by tsc --build,
     // which includes constraints.test.ts via tsconfig.json include: ["src"].
     // If any assertion fails, tsc fails — no runtime check needed.
     void 0;
@@ -303,16 +324,16 @@ describe("§11 type-level assertions", () => {
 
 // ── 14d. Hook command that doesn't visit the subject union ───────
 //
-//   Template<C, H, SU> declares `H extends AnyCommand[] & SubjectUnionVisitors<SU, H>`.
-//   This constraint is semantically correct but TypeScript can't enforce it
-//   at the type alias instantiation site: `CommandSubjectUnion<H[K]>` uses
-//   `infer CSU` on a class type inside a constraint position, which resolves
-//   to `any`, making `SU extends any` always true.
+//   CommandHooks<H, SU> checks that each hook Command declares visit methods
+//   for every Subject in SU (via `SubjectVisitName<SU>` key presence).
+//   This is a simple structural extends check — no `infer` involved —
+//   so TypeScript evaluates it concretely even inside mapped type bodies.
 //
-//   Enforcement instead happens at TWO other sites:
-//     1. `implements` — CommandHooks<H> requires the hook as a structural property
-//     2. Hook invocation — this.hook.run(subject, ...) checks the hook command's
-//        own `this & CommandSubjectStrategies` constraint, catching wrong subjects
+//   Enforcement happens at TWO sites:
+//     1. `implements` site — if the hook is missing a visit method for any Subject
+//        in SU, the hook property resolves to `never` (proven in the `it` block)
+//     2. Invocation site — calling hook.run(subject) with the wrong subject is
+//        also rejected by the hook Command's own this-constraint (proven below)
 //
 //   The compile-time proof below verifies enforcement at the invocation site.
 
@@ -445,12 +466,15 @@ describe("§14 compile-time constraint tests", () => {
 
   it("14a: missing visit method rejected at call site", () => void 0);
   it("14b: unsupported subject rejected at call site", () => void 0);
-  it("14c: template missing hook dependency rejected at implements", () => void 0);
+  it("14c: template missing hook dependency (absent property) rejected at implements", () =>
+    void 0);
 
-  it("14d: hook-subject mismatch caught at hook invocation site (runtime + compile)", () => {
-    // CatOnlyCommand only visits Cat, but we wire it as a hook into a Dog template.
-    // Structurally valid at implements site; error surfaces when the hook is invoked
-    // on the wrong subject (caught at call site by the command's this constraint).
+  it("14d: hook-subject mismatch rejected at implements site", () => {
+    // CatOnlyCommand only visits Cat (declares only resolveCat, not resolveDog).
+    // Template<DogOnlyCommand, [CatOnlyCommand], Dog> requires the hook to cover
+    // Dog (SU = Dog). CommandHooks checks that CatOnlyCommand has `resolveDog` —
+    // it does not, so the hook property resolves to `never`. The @ts-expect-error
+    // below proves the framework rejects the miswired hook at the implements site.
     class CatOnlyCommand extends Command<Person, string, string, [Cat]> {
       readonly commandName = "catOnly" as const;
       resolveCat() {
@@ -459,13 +483,13 @@ describe("§14 compile-time constraint tests", () => {
     }
 
     class MiswiredTemplate implements Template<DogOnlyCommand, [CatOnlyCommand], Dog> {
+      // @ts-expect-error — CatOnlyCommand doesn't handle Dog (no resolveDog),
+      // so CommandHooks resolves to { catOnly: "Error: hook Command does not declare visit methods for all subjects in SU" }
       catOnly: CatOnlyCommand;
       constructor(c: CatOnlyCommand) {
         this.catOnly = c;
       }
       execute(subject: Dog, object: string): number {
-        // Invoking this.catOnly.run(subject, "data") here would be a compile error —
-        // Dog is not assignable to Cat (CatOnlyCommand's subject union).
         return subject.name.length;
       }
     }
@@ -482,7 +506,7 @@ describe("§14 compile-time constraint tests", () => {
       }
     }
 
-    // Template works fine when it doesn't invoke the mismatched hook
+    // Template works fine at runtime when it doesn't invoke the mismatched hook
     const cmd = new HookedDogCmd(new CatOnlyCommand());
     strictEqual(cmd.run(new Dog("Rex", "Lab"), "test"), 3);
   });
@@ -492,4 +516,29 @@ describe("§14 compile-time constraint tests", () => {
   it("14g: wrong object type in execute rejected at call site", () => void 0);
   it("14h: non-Subject in CSU tuple rejected", () => void 0);
   it("14i: duplicate visitName — conflicting handlers rejected", () => void 0);
+
+  it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {
+    // When a hook Command declares commandName as the wide `string` type,
+    // CommandName<Cmd> returns the WidenedCommandNameError string rather than `never`.
+    // The hook property is then keyed by the error string, not silently dropped —
+    // the Template's implements check fails with a readable compile error.
+    class NonLiteralNameHook extends Command<Person, string, string, [Dog]> {
+      readonly commandName: string = "log"; // non-literal — type is `string`, not `"log"`
+      resolveDog() {
+        return { execute: (s: Dog, o: string): string => "" };
+      }
+    }
+
+    // @ts-expect-error — commandName is non-literal; hook property is keyed by the
+    // WidenedCommandNameError string rather than "log", so this class is missing
+    // the required property and fails the implements check.
+    class BrokenHookTemplate implements Template<DogOnlyCommand, [NonLiteralNameHook], Dog> {
+      readonly log: NonLiteralNameHook = new NonLiteralNameHook();
+      execute(subject: Dog, object: string): number {
+        return subject.name.length;
+      }
+    }
+
+    void BrokenHookTemplate;
+  });
 });

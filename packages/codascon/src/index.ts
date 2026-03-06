@@ -55,18 +55,12 @@
  *   signatures into an impossible intersection (e.g. `(s: Dog & Cat) => ...`),
  *   making the visit method unimplementable.
  *
- * - **Template structural enforcement**: `CommandHooks<H>` requires the Template
- *   to have a property for each hook Command, keyed by `commandName`. This is
- *   enforced structurally at `implements` sites.
- *
- * - **Hook subject coverage**: `SubjectUnionVisitors<SU, H>` constrains the `H`
- *   parameter on `Template` to only accept hook Commands whose subject union
- *   covers the Template's SU. Note: due to TypeScript limitations with
- *   conditional type inference in constraint position, this constraint is not
- *   enforced at the type alias instantiation site. Instead, enforcement occurs
- *   at the hook invocation site — calling `hookCmd.run(subject)` where the
- *   subject is outside the hook's union produces a compile error via the hook
- *   Command's own `this` constraint.
+ * - **Hook presence and subject coverage**: `CommandHooks<H, SU>` requires the
+ *   Template to have a property for each hook Command, keyed by `commandName`,
+ *   AND enforces that each hook Command declares visit methods for every Subject
+ *   in `SU`. A hook missing any required visit method resolves to `never` at
+ *   the `implements` site — no value of the hook's class satisfies `never`,
+ *   producing a compile error.
  *
  * ## Client Patterns
  *
@@ -134,19 +128,31 @@ export type SubjectVisitName<S> = S extends { visitName: infer K extends string 
 /*
  * Extracts the `commandName` string literal type from a Command.
  *
- * Returns `never` if the Command's `commandName` is the wide `string` type.
- * Used by `CommandHooks<H>` to key hook properties on the Template type.
+ * Returns `never` if `C` does not have a `commandName` property at all.
+ * Returns a descriptive error string if `commandName` is the wide `string`
+ * type rather than a string literal — this causes `CommandHooks` to key
+ * the hook property with the error string, making the `implements` check
+ * fail with a readable compile error instead of silently dropping the hook.
  *
  * @example
  * class FeedCmd extends Command<...> { readonly commandName = "feed" as const; }
  * type T = CommandName<FeedCmd>;  // "feed"
  */
-/** Extracts the `commandName` string literal type from a Command. */
-export type CommandName<C> = C extends { commandName: infer K extends string }
-  ? string extends K
+/** Extracts the `commandName` string literal type from a Command. Returns a descriptive error string for non-literal `commandName`; `never` for `any`. */
+type WidenedCommandNameError =
+  "commandName must be a literal. Fix: readonly commandName = 'myHook' as const";
+
+export type CommandName<C> =
+  // IsAny guard: when C is `any`, return `never` so mapped types keyed by CommandName<Cmd>
+  // (e.g. CommandHooks<any[], SU>) produce {} rather than a spurious error-keyed property.
+  // This mirrors the IsAny guard in WithLiteralVisitNames — same root cause.
+  0 extends 1 & C
     ? never
-    : K
-  : never;
+    : C extends { commandName: infer K extends string }
+      ? string extends K
+        ? WidenedCommandNameError
+        : K
+      : never;
 
 /*
  * Extracts the object type (`O`) from a Command's generic parameters.
@@ -159,8 +165,11 @@ export type CommandName<C> = C extends { commandName: infer K extends string }
  * class AccessCmd extends Command<Person, Building, Result, [Student]> { ... }
  * type T = CommandObject<AccessCmd>;  // Building
  */
-/** Extracts the object type (`O`) from a Command — the context/payload passed to visit methods and `execute`. */
-export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : never;
+/** Extracts the object type (`O`) from a Command — the context/payload passed to visit methods and `execute`. Returns a descriptive error string if `C` does not extend `Command`. */
+export type CommandObject<C> =
+  C extends Command<any, infer O, any, any>
+    ? O
+    : "Error: CommandObject<C> requires C to extend Command";
 
 /*
  * Extracts the return type (`R`) from a Command's generic parameters.
@@ -172,8 +181,11 @@ export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : n
  * class AccessCmd extends Command<Person, Building, AccessResult, [Student]> { ... }
  * type T = CommandReturn<AccessCmd>;  // AccessResult
  */
-/** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. */
-export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : never;
+/** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. Returns a descriptive error string if `C` does not extend `Command`. */
+export type CommandReturn<C> =
+  C extends Command<any, any, infer R, any>
+    ? R
+    : "Error: CommandReturn<C> requires C to extend Command";
 
 // ─── Internal Type Utilities ─────────────────────────────────────
 
@@ -189,37 +201,19 @@ type AnyCommand = Command<any, any, any, any>;
  * Given `Command<B, O, R, [Student, Professor]>`, produces `Student | Professor`.
  * This is the set of Subjects the Command can dispatch to.
  *
- * Note: when used inside type parameter constraints (e.g. in `SubjectUnionVisitors`),
- * the `infer CSU` may resolve to `any` for class types, causing the conditional
- * to produce `any` rather than the expected union. This is a TypeScript limitation
- * that affects constraint enforcement but not runtime behavior.
+ * Returns a descriptive error string if `C` does not extend `Command` — this
+ * surfaces as a readable compile error rather than a silent `never`.
+ *
+ * Note: when used inside type parameter constraints, the `infer CSU` may resolve
+ * to `any` for class types. This is a TypeScript limitation that affects constraint
+ * enforcement but not runtime behavior. `CommandHooks<SU, H>` avoids this by
+ * evaluating coverage at the `implements` site rather than in constraint position.
  */
-/** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. */
+/** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. Returns a descriptive error string if `C` does not extend `Command`. */
 export type CommandSubjectUnion<C> =
-  C extends Command<any, any, any, infer CSU> ? CSU[number] : never;
-
-/*
- * Validates that each Command in the hook tuple `H` has a subject union
- * that covers `SU` (the Template's subject union).
- *
- * For each position `K` in `H`, checks whether `SU` extends
- * `CommandSubjectUnion<H[K]>`. If the hook Command doesn't visit all
- * Subjects in SU, that position resolves to `never`, making
- * `H extends AnyCommand[] & SubjectUnionVisitors<SU, H>` fail.
- *
- * **TypeScript limitation:** This constraint is semantically correct but
- * is not enforced at the `Template<C, H, SU>` instantiation site due to
- * `CommandSubjectUnion<H[K]>` resolving to `any` in constraint position.
- * Enforcement instead occurs at two other sites:
- *
- * 1. **Structural (CommandHooks)** — `implements Template<C, [HookCmd]>`
- *    requires the hook as a property, catching missing wiring.
- * 2. **Invocation** — `hookCmd.run(subject)` checks the hook Command's own
- *    `this & CommandSubjectStrategies` constraint, catching subject mismatches.
- */
-type SubjectUnionVisitors<SU extends Subject, H extends AnyCommand[]> = {
-  [K in keyof H]: SU extends CommandSubjectUnion<H[K]> ? H[K] : never;
-};
+  C extends Command<any, any, any, infer CSU>
+    ? CSU[number]
+    : "Error: CommandSubjectUnion<C> requires C to extend Command";
 
 /*
  * Defines the signature of a single visit method on a Command.
@@ -321,24 +315,44 @@ type WithLiteralVisitNames<CSU extends Subject[]> =
       : Record<never, never>;
 
 /*
- * Maps a tuple of hook Commands to an object type keyed by their `commandName`.
+ * Maps a tuple of hook Commands to an object type keyed by their `commandName`,
+ * enforcing that each hook Command has a visit method for every Subject in `SU`.
  *
- * This produces the structural requirement that a Template implementation
- * must have a property for each hook Command. For example, given
- * `H = [AuditCommand, LogCommand]` where their commandNames are `"audit"`
- * and `"log"`, produces `{ audit: AuditCommand; log: LogCommand }`.
+ * For each hook Command `Cmd` in `H`:
+ * - If `Cmd` declares a visit method for every Subject in `SU`
+ *   (i.e. has a property matching each `SubjectVisitName<SU>` key),
+ *   the property resolves to `Cmd` — the implementing class satisfies it normally.
+ * - If the hook is missing any visit method required by `SU`, the property
+ *   resolves to `never` — no value of type `Cmd` can satisfy `never`,
+ *   so the `implements` check fails at the declaration site.
  *
- * Hook properties may be:
- * - Abstract on the Template, instantiated by Strategies
- * - Concrete on the Template, shared across all Strategies
- * - Overridden by a Strategy
- * - Injected via constructor during strategy resolution
+ * **Why visit-method presence instead of `CommandSubjectUnion<Cmd>`:**
+ * TypeScript defers `infer`-based conditional type evaluation for type variables
+ * inside mapped type bodies. `CommandSubjectUnion<Cmd>` uses `infer CSU` on the
+ * Command class hierarchy — when `Cmd` is the mapped type iteration variable,
+ * TypeScript evaluates it against the constraint (`AnyCommand`), which has
+ * `CSU = any`, making the coverage check always pass.
+ *
+ * `Cmd extends { [K in SubjectVisitName<SU>]: any }` is a simple structural
+ * extends check (no inference). TypeScript evaluates this concretely per union
+ * member, checking whether the actual Command class declares the expected visit
+ * method names. This bypasses the `infer` deferral problem entirely.
  *
  * @example
- * // CommandHooks<[AuditCommand]> = { audit: AuditCommand }
+ * // LogCommand handles [Cat, Dog, Bird] — has resolveCat, resolveDog, resolveBird
+ * // CommandHooks<[LogCommand], Cat | Dog>:
+ * //   LogCommand extends { resolveCat: any, resolveDog: any } → true → { log: LogCommand }
+ *
+ * // CatOnlyCommand handles [Cat] — has resolveCat only
+ * // CommandHooks<[CatOnlyCommand], Cat | Dog>:
+ * //   CatOnlyCommand extends { resolveCat: any, resolveDog: any } → false → { log: never }
  */
-type CommandHooks<H extends AnyCommand[]> = {
-  [Cmd in H[number] as CommandName<Cmd>]: Cmd;
+type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
+  [Cmd in H[number] as CommandName<Cmd>]: Cmd extends {
+    [K in SubjectVisitName<SU>]: any;
+  }
+    ? Cmd
+    : "Error: hook Command does not declare visit methods for all subjects in SU";
 };
 
 // ─── Core Classes ────────────────────────────────────────────────
@@ -503,8 +517,8 @@ export abstract class Subject {
  *
  * A Template combines:
  * - `execute(subject, object)` — the execution logic
- * - `CommandHooks<H>` — structural properties referencing other Commands
- *   that `execute` may invoke
+ * - `CommandHooks<SU, H>` — structural properties referencing other Commands
+ *   that `execute` may invoke, with subject coverage enforced at the `implements` site
  *
  * ## Generic Parameters
  *
@@ -590,17 +604,18 @@ export abstract class Subject {
  *
  * ## Hook Enforcement
  *
- * `CommandHooks<H>` is intersected into the Template type, requiring structural
- * properties for each hook Command. This is enforced at `implements` sites —
- * a class implementing `Template<C, [AuditCmd]>` without an `audit` property
- * will fail to compile.
+ * `CommandHooks<H, SU>` is intersected into the Template type, enforcing two
+ * things at the `implements` site:
  *
- * The `SubjectUnionVisitors<SU, H>` constraint on `H` is semantically correct
- * (each hook Command should visit all Subjects in SU) but is not enforced at
- * the type alias instantiation site due to a TypeScript limitation. Instead,
- * enforcement occurs when the hook is actually invoked in `execute` — calling
- * `this.audit.run(subject)` where `subject` is outside the hook's union
- * produces a compile error via the hook Command's own `this` constraint.
+ * 1. **Presence** — a property must exist for each hook Command, keyed by its
+ *    `commandName`. Missing a hook property is a compile error.
+ *
+ * 2. **Subject coverage** — each hook Command must declare visit methods for
+ *    every Subject in `SU` (checked via `SubjectVisitName<SU>` key presence).
+ *    If a hook is missing any required visit method, its property type resolves
+ *    to `never`, making the `implements` check fail. For example, a `LogCommand`
+ *    that only handles `Cat` (declaring only `resolveCat`) cannot satisfy
+ *    `Template<C, [LogCommand], Cat | Dog>` because it is missing `resolveDog`.
  */
 /**
  * Strategy interface. Implement `execute(subject, object)` and declare a property
@@ -608,8 +623,8 @@ export abstract class Subject {
  */
 export type Template<
   C extends AnyCommand,
-  H extends AnyCommand[] & SubjectUnionVisitors<SU, H> = [],
+  H extends AnyCommand[] = [],
   SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
-> = CommandHooks<H> & {
+> = CommandHooks<H, SU> & {
   execute<T extends SU>(subject: T, object: CommandObject<C>): CommandReturn<C>;
 };

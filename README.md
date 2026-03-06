@@ -156,6 +156,8 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 
 **Missing hook property** — Declare `implements Template<Cmd, [AuditCommand]>` without an `audit` property. Compile error.
 
+**Hook subject coverage** — Use a hook `Command` that doesn't declare a visit method for every `Subject` in the `Template`'s union. Compile error at the hook property declaration, naming the missing coverage.
+
 **Wrong return type** — Return a `string` from `execute` when the `Command` expects `AccessResult`. Compile error.
 
 **Duplicate `visitName`** — Two `Subject`s with the same `visitName` in one `Command`'s union. The type system creates an impossible intersection, making the visit method unimplementable.
