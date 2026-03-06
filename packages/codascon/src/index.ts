@@ -142,11 +142,17 @@ export type SubjectVisitName<S> = S extends { visitName: infer K extends string 
 type WidenedCommandNameError =
   "commandName must be a literal. Fix: readonly commandName = 'myHook' as const";
 
-export type CommandName<C> = C extends { commandName: infer K extends string }
-  ? string extends K
-    ? WidenedCommandNameError
-    : K
-  : never;
+export type CommandName<C> =
+  // IsAny guard: when C is `any`, return `never` so mapped types keyed by CommandName<Cmd>
+  // (e.g. CommandHooks<any[], SU>) produce {} rather than a spurious error-keyed property.
+  // This mirrors the IsAny guard in WithLiteralVisitNames — same root cause.
+  0 extends 1 & C
+    ? never
+    : C extends { commandName: infer K extends string }
+      ? string extends K
+        ? WidenedCommandNameError
+        : K
+      : never;
 
 /*
  * Extracts the object type (`O`) from a Command's generic parameters.
