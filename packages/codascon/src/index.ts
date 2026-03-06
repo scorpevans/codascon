@@ -138,7 +138,7 @@ export type SubjectVisitName<S> = S extends { visitName: infer K extends string 
  * class FeedCmd extends Command<...> { readonly commandName = "feed" as const; }
  * type T = CommandName<FeedCmd>;  // "feed"
  */
-/** Extracts the `commandName` string literal type from a Command. */
+/** Extracts the `commandName` string literal type from a Command. Returns a descriptive error string for non-literal `commandName`; `never` for `any`. */
 type WidenedCommandNameError =
   "commandName must be a literal. Fix: readonly commandName = 'myHook' as const";
 
@@ -165,7 +165,7 @@ export type CommandName<C> =
  * class AccessCmd extends Command<Person, Building, Result, [Student]> { ... }
  * type T = CommandObject<AccessCmd>;  // Building
  */
-/** Extracts the object type (`O`) from a Command — the context/payload passed to visit methods and `execute`. */
+/** Extracts the object type (`O`) from a Command — the context/payload passed to visit methods and `execute`. Returns a descriptive error string if `C` does not extend `Command`. */
 export type CommandObject<C> =
   C extends Command<any, infer O, any, any>
     ? O
@@ -181,7 +181,7 @@ export type CommandObject<C> =
  * class AccessCmd extends Command<Person, Building, AccessResult, [Student]> { ... }
  * type T = CommandReturn<AccessCmd>;  // AccessResult
  */
-/** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. */
+/** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. Returns a descriptive error string if `C` does not extend `Command`. */
 export type CommandReturn<C> =
   C extends Command<any, any, infer R, any>
     ? R
@@ -209,7 +209,7 @@ type AnyCommand = Command<any, any, any, any>;
  * enforcement but not runtime behavior. `CommandHooks<SU, H>` avoids this by
  * evaluating coverage at the `implements` site rather than in constraint position.
  */
-/** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. */
+/** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. Returns a descriptive error string if `C` does not extend `Command`. */
 export type CommandSubjectUnion<C> =
   C extends Command<any, any, any, infer CSU>
     ? CSU[number]
