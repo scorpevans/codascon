@@ -19,22 +19,39 @@ _The Power:_ Pure type-level enforcement via `Subject`, `Command`, `Template`, a
 
 ## The Problem
 
-When you have _N_ entity types and _M_ operations, the naive approach produces N×M branching logic scattered across your codebase. Add a new entity type and you must hunt down every `switch` and `instanceof` check. Miss one and you get a silent runtime bug.
+Software development carries a cognitive burden that begins well before a line of business logic is written. Every new codebase demands structural decisions: which patterns to apply, how to organize responsibilities, where new code belongs as the system grows. SOLID principles and design patterns provide guidance, but they remain advisory — there is no formal protocol that enforces them, and no two codebases look alike.
 
-**Codascon** makes that impossible. If you add a `Subject` and forget to handle it in any `Command`, your code doesn't compile.
+The burden becomes acute as soon as a domain has multiple entity types and multiple operations. With _N_ entity types and _M_ operations, the naive approach scatters N×M branching logic across the codebase — `switch` statements, `instanceof` checks, and conditional chains. Add a new entity type and you must hunt down every branch that handles it. Miss one and you get a silent runtime bug, discovered in production.
 
-## How It Works
+The absence of a formal coding protocol compounds in several directions:
 
-```
-command.run(subject, object)
-  → subject.getCommandStrategy(command, object)     // double dispatch
-    → command[subject.visitName](subject, object)   // visit method selects strategy
-      → returns a Template                          // the chosen strategy
-  → template.execute(subject, object)               // strategy executes
-  → returns result
-```
+- **No consistent architecture.** Without a shared structural schema, every codebase is a dialect. Onboarding, auditing, and refactoring all require re-learning local conventions before any real work begins.
+- **No compiler-checkable guarantees.** In dynamically typed languages, structurally incorrect code runs until it crashes. Even in statically typed languages, the type system can only enforce what the structure asks it to enforce — which, without a protocol, is rarely the right things.
+- **Brittle change management.** When business rules change, a developer must reason about the entire codebase to identify what needs updating. Without enforced isolation of concerns, every change carries hidden risk.
 
-A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+With the rise of AI-assisted development, these problems compound further. An LLM generating code without structural rails produces output that is internally inconsistent, architecturally divergent across iterations, and difficult to audit. The more code the AI writes, the more the absence of a formal protocol matters.
+
+## The Solution — Codascon
+
+Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic. It gives business logic a home.
+
+**1. Compiler safety**
+
+If your codascon code compiles, the dispatch mechanism will not fail at runtime. Every entity-operation combination is accounted for by construction, not by discipline. In languages with sufficient type facilities, this guarantee is enforced at compile time; the protocol still provides structural clarity in dynamically typed languages, with the runtime safety guarantee scaling to what the language's type system can enforce.
+
+**2. Cognitive load — and code routing**
+
+You implement strategies. The compiler tells you what is missing and where.
+
+There is no N×M coverage matrix to keep in your head — the type system holds it. When a new `Subject` is added, every `Command` that must handle it shows a compile error at the exact call site. When a business rule changes for a specific entity-operation pair — say, extending how `Orders` are processed — you add a `Strategy` to the relevant `Command` and update its resolver logic. You do not have to consider the rest of the codebase.
+
+**3. Code organization**
+
+The protocol's separation of concerns — a `Command` with its visit methods, `Templates`, and `Strategies` forming a cohesive unit — naturally maps each operation to a single file. Codascon does not enforce this layout, but the structure makes it the obvious choice: each file is self-contained, adding an operation means adding a file, and the same domain consistently produces the same layout.
+
+**4. Vibe coding**
+
+With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same file layout, the same type constraints, the same dispatch pattern — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent, auditable, and extensible.
 
 ## Packages
 
@@ -148,22 +165,6 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 // { granted: true, reason: "Alice has access" }
 ```
 
-## What the Compiler Catches
-
-**Missing visit method** — Remove `resolveProfessor` from the `Command` above. The call `cmd.run(...)` immediately shows a type error. Not at the class declaration, at the call site — you see the error exactly where it matters.
-
-**Wrong `Subject` type** — Pass a `Visitor` to a `Command` that only handles `[Student, Professor]`. Compile error.
-
-**Missing hook property** — Declare `implements Template<Cmd, [AuditCommand]>` without an `audit` property. Compile error.
-
-**Hook subject coverage** — Use a hook `Command` that doesn't declare a visit method for every `Subject` in the `Template`'s union. Compile error at the hook property declaration, naming the missing coverage.
-
-**Wrong return type** — Return a `string` from `execute` when the `Command` expects `AccessResult`. Compile error.
-
-**Duplicate `visitName`** — Two `Subject`s with the same `visitName` in one `Command`'s union. The type system creates an impossible intersection, making the visit method unimplementable.
-
-**Missing abstract method in a `Strategy`** — A `Strategy` that extends an abstract `Template` without implementing all abstract methods. Compile error at the class declaration.
-
 ## Advanced Patterns
 
 ### Parameterized Templates
@@ -237,9 +238,22 @@ const result = await parkingCmd.run(student, lotA);
 
 Visit methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
 
+## How It Works
+
+```
+command.run(subject, object)
+  → subject.getCommandStrategy(command, object)     // double dispatch
+    → command[subject.visitName](subject, object)   // visit method selects strategy
+      → returns a Template                          // the chosen strategy
+  → template.execute(subject, object)               // strategy executes
+  → returns result
+```
+
+A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+
 ## Odetovibe — YAML Configuration & Code Generation
 
-For larger domains, define the structure declaratively and let **Odetovibe** generate the TypeScript scaffolding:
+For larger domains, define the Business-logics structure declaratively and let **Odetovibe** generate the TypeScript scaffolding:
 
 ```yaml
 namespace: campus
@@ -277,16 +291,25 @@ commands:
 
 ### Generate
 
+#### CLI
+
 ```bash
-# CLI
-npx odetovibe campus.yaml --out src/
-npx odetovibe campus.yaml --out src/ --overwrite    # unconditional overwrite
-npx odetovibe campus.yaml --out src/ --no-overwrite # strict: write .ode.ts on conflict
+# See all options
 npx odetovibe --help
+
+# Generate TypeScript scaffolding (default: merge mode — preserves existing method bodies)
+npx odetovibe campus.yaml --out src/
+
+# Unconditional overwrite — replaces all generated files
+npx odetovibe campus.yaml --out src/ --overwrite
+
+# Strict mode — writes .ode.ts alongside the original on conflict instead of overwriting
+npx odetovibe campus.yaml --out src/ --no-overwrite
 ```
 
+#### Library — three phases: Extract → Transform → Load
+
 ```typescript
-// Library — three phases: Extract → Transform → Load
 import { Project } from "ts-morph";
 import { parseYaml, validateYaml, emitAst, writeFiles } from "odetovibe";
 
@@ -320,25 +343,6 @@ See [`packages/odetovibe/src/schema.ts`](./packages/odetovibe/src/schema.ts) for
 ## Real-World Example
 
 [**Odetovibe**](https://www.npmjs.com/package/odetovibe) — the YAML-to-TypeScript code generator that ships alongside this framework — is built entirely on the codascon protocol. The domain is described in YAML and its TypeScript scaffolding is generated by odetovibe itself.
-
-## When to Use Codascon
-
-**Good fit:**
-
-- Domain with multiple entity types and multiple operations that grow along both axes
-- Permission / access control systems
-- Document processing pipelines
-- Game entity interactions
-- Workflow engines where behavior varies by entity type and operation context
-
-**Not a good fit:**
-
-- Simple CRUD services
-- Linear data pipelines
-- Applications where a `switch` or polymorphic method suffices
-- Domains with one or two entity types that rarely change
-
-The abstraction tax is real. It pays off when extension happens along the axes the protocol anticipates.
 
 ## For AI-Assisted Development
 
