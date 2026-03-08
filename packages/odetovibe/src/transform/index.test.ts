@@ -164,6 +164,16 @@ describe("SubjectClassEmitter", () => {
     expect(sf.getClass("Student")).toBeDefined();
     expect(sf.getClass("Professor")).toBeDefined();
   });
+
+  it("returns targetFile without emitting a class when the key is in externalTypeKeys", () => {
+    const project = makeProject();
+    const result = emitCmd.run(
+      student,
+      ctx(idx({ externalTypeKeys: new Set(["Student"]) }), project),
+    );
+    expect(result.targetFile).toBe("domain-types.ts");
+    expect(project.getSourceFile("domain-types.ts")?.getClass("Student")).toBeUndefined();
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -207,6 +217,16 @@ describe("InterfaceEmitter", () => {
     const sf = project.getSourceFileOrThrow("domain-types.ts");
     expect(sf.getClass("Student")).toBeDefined();
     expect(sf.getInterface("Building")).toBeDefined();
+  });
+
+  it("returns targetFile without emitting an interface when the key is in externalTypeKeys", () => {
+    const project = makeProject();
+    const result = emitCmd.run(
+      building,
+      ctx(idx({ externalTypeKeys: new Set(["Building"]) }), project),
+    );
+    expect(result.targetFile).toBe("domain-types.ts");
+    expect(project.getSourceFile("domain-types.ts")?.getInterface("Building")).toBeUndefined();
   });
 });
 
@@ -390,6 +410,51 @@ describe("CommandClassEmitter", () => {
     const importedNames = dtImp?.getNamedImports().map((n) => n.getName()) ?? [];
     expect(importedNames).toContain("AccessResult");
     expect(importedNames).not.toContain("Promise<AccessResult>");
+  });
+
+  it("adds to an existing value import declaration when the name is not yet present", () => {
+    // ensureValueImport line 45: decl exists but target name is absent → addNamedImport fires
+    const project = makeProject();
+    project.createSourceFile(
+      "commands/access-building.ts",
+      `import { SomeExisting } from "codascon";\n`,
+    );
+    emitCmd.run(cmdEntry, ctx(withTypes, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const valueImports = sf
+      .getImportDeclarations()
+      .filter((d) => d.getModuleSpecifierValue() === "codascon" && !d.isTypeOnly());
+    // Must not create a duplicate — still one value import declaration
+    expect(valueImports).toHaveLength(1);
+    const names = valueImports[0].getNamedImports().map((n) => n.getName());
+    expect(names).toContain("Command"); // newly added
+    expect(names).toContain("SomeExisting"); // pre-existing preserved
+  });
+
+  it("prefixes a relative import specifier with '../' for command-file depth", () => {
+    // toCommandDepth: specifier starts with "./" → "../" prepended so import is correct
+    // from inside commands/ (one level deeper than the namespace root).
+    const index = idx({
+      imports: { "./shared.js": ["Person"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    // toCommandDepth("./shared.js") === ".././shared.js"
+    const personImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === ".././shared.js");
+    expect(personImp).toBeDefined();
+    expect(personImp!.getNamedImports().map((n) => n.getName())).toContain("Person");
   });
 });
 
