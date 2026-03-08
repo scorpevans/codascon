@@ -1366,6 +1366,74 @@ describe("StrictMergeWriter — hasConflict additional branches", () => {
     expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "f.ode.ts"))).toBe(false);
   });
+
+  it("does not flag a conflict when a generated method is absent from the existing class (new methods are not conflicts)", async () => {
+    // hasConflict line 571: existingCls.getMethod(name) returns undefined → continue.
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(s: string): void { throw new Error(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing class has no methods
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), "/* @odetovibe-generated */\nexport class Foo {}");
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBeUndefined();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("execute"); // added by merge
+  });
+
+  it("does not flag a conflict when the generated class has a constructor but the existing class does not", async () => {
+    // hasConflict line 556 false branch: genCtors.length > 0, existingCtors.length = 0
+    // → skip constructor check, no conflict.
+    const project = makeProject({
+      "f.ts": "export class Foo { constructor(readonly x: string) {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), "/* @odetovibe-generated */\nexport class Foo {}");
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBeUndefined();
+  });
+
+  it("does not flag a conflict when both classes have constructors with identical parameter types", async () => {
+    // hasConflict lines 558-564: counts match, params match → loop completes without returning.
+    const project = makeProject({
+      "f.ts": "export class Foo { constructor(readonly x: string) {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { constructor(readonly x: string) {} }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBeUndefined();
+  });
+
+  it("writes .ode.ts when an import switches between type-only and value", async () => {
+    // hasConflict line 605: existing import from same specifier has different isTypeOnly.
+    // Generated wants a value import; existing has a type-only import → conflict.
+    const project = makeProject({
+      "f.ts": 'import { Foo } from "bar";\nexport class MyClass {}',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      '/* @odetovibe-generated */\nimport type { Foo } from "bar";\nexport class MyClass {}',
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1459,6 +1527,24 @@ describe("StrictMergeWriter — post-merge compile errors", () => {
     expect(result.compileErrors!.length).toBeGreaterThan(0);
     expect(result.created).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, "f.ode.ts"))).toBe(false);
+  });
+
+  it("returns compileErrors without writing when the output file does not exist yet but generated code has errors", async () => {
+    // StrictMergeWriter new-file path (line 692): !fs.existsSync → checkDiagnostics →
+    // TS2304 (undeclaredFn, not in FALLBACK_FILTERED_CODES) → early return, file never created.
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(): void { undeclaredFn(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // No existing file — strict new-file path is taken
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+    expect(result.created).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(false);
   });
 });
 
