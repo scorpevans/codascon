@@ -19,7 +19,7 @@ export function printUsage(): void {
   console.log("  --no-overwrite   Strict merge: abort to .ode.ts on conflict (default: merge)");
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
@@ -36,8 +36,15 @@ async function main(): Promise<void> {
       ? ("strict" as const)
       : ("merge" as const);
 
-  // Extract
-  const configIndex = parseYaml(schemaPath);
+  // Extract — wrap only parseYaml; YAML parse and ENOENT errors are user-facing
+  let configIndex: ReturnType<typeof parseYaml>;
+  try {
+    configIndex = parseYaml(schemaPath);
+  } catch (err: unknown) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+
   const result = validateYaml(configIndex);
 
   if (!result.valid) {
