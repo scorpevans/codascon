@@ -255,7 +255,7 @@ Visit methods (strategy selection) remain synchronous. Only `execute` returns th
 
 ## Odetovibe — YAML Configuration & Code Generation
 
-For larger domains, define the Business-logics structure declaratively and let **Odetovibe** generate the TypeScript scaffolding:
+For larger domains, define the Business logics and architecture declaratively and let **Odetovibe** generate the TypeScript scaffolding:
 
 ```yaml
 namespace: campus
@@ -355,14 +355,14 @@ Provide a domain description and let the LLM generate the full codascon implemen
 ```markdown
 You are an expert TypeScript architect. Build a new domain using the **codascon** protocol — a strict, double-dispatch visitor framework.
 
-#### Step 1: Understand the Protocol
+### Step 1: Understand the Protocol
 
 Read both resources in full before writing any code:
 
 - README: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/README.md
 - SOURCE: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/src/index.ts
 
-#### Step 2: Study the Reference Implementation
+### Step 2: Study the Reference Implementation
 
 Mimic the file structure and patterns from these real-world files exactly:
 
@@ -373,21 +373,23 @@ Mimic the file structure and patterns from these real-world files exactly:
 - YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/transform.yaml
 - YAML (load): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/load.yaml
 
-#### Step 3: Apply These Structural Rules
+### Step 3: Apply These Structural Rules
 
 All output must conform to this layout:
 
     src/
-    └── [namespace]
-        ├── TypesA.ts
+    └── [namespace]              ← the namespace defined in the domain
+        ├── TypesA.ts            ← Subject classes and plain interfaces
+        ├── TypesB.ts            ← Subject classes and plain interfaces
         └── commands/
-            └── FirstCommand.ts
+            ├── FirstCommand.ts  ← Command + its Templates and Strategies
+            └── SecondCommand.ts ← Command + its Templates and Strategies
 
-#### Step 4: Implement This Domain
+### Step 4: Implement This Domain
 
 [INSERT YOUR DOMAIN DESCRIPTION]
 
-Output complete, compile-safe TypeScript with stub strategy implementations.
+Output complete, compile-safe TypeScript with stub strategy implementations — or equivalently, a YAML config in the odetovibe schema format.
 ```
 
 ### 2. Step-wise Vibe coding
@@ -422,11 +424,12 @@ npx odetovibe domain.yaml --out src/
 ```markdown
 Here are the generated TypeScript files from the codascon scaffolding. Each strategy has a stub `execute` method marked `// @odetovibe-generated`.
 
+Here are the YAML code configurations:
+[LINK YOUR YAML CONFIG]
+
 Implement the business logic for each stub based on the following rules:
 
 [INSERT YOUR BUSINESS RULES]
-
-[PASTE GENERATED FILES]
 
 Do not modify any class declarations, constructor signatures, or method signatures — only fill in the method bodies and provide new Base Types as may be needed.
 ```
