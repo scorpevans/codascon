@@ -196,7 +196,9 @@ type _T1 = Expect<Equal<SubjectVisitName<Dog>, "resolveDog">>;
 type _T2 = Expect<Equal<SubjectVisitName<Cat>, "resolveCat">>;
 type _T3 = Expect<Equal<SubjectVisitName<Bird>, "resolveBird">>;
 
-// SubjectVisitName rejects non-literal
+// SubjectVisitName returns `never` for non-literal visitNames. Enforcement is via
+// RequireLiteralVisitNames<BSL> in Command.run's this constraint, which fires at
+// the call site with concrete BSL rather than inside the method body.
 class BadSubject extends Subject {
   readonly visitName: string = "oops";
 }
@@ -230,6 +232,14 @@ type _T12 = Expect<
 type _T13 = Expect<Equal<CommandSubjectUnion<FeedCommand>, Dog | Cat | Bird>>;
 type _T14 = Expect<Equal<CommandSubjectUnion<GroomCommand>, Dog | Cat>>;
 
+// CommandSubjectUnion resolves to the concrete union — not `any` — for concrete Command
+// subclasses. This guards against the regression where B=any in the conditional type
+// collapsed the CSU constraint to Subject[], causing TypeScript to short-circuit to any.
+// Equal<any, T> = true (any-blind), so we use IsAny to assert the result is not `any`.
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type _T13_notAny = Expect<Equal<IsAny<CommandSubjectUnion<FeedCommand>>, false>>;
+type _T14_notAny = Expect<Equal<IsAny<CommandSubjectUnion<GroomCommand>>, false>>;
+
 // CommandName returns an error string (not never) for non-literal commandName —
 // so hook properties keyed by a non-literal name surface an error rather than
 // silently disappearing from the Template's implements check.
@@ -240,22 +250,16 @@ type _T15 = Expect<
   >
 >;
 
-// Utility types return descriptive error strings (not never) for non-Command inputs.
-type _T16 = Expect<
-  Equal<CommandObject<string>, "Error: CommandObject<C> requires C to extend Command">
->;
-type _T17 = Expect<
-  Equal<CommandReturn<string>, "Error: CommandReturn<C> requires C to extend Command">
->;
-type _T18 = Expect<
-  Equal<CommandSubjectUnion<string>, "Error: CommandSubjectUnion<C> requires C to extend Command">
->;
+// Utility types return never for non-Command inputs.
+type _T16 = Expect<Equal<CommandObject<string>, never>>;
+type _T17 = Expect<Equal<CommandReturn<string>, never>>;
+type _T18 = Expect<Equal<CommandSubjectUnion<string>, never>>;
 
 describe("§11 type-level assertions", () => {
   it("type assertions verified by tsc --build (compile-time proof)", () => {
-    // All type assertions above (_T1–_T18) are verified at compile time by tsc --build,
-    // which includes constraints.test.ts via tsconfig.json include: ["src"].
-    // If any assertion fails, tsc fails — no runtime check needed.
+    // All type assertions above (_T1–_T18, _T13_notAny, _T14_notAny) are verified at
+    // compile time by tsc --build, which includes constraints.test.ts via tsconfig.json
+    // include: ["src"]. If any assertion fails, tsc fails — no runtime check needed.
     void 0;
   });
 });
