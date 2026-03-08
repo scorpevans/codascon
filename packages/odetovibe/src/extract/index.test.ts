@@ -300,6 +300,20 @@ describe("CommandValidator", () => {
     expect(rules(result)).toContain("objectType-ref");
     expect(rules(result)).toHaveLength(2);
   });
+
+  it("[dispatch-target-ref] config.templates absent — ?? {} fallback (line 179)", () => {
+    // When a YAML command has no templates key, config.templates is undefined at runtime.
+    // The validator coalesces to {} at line 179 so every dispatch target is "not found".
+    const entry = new CommandEntry("Cmd", {
+      commandName: "cmd",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student"],
+      dispatch: { Student: "AnyTemplate" },
+    } as any); // templates intentionally absent to trigger the ?? {} path
+    expect(rules(validateCmd.run(entry, withTypes))).toContain("dispatch-target-ref");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -473,6 +487,33 @@ describe("ConcreteTemplateValidator", () => {
     });
     expect(rules(validateCmd.run(entry, indexWithTemplate(entry)))).toContain("commandHook-ref");
   });
+
+  it("[commandHook-ref] passes when commandHooks value references a known Command (line 367 false branch)", () => {
+    // Covers the false branch of `if (!object.commands.has(cmdRef))` at line 367:
+    // the command IS found → no error pushed → result is valid.
+    const auditCmd = new CommandEntry("AuditCmd", {
+      commandName: "audit",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student"],
+      dispatch: { Student: "GrantAccess" },
+      templates: { GrantAccess: { isParameterized: false, strategies: {} } },
+    });
+    const entry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
+      isParameterized: false,
+      commandHooks: { audit: "AuditCmd" },
+      strategies: {},
+    });
+    const index: ConfigIndex = {
+      ...indexWithTemplate(entry),
+      commands: new Map([
+        ["Cmd", cmdEntry],
+        ["AuditCmd", auditCmd],
+      ]),
+    };
+    expect(validateCmd.run(entry, index).valid).toBe(true);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -579,6 +620,62 @@ describe("StrategyValidator", () => {
       commandHooks: { audit: "UnknownCommand" }, // "audit" key is valid; Command does not exist
     });
     expect(rules(validateCmd.run(entry, baseIndex()))).toContain("commandHook-ref");
+  });
+
+  it("[subjectSubset-parent] uses cmdEntry.subjectUnion when parent template has no subjectSubset (line 424 first ?? path)", () => {
+    // tpl.config.subjectSubset is undefined → falls through to cmdEntry?.config.subjectUnion.
+    // "Professor" is in cmdEntry.subjectUnion ["Student", "Professor"] → no error.
+    const tplWithoutSubset = new AbstractTemplateEntry("AccessTemplate", "Cmd", {
+      isParameterized: true,
+      strategies: { DepartmentMatch: {} },
+      // no subjectSubset — forces the ?? fallback to cmdEntry.subjectUnion
+    });
+    const entry = new StrategyEntry("DepartmentMatch", "AccessTemplate", "Cmd", {
+      subjectSubset: ["Professor"],
+    });
+    const index: ConfigIndex = {
+      ...baseIndex(),
+      abstractTemplates: new Map([["Cmd.AccessTemplate", tplWithoutSubset]]),
+    };
+    expect(validateCmd.run(entry, index).valid).toBe(true);
+  });
+
+  it("[subjectSubset-parent] uses [] when both parent subjectSubset and cmdEntry are absent (line 424 second ?? path)", () => {
+    // tpl.config.subjectSubset is undefined AND command is not in the index (cmdEntry undefined).
+    // Both ?? operands are nullish → parentSubset falls back to [].
+    // Any strategy subjectSubset entry will then fail the parentSet.has() check.
+    const tplWithoutSubset = new AbstractTemplateEntry("AccessTemplate", "Cmd", {
+      isParameterized: true,
+      strategies: { DepartmentMatch: {} },
+      // no subjectSubset
+    });
+    const entry = new StrategyEntry("DepartmentMatch", "AccessTemplate", "Cmd", {
+      subjectSubset: ["Student"],
+    });
+    const index: ConfigIndex = {
+      ...withTypes,
+      commands: new Map(), // "Cmd" absent → cmdEntry undefined → ?? [] fallback
+      abstractTemplates: new Map([["Cmd.AccessTemplate", tplWithoutSubset]]),
+    };
+    expect(rules(validateCmd.run(entry, index))).toContain("subjectSubset-parent");
+  });
+
+  it("[commandHook-key] parent template without commandHooks — ?? {} path (line 441)", () => {
+    // tpl.config.commandHooks is undefined → Object.keys(undefined ?? {}) = [] → empty parentHookKeys.
+    // Any hookKey in strategy.commandHooks then fails the parentHookKeys.has() check.
+    const tplWithoutHooks = new AbstractTemplateEntry("AccessTemplate", "Cmd", {
+      isParameterized: true,
+      strategies: { DepartmentMatch: {} },
+      // no commandHooks — forces the ?? {} fallback at line 441
+    });
+    const entry = new StrategyEntry("DepartmentMatch", "AccessTemplate", "Cmd", {
+      commandHooks: { audit: "AuditCmd" }, // "audit" not declared by parent → commandHook-key
+    });
+    const index: ConfigIndex = {
+      ...baseIndex(),
+      abstractTemplates: new Map([["Cmd.AccessTemplate", tplWithoutHooks]]),
+    };
+    expect(rules(validateCmd.run(entry, index))).toContain("commandHook-key");
   });
 });
 
@@ -767,6 +864,48 @@ commands: {}
 
   it("throws for an empty YAML file (yaml.load returns null/undefined)", () => {
     expect(() => parseYamlString("")).toThrow();
+  });
+
+  it("handles absent domainTypes key — domainTypes ?? {} path (index.ts line 109)", () => {
+    // When the YAML has no domainTypes key, parsed.domainTypes is undefined.
+    // The ?? {} fallback makes Object.entries return [], so the loop is a no-op.
+    const index = parseYamlString(`commands: {}`);
+    expect(index.subjectTypes.size).toBe(0);
+    expect(index.plainTypes.size).toBe(0);
+    expect(index.commands.size).toBe(0);
+  });
+
+  it("handles absent commands key — commands ?? {} path (index.ts line 123)", () => {
+    // When the YAML has no commands key, parsed.commands is undefined.
+    // The ?? {} fallback makes Object.entries return [], so the loop is a no-op.
+    const index = parseYamlString(`domainTypes:\n  Person: {}`);
+    expect(index.commands.size).toBe(0);
+    expect(index.plainTypes.has("Person")).toBe(true);
+  });
+
+  it("handles command without templates key — templates ?? {} path (index.ts line 126)", () => {
+    // When a command config has no templates key, cmdConfig.templates is undefined.
+    // The ?? {} fallback makes Object.entries return [], so the inner loop is a no-op.
+    const index = parseYamlString(`
+domainTypes:
+  Person: {}
+  Item: {}
+  Result: {}
+  Student:
+    visitName: resolveStudent
+commands:
+  Cmd:
+    commandName: cmd
+    baseType: Person
+    objectType: Item
+    returnType: Result
+    subjectUnion: [Student]
+    dispatch:
+      Student: GrantAccess
+`);
+    expect(index.commands.has("Cmd")).toBe(true);
+    expect(index.concreteTemplates.size).toBe(0);
+    expect(index.abstractTemplates.size).toBe(0);
   });
 });
 
