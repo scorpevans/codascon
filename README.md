@@ -37,7 +37,7 @@ Codascon is a structural protocol built around four primitives — `Subject`, `C
 
 **1. Compiler safety**
 
-If your codascon code compiles, the dispatch mechanism will not fail at runtime. Every entity-operation combination is accounted for by construction, not by discipline. In languages with sufficient type facilities, this guarantee is enforced at compile time; the protocol still provides structural clarity in dynamically typed languages, with the runtime safety guarantee scaling to what the language's type system can enforce.
+Codascon's implementation in TypeScript provides exhaustive compile-time type checking; the dispatch mechanism will not fail at runtime. In other languages, the structural protocol still applies and brings the same organizational benefits, and the compile-time safety would depend on the extent of the implementation of Codascon as constrained by the language's type system.
 
 **2. Cognitive load — and code routing**
 
@@ -52,6 +52,21 @@ The protocol's separation of concerns — a `Command` with its visit methods, `T
 **4. Vibe coding**
 
 With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same file layout, the same type constraints, the same dispatch pattern — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent, auditable, and extensible.
+
+## How It Works
+
+Codascon currently exposes 4 interfaces: Subject, Command, Template and Strategy.
+
+A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+
+```
+command.run(subject, object)
+  → subject.getCommandStrategy(command, object)     // double dispatch
+    → command[subject.visitName](subject, object)   // visit method selects strategy
+      → returns a Template                          // the chosen strategy
+  → template.execute(subject, object)               // strategy executes
+  → returns result
+```
 
 ## Packages
 
@@ -237,19 +252,6 @@ const result = await parkingCmd.run(student, lotA);
 ```
 
 Visit methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
-
-## How It Works
-
-```
-command.run(subject, object)
-  → subject.getCommandStrategy(command, object)     // double dispatch
-    → command[subject.visitName](subject, object)   // visit method selects strategy
-      → returns a Template                          // the chosen strategy
-  → template.execute(subject, object)               // strategy executes
-  → returns result
-```
-
-A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
 
 ## Odetovibe — YAML Configuration & Code Generation
 
