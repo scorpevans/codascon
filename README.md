@@ -96,17 +96,23 @@ import { Subject } from "codascon";
 
 class Student extends Subject {
   readonly visitName = "resolveStudent" as const;
+  constructor(readonly name: string) {
+    super();
+  }
 }
 
 class Professor extends Subject {
   readonly visitName = "resolveProfessor" as const;
+  constructor(readonly name: string) {
+    super();
+  }
 }
 ```
 
 ### Define a Command
 
 ```typescript
-import { Command, Subject } from "codascon";
+import { Command } from "codascon";
 
 interface Building {
   name: string;
@@ -119,7 +125,7 @@ interface AccessResult {
 }
 
 class AccessBuildingCommand extends Command<
-  Subject, // base type — shared base class
+  { name: string }, // base type — any type; all subjects must extend it
   Building, // object type — context
   AccessResult, // return type
   [Student, Professor] // subject union
@@ -167,7 +173,7 @@ class DenyAccess extends AccessTemplate {
 
 ```typescript
 const cmd = new AccessBuildingCommand();
-const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
+const result = cmd.run(new Professor("Prof. Smith"), { name: "Science Hall", department: "CS" });
 // { granted: true, reason: "Access granted to Science Hall" }
 ```
 
