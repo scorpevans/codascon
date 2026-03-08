@@ -55,7 +55,7 @@ Codascon provides a consistent schema for expressing code architecture. Every do
 
 **5. Vibe coding**
 
-With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same file layout, the same type constraints, the same dispatch pattern — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent, auditable, and extensible.
+With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same code — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent and auditable.
 
 ## How It Works
 
