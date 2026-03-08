@@ -12,9 +12,17 @@ _The Power:_ Pure type-level enforcement via `Subject`, `Command`, `Template`, a
 
 ## The Problem
 
-When you have _N_ entity types and _M_ operations, the naive approach produces N×M branching logic scattered across your codebase. Add a new entity type and you must hunt down every `switch` and `instanceof` check. Miss one and you get a silent runtime bug.
+Software development carries a cognitive burden that begins well before a line of business logic is written. Every new codebase demands structural decisions: which patterns to apply, how to organize responsibilities, where new code belongs as the system grows. SOLID principles and design patterns provide guidance, but they remain advisory — there is no formal protocol that enforces them, and no two codebases look alike.
 
-**Codascon** makes that impossible. If you add a `Subject` and forget to handle it in any `Command`, your code doesn't compile.
+The burden becomes acute as soon as a domain has multiple entity types and multiple operations. With _N_ entity types and _M_ operations, the naive approach scatters N×M branching logic across the codebase — `switch` statements, `instanceof` checks, and conditional chains. Add a new entity type and you must hunt down every branch that handles it. Miss one and you get a silent runtime bug, discovered in production.
+
+The absence of a formal coding protocol compounds in several directions:
+
+- **No consistent architecture.** Without a shared structural schema, every codebase is a dialect. Onboarding, auditing, and refactoring all require re-learning local conventions before any real work begins.
+- **No compiler-checkable guarantees.** In dynamically typed languages, structurally incorrect code runs until it crashes. Even in statically typed languages, the type system can only enforce what the structure asks it to enforce — which, without a protocol, is rarely the right things.
+- **Brittle change management.** When business rules change, a developer must reason about the entire codebase to identify what needs updating. Without enforced isolation of concerns, every change carries hidden risk.
+
+With the rise of AI-assisted development, these problems compound further. An LLM generating code without structural rails produces output that is internally inconsistent, architecturally divergent across iterations, and difficult to audit. The more code the AI writes, the more the absence of a formal protocol matters.
 
 ## How It Works
 
@@ -134,21 +142,27 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 // { granted: true, reason: "Alice has access" }
 ```
 
-## What the Compiler Catches
+## The Solution — Codascon
 
-**Missing visit method** — Remove `resolveProfessor` from the `Command` above. The call `cmd.run(...)` immediately shows a type error. Not at the class declaration, at the call site — you see the error exactly where it matters.
+Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic. It gives business logic a home.
 
-**Wrong `Subject` type** — Pass a `Visitor` to a `Command` that only handles `[Student, Professor]`. Compile error.
+**1. Compiler safety**
 
-**Missing hook property** — Declare `implements Template<Cmd, [AuditCommand]>` without an `audit` property. Compile error.
+If your codascon code compiles, the dispatch mechanism will not fail at runtime. Every entity-operation combination is accounted for by construction, not by discipline. In languages with sufficient type facilities, this guarantee is enforced at compile time; the protocol still provides structural clarity in dynamically typed languages, with the runtime safety guarantee scaling to what the language's type system can enforce.
 
-**Hook subject coverage** — Use a hook `Command` that doesn't declare a visit method for every `Subject` in the `Template`'s union. Compile error at the hook property declaration, naming the missing coverage.
+**2. Cognitive load — and code routing**
 
-**Wrong return type** — Return a `string` from `execute` when the `Command` expects `AccessResult`. Compile error.
+You implement strategies. The compiler tells you what is missing and where.
 
-**Duplicate `visitName`** — Two `Subject`s with the same `visitName` in one `Command`'s union. The type system creates an impossible intersection, making the visit method unimplementable.
+There is no N×M coverage matrix to keep in your head — the type system holds it. When a new `Subject` is added, every `Command` that must handle it shows a compile error at the exact call site. When a business rule changes for a specific entity-operation pair — say, extending how `Orders` are processed — you add a `Strategy` to the relevant `Command` and update its resolver logic. You do not have to consider the rest of the codebase.
 
-**Missing abstract method in a `Strategy`** — A `Strategy` that extends an abstract `Template` without implementing all abstract methods. Compile error at the class declaration.
+**3. Code organization**
+
+The protocol's separation of concerns — a `Command` with its visit methods, `Templates`, and `Strategies` forming a cohesive unit — naturally maps each operation to a single file. Codascon does not enforce this layout, but the structure makes it the obvious choice: each file is self-contained, adding an operation means adding a file, and the same domain consistently produces the same layout.
+
+**4. Vibe coding**
+
+With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same file layout, the same type constraints, the same dispatch pattern — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent, auditable, and extensible.
 
 ## Advanced Patterns
 
