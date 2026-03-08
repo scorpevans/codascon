@@ -1916,3 +1916,100 @@ describe("StrictMergeWriter — hasConflict new import is not a conflict", () =>
     expect(result.conflicted).toBeUndefined();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// propSignature — no-initializer paths (lines 461 and 463)
+//
+// propSignature is called for both sides of a property comparison in
+// hasConflict.  When a property has no initializer (only a type
+// annotation), getInitializer() returns undefined:
+//   line 461: ?? fallback path — init = ""
+//   line 463: init = "" → ternary false arm — initPart = ""
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — propSignature no-initializer paths", () => {
+  it("writes .ode.ts when property type changes and neither property has an initializer (lines 461 false path, 463 false arm)", async () => {
+    // Both properties have type annotations but no initializers.
+    // propSignature: getInitializer() = undefined → init = "" (line 461 ?? fallback).
+    // Line 463: init = "" → initPart = "" (ternary false arm).
+    // Signatures differ (string vs number) → conflict detected.
+    const project = makeProject({
+      "f.ts": "export class Foo { readonly x: string; }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { readonly x: number; }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hasConflict — anonymous class guard (line 512)
+//
+// hasConflict skips generated ClassDeclarations with no name via
+// `if (!name) continue` at line 512.  This is the parallel of
+// mergeFile's line 431 guard, but exercised in strict mode.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict anonymous class guard", () => {
+  it("skips an anonymous default-export class in hasConflict and proceeds without conflict (line 512 continue)", async () => {
+    // hasConflict(generatedText, existingContent) iterates generated.getClasses().
+    // export default class {} → getName() = undefined → line 512: continue.
+    // No named classes to compare → hasConflict returns false → merge runs.
+    const project = makeProject({ "f.ts": "export default class {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing file present — hasConflict is invoked
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Bar { execute(): void { return; } }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    // Anonymous class skipped in hasConflict; no conflict; Bar preserved in merged output
+    expect(result.conflicted).toBeUndefined();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("class Bar");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hasConflict — constructor count mismatch via dual-implementation
+// class (line 557)
+//
+// ts-morph's getConstructors() returns every ConstructorDeclaration
+// node, including syntactic duplicates.  When the existing class has
+// two constructor declarations and generated has one, the count check
+// at line 557 fires before the param-signature loop.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict constructor count mismatch (dual-impl)", () => {
+  it("writes .ode.ts when existing has two constructor declarations but generated has one (line 557)", async () => {
+    // Generated: 1 ConstructorDeclaration. Existing: 2 (two impl-style declarations,
+    // syntactically valid — the TypeScript parser produces one node per constructor keyword).
+    // genCtors.length (1) > 0 → line 554 true; existingCtors.length (2) > 0 → line 556 true.
+    // Line 557: 1 !== 2 → return true.
+    const project = makeProject({
+      "f.ts": "export class Foo { constructor(x: string) {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { constructor(x: string) {} constructor(x: number) {} }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+});
