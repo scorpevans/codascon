@@ -1118,3 +1118,350 @@ describe("TypeScript diagnostics", () => {
 // Note: the "unresolved type when imports omitted" regression test was removed because
 // domain type field content is no longer emitted — field types never appear in generated
 // code, so there is no code path that could produce TS2304 for a missing domain type import.
+
+// ═══════════════════════════════════════════════════════════════════
+// detectIndentation — branch coverage via MergeWriter
+//
+// detectIndentation is called inside mergeFile whenever MergeWriter or
+// StrictMergeWriter reconciles an existing file.  Its non-default
+// branches (tab, four-space, two-space-via-match) require an existing
+// file whose first indented line starts with the corresponding whitespace.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("detectIndentation — indentation style of existing file", () => {
+  it("handles tab-indented existing file without error", async () => {
+    // First indented line starts with \t → tab branch of detectIndentation
+    const existingContent =
+      '/* @odetovibe-generated */\nexport class Foo {\n\treadonly visitName = "foo" as const;\n}';
+    const project = makeProject({ "f.ts": "export class Foo {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), existingContent);
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    expect(result.compileErrors).toBeUndefined();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("class Foo");
+  });
+
+  it("handles four-space-indented existing file without error", async () => {
+    // First indented line starts with four spaces → four-space branch of detectIndentation
+    const existingContent =
+      '/* @odetovibe-generated */\nexport class Foo {\n    readonly visitName = "foo" as const;\n}';
+    const project = makeProject({ "f.ts": "export class Foo {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), existingContent);
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    expect(result.compileErrors).toBeUndefined();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("class Foo");
+  });
+
+  it("handles two-space-indented existing file without error", async () => {
+    // First indented line starts with 2 spaces → falls into the else branch (length < 4)
+    // via the match path, not the no-match default (the no-match default is exercised by
+    // the majority of other merge tests whose existing content has no leading whitespace).
+    const existingContent =
+      '/* @odetovibe-generated */\nexport class Foo {\n  readonly visitName = "foo" as const;\n}';
+    const project = makeProject({ "f.ts": "export class Foo {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), existingContent);
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    expect(result.compileErrors).toBeUndefined();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("class Foo");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MergeWriter — constructor merge
+//
+// mergeClass replaces all existing constructors with the generated ones
+// whenever the generated class declares any constructor.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MergeWriter — constructor merge", () => {
+  it("replaces the existing constructor when generated class declares a different one", async () => {
+    const project = makeProject({
+      "f.ts": "export class Foo { constructor(readonly x: string) {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing has a no-arg constructor — generated replaces it
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { constructor() {} }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("x: string");
+  });
+
+  it("adds a constructor when the existing class has none", async () => {
+    const project = makeProject({
+      "f.ts": "export class Foo { constructor(readonly x: string) {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing has no constructor at all
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), "/* @odetovibe-generated */\nexport class Foo {}");
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("x: string");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MergeWriter — abstract method merge
+//
+// mergeMethod replaces the existing method entirely when the generated
+// method is abstract (abstract methods have no body to preserve).
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MergeWriter — abstract method", () => {
+  it("replaces a concrete method body when generated method is abstract", async () => {
+    const project = makeProject({
+      "f.ts": "export abstract class Foo { abstract execute(x: string): void; }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing has a concrete method with the same name — merge must make it abstract
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport abstract class Foo { execute(x: string): void { return; } }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("abstract execute");
+    // Concrete body must not survive — the generated abstract declaration replaces it entirely
+    expect(written).not.toContain("return;");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// StrictMergeWriter — hasConflict additional branches
+//
+// hasConflict checks: isAbstract, typeParameter count/content,
+// property signature, and constructor parameter signature.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict additional branches", () => {
+  it("writes .ode.ts when isAbstract differs between generated and existing class", async () => {
+    const project = makeProject({ "f.ts": "export abstract class Foo {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing is not abstract — isAbstract mismatch triggers conflict
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), "/* @odetovibe-generated */\nexport class Foo {}");
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+    expect(fs.existsSync(path.join(tmpDir, "f.ode.ts"))).toBe(true);
+    // Original file is untouched
+    const original = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(original).not.toContain("abstract");
+  });
+
+  it("writes .ode.ts when typeParameter count differs", async () => {
+    const project = makeProject({ "f.ts": "export class Foo<T, U> {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing has one type parameter; generated has two
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo<T> {}",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+
+  it("writes .ode.ts when typeParameter constraint changes", async () => {
+    const project = makeProject({ "f.ts": "export class Foo<T extends string> {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Same count, different constraint
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo<T extends number> {}",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+
+  it("writes .ode.ts when a property type differs (exercises propSignature)", async () => {
+    const project = makeProject({
+      "f.ts": 'export class Foo { readonly x: string = "a"; }',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing has number type; generated has string type
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { readonly x: number = 1; }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+
+  it("writes .ode.ts when constructor parameter types differ (exercises ctorParamSignature)", async () => {
+    const project = makeProject({
+      "f.ts": "export class Foo { constructor(x: string) {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing constructor takes number; generated takes string
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { constructor(x: number) {} }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Post-merge compile errors
+//
+// After merging generated structure with user code, the merged result
+// is type-checked before writing.  When the preserved user method body
+// references an undeclared name, the merge produces TS2304 and the
+// file is not written.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MergeWriter — post-merge compile errors", () => {
+  it("returns compileErrors when the merged body references an undeclared name", async () => {
+    // Generated updates the param type; existing body calls undeclaredFn.
+    // mergeMethod preserves the body → merged text: execute(x: string): void { undeclaredFn(); }
+    // checkDiagnostics catches TS2304 (not in FALLBACK_FILTERED_CODES).
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(x: string): void { throw new Error(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { execute(x: number): void { undeclaredFn(); } }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+  });
+
+  it("does not overwrite the existing file when merged content has compile errors", async () => {
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(x: string): void { throw new Error(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    const originalContent =
+      "/* @odetovibe-generated */\nexport class Foo { execute(x: number): void { undeclaredFn(); } }";
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), originalContent);
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    // Original content is preserved — merge aborted before writeFileSync
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("undeclaredFn");
+  });
+});
+
+describe("StrictMergeWriter — post-merge compile errors", () => {
+  it("returns compileErrors on the no-conflict path when merged body has an undeclared name", async () => {
+    // Same method signature → hasConflict returns false → proceeds to merge.
+    // Preserved body calls undeclaredFn → TS2304 after merge.
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(x: string): void { throw new Error(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing has the same signature but an undeclared name in the body
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { execute(x: string): void { undeclaredFn(); } }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+    // No conflict was detected — this is the no-conflict merge path, not the .ode.ts path
+    expect(result.conflicted).toBeUndefined();
+  });
+
+  it("returns compileErrors on the conflict path when generated content has an undeclared name", async () => {
+    // Generated extends an undeclared base → different extends clause triggers conflict.
+    // checkDiagnostics on the conflict altText finds TS2304 → .ode.ts is not written.
+    const project = makeProject({ "f.ts": "export class Foo extends UndeclaredBase {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing has a different extends clause → hasConflict = true
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo extends Subject {}",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    // Conflict path was taken (path is .ode.ts) but compile errors prevented writing
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+    expect(result.created).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "f.ode.ts"))).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// formatCode — Prettier error fallback
+//
+// formatCode catches Prettier errors and returns the original unformatted
+// code.  Triggered when Prettier cannot infer a parser for the file
+// extension (e.g. an unknown extension with no prettierrc in scope).
+// ═══════════════════════════════════════════════════════════════════
+
+describe("formatCode — Prettier error fallback", () => {
+  it("writes the file with unformatted content when Prettier cannot infer a parser", async () => {
+    // A single-line interface body that Prettier would expand to multi-line for .ts files.
+    // For an unknown extension (.xyz) with no prettierrc in /tmp, Prettier throws →
+    // formatCode catch returns the original code unchanged → single-line form is preserved.
+    const body = "export interface Foo { name: string; }";
+    const project = makeProject({ "f.xyz": body });
+    const sf = project.getSourceFileOrThrow("f.xyz");
+    const tmpDir = makeTmpDir();
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir));
+
+    expect(fs.existsSync(path.join(tmpDir, "f.xyz"))).toBe(true);
+    const written = fs.readFileSync(path.join(tmpDir, "f.xyz"), "utf-8");
+    // Prettier did not run — single-line form is intact (not expanded)
+    expect(written).toContain("{ name: string; }");
+  });
+});
