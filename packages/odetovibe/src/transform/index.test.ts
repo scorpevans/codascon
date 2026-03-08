@@ -613,6 +613,39 @@ describe("AbstractTemplateEmitter", () => {
     expect(names).toContain("FooCommand");
     expect(names).toContain("Foo");
   });
+
+  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 278/282/285 true branches)", () => {
+    // buildImportSourceMap maps "Student", "AccessResult", "Building" → "external-pkg".
+    // importSrc.has("Student") = true → line 278 true branch; same for returnType and objectType.
+    const index = idx({
+      imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const tpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: false,
+      subjectSubset: ["Student"],
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(tpl, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "external-pkg");
+    expect(extImp).toBeDefined();
+    const importedNames = extImp!.getNamedImports().map((n) => n.getName());
+    expect(importedNames).toContain("Student");
+    expect(importedNames).toContain("AccessResult");
+    expect(importedNames).toContain("Building");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -725,6 +758,39 @@ describe("ConcreteTemplateEmitter", () => {
     expect(execute.getReturnType().getText()).toContain("Promise");
     const t = text(project, "commands/access-building.ts");
     expect(t).toContain("Promise<AccessResult>");
+  });
+
+  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 365/369/371 true branches)", () => {
+    // Parallel to the AbstractTemplateEmitter test: same importSrc.has() ternaries but in
+    // ConcreteTemplateEmitter at lines 365, 369, 371.
+    const index = idx({
+      imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const tpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+      isParameterized: false,
+      subjectSubset: ["Student"],
+      strategies: {},
+    });
+    const project = makeProject();
+    emitCmd.run(tpl, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "external-pkg");
+    expect(extImp).toBeDefined();
+    const importedNames = extImp!.getNamedImports().map((n) => n.getName());
+    expect(importedNames).toContain("Student");
+    expect(importedNames).toContain("AccessResult");
+    expect(importedNames).toContain("Building");
   });
 });
 
@@ -878,6 +944,39 @@ describe("StrategyClassEmitter", () => {
     const execute = cls.getMethodOrThrow("execute");
     expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
     expect(execute.getBodyText()).toContain("@odetovibe-generated");
+  });
+
+  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 447/452/454 true branches)", () => {
+    // Parallel to the AbstractTemplateEmitter test: same importSrc.has() ternaries but in
+    // StrategyClassEmitter at lines 447, 452, 454.
+    const index: ConfigIndex = {
+      imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      externalTypeKeys: new Set(),
+      namespace: undefined,
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTplEntry]]),
+      concreteTemplates: new Map(),
+      strategies: new Map(),
+    };
+    const project = makeProject();
+    emitCmd.run(stratEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "external-pkg");
+    expect(extImp).toBeDefined();
+    const importedNames = extImp!.getNamedImports().map((n) => n.getName());
+    expect(importedNames).toContain("Student");
+    expect(importedNames).toContain("AccessResult");
+    expect(importedNames).toContain("Building");
   });
 });
 
