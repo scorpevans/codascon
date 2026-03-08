@@ -24,18 +24,27 @@ The absence of a formal coding protocol compounds in several directions:
 
 With the rise of AI-assisted development, these problems compound further. An LLM generating code without structural rails produces output that is internally inconsistent, architecturally divergent across iterations, and difficult to audit. The more code the AI writes, the more the absence of a formal protocol matters.
 
-## How It Works
+## The Solution — Codascon
 
-```
-command.run(subject, object)
-  → subject.getCommandStrategy(command, object)     // double dispatch
-    → command[subject.visitName](subject, object)   // visit method selects strategy
-      → returns a Template                          // the chosen strategy
-  → template.execute(subject, object)               // strategy executes
-  → returns result
-```
+Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic. It gives business logic a home.
 
-A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+**1. Compiler safety**
+
+If your codascon code compiles, the dispatch mechanism will not fail at runtime. Every entity-operation combination is accounted for by construction, not by discipline. In languages with sufficient type facilities, this guarantee is enforced at compile time; the protocol still provides structural clarity in dynamically typed languages, with the runtime safety guarantee scaling to what the language's type system can enforce.
+
+**2. Cognitive load — and code routing**
+
+You implement strategies. The compiler tells you what is missing and where.
+
+There is no N×M coverage matrix to keep in your head — the type system holds it. When a new `Subject` is added, every `Command` that must handle it shows a compile error at the exact call site. When a business rule changes for a specific entity-operation pair — say, extending how `Orders` are processed — you add a `Strategy` to the relevant `Command` and update its resolver logic. You do not have to consider the rest of the codebase.
+
+**3. Code organization**
+
+The protocol's separation of concerns — a `Command` with its visit methods, `Templates`, and `Strategies` forming a cohesive unit — naturally maps each operation to a single file. Codascon does not enforce this layout, but the structure makes it the obvious choice: each file is self-contained, adding an operation means adding a file, and the same domain consistently produces the same layout.
+
+**4. Vibe coding**
+
+With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same file layout, the same type constraints, the same dispatch pattern — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent, auditable, and extensible.
 
 ## Install
 
@@ -142,28 +151,6 @@ const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", de
 // { granted: true, reason: "Alice has access" }
 ```
 
-## The Solution — Codascon
-
-Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic. It gives business logic a home.
-
-**1. Compiler safety**
-
-If your codascon code compiles, the dispatch mechanism will not fail at runtime. Every entity-operation combination is accounted for by construction, not by discipline. In languages with sufficient type facilities, this guarantee is enforced at compile time; the protocol still provides structural clarity in dynamically typed languages, with the runtime safety guarantee scaling to what the language's type system can enforce.
-
-**2. Cognitive load — and code routing**
-
-You implement strategies. The compiler tells you what is missing and where.
-
-There is no N×M coverage matrix to keep in your head — the type system holds it. When a new `Subject` is added, every `Command` that must handle it shows a compile error at the exact call site. When a business rule changes for a specific entity-operation pair — say, extending how `Orders` are processed — you add a `Strategy` to the relevant `Command` and update its resolver logic. You do not have to consider the rest of the codebase.
-
-**3. Code organization**
-
-The protocol's separation of concerns — a `Command` with its visit methods, `Templates`, and `Strategies` forming a cohesive unit — naturally maps each operation to a single file. Codascon does not enforce this layout, but the structure makes it the obvious choice: each file is self-contained, adding an operation means adding a file, and the same domain consistently produces the same layout.
-
-**4. Vibe coding**
-
-With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same file layout, the same type constraints, the same dispatch pattern — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent, auditable, and extensible.
-
 ## Advanced Patterns
 
 ### Parameterized Templates
@@ -234,6 +221,19 @@ const result = await parkingCmd.run(student, lotA);
 ```
 
 Visit methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
+
+## How It Works
+
+```
+command.run(subject, object)
+  → subject.getCommandStrategy(command, object)     // double dispatch
+    → command[subject.visitName](subject, object)   // visit method selects strategy
+      → returns a Template                          // the chosen strategy
+  → template.execute(subject, object)               // strategy executes
+  → returns result
+```
+
+A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
 
 ## Real-World Example
 
