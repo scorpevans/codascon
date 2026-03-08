@@ -1498,7 +1498,7 @@ describe("formatCode — Prettier error fallback", () => {
 // visit method that the user's file does not yet have.
 // ═══════════════════════════════════════════════════════════════════
 
-describe("MergeWriter — new method added to existing class", () => {
+describe("MergeWriter — new member added to existing class", () => {
   it("adds a generated method that is absent from the existing class", async () => {
     // Generated has two methods; existing only has the first.
     // mergeClass calls existing.addMethod() for the missing one (line 401).
@@ -1519,6 +1519,27 @@ describe("MergeWriter — new method added to existing class", () => {
     const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
     expect(written).toContain("b()"); // newly added via line 401
     expect(written).toContain("return; /* user impl */"); // a()'s body preserved
+  });
+
+  it("adds a generated property that is absent from the existing class", async () => {
+    // mergeClass loops over generated properties; if the existing class does not
+    // have one, it calls existing.addProperty() (line 385).
+    const project = makeProject({
+      "f.ts": 'export class Foo { readonly x = "a"; readonly y = "b"; }',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing only has property x — y is new in the generated version
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      '/* @odetovibe-generated */\nexport class Foo { readonly x = "a"; }',
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("readonly y"); // newly added via line 385
+    expect(written).toContain("readonly x"); // x preserved
   });
 });
 
@@ -1546,5 +1567,42 @@ describe("checkDiagnostics — FALLBACK_FILTERED_CODES TS2583 suppression", () =
     // TS2583 was produced but filtered — file written cleanly
     expect(result.compileErrors).toBeUndefined();
     expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// checkDiagnostics — tsconfig branch (lines 148-167)
+//
+// When findTsConfigPath finds a tsconfig.json walking up from the
+// output path, checkDiagnostics uses a real-filesystem Project
+// rather than the isolated in-memory fallback.  Triggered by writing
+// a tsconfig.json into the temp dir before running writeFiles.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("checkDiagnostics — tsconfig branch", () => {
+  it("reports a compile error using the real tsconfig when one is found", async () => {
+    // Place a tsconfig.json in the temp dir so findTsConfigPath finds it.
+    // checkDiagnostics then creates a real Project with that config (lines 148-156),
+    // adds the file (line 157), runs diagnostics (lines 160-168).
+    // A type error in the code produces a diagnostic that passes the filter
+    // and is mapped to a message string (lines 165-167).
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { strict: true } }),
+    );
+
+    const project = makeProject({ "f.ts": "const x: string = 123;" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir));
+
+    // Real type-check caught TS2322 ("Type 'number' is not assignable to type 'string'")
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+    expect(result.compileErrors!.some((e) => e.includes("not assignable"))).toBe(true);
+    // File was not written — compile gate aborted the write
+    expect(result.created).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(false);
   });
 });
