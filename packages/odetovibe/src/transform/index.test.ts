@@ -456,6 +456,56 @@ describe("CommandClassEmitter", () => {
     expect(personImp).toBeDefined();
     expect(personImp!.getNamedImports().map((n) => n.getName())).toContain("Person");
   });
+
+  it("imports a subject type from external source when its key is in configIndex.imports (line 210 true branch)", () => {
+    // The subjectUnion loop at line 209 also checks importSrc: line 210 true branch fires when
+    // a subject key is declared in imports. Existing tests only put non-subject types in imports.
+    const index = idx({
+      imports: { "ext-pkg": ["Student"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "ext-pkg");
+    expect(extImp).toBeDefined();
+    expect(extImp!.getNamedImports().map((n) => n.getName())).toContain("Student");
+  });
+
+  it("skips visit-method generation for a subjectUnion member absent from subjectTypes (line 230 continue)", () => {
+    // configIndex.subjectTypes.get("Ghost") = undefined → !subjectEntry = true → continue at line 230.
+    // No visit method is emitted for "Ghost"; the method for the known subject is still emitted.
+    const ghostCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student", "Ghost"],
+    });
+    const index = idx({
+      subjectTypes: new Map([["Student", student]]), // "Ghost" absent
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", ghostCmd]]),
+    });
+    const project = makeProject();
+    emitCmd.run(ghostCmd, ctx(index, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    const methodNames = cls.getMethods().map((m) => m.getName());
+    expect(methodNames).toContain("resolveStudent"); // known subject → visit method emitted
+    expect(methodNames).not.toContain("resolveGhost"); // "Ghost" absent → skipped
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
