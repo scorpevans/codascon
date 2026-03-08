@@ -233,6 +233,8 @@ command.run(subject, object)
 
 ## For AI-Assisted Development
 
+Codascon is particularly well-suited for LLM-assisted ("vibe") coding. Note however that the domain engineering (e.g. `users` vs `student`+`professor` vs ...) and business logic (definition of `average()`) can never be completely outsourced to an LLM or a 3rd party.
+
 ### 1. One-step Vibe coding
 
 Provide a domain description and let the LLM generate the full codascon implementation in one shot:
