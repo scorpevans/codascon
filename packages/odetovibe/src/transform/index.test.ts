@@ -164,6 +164,16 @@ describe("SubjectClassEmitter", () => {
     expect(sf.getClass("Student")).toBeDefined();
     expect(sf.getClass("Professor")).toBeDefined();
   });
+
+  it("returns targetFile without emitting a class when the key is in externalTypeKeys", () => {
+    const project = makeProject();
+    const result = emitCmd.run(
+      student,
+      ctx(idx({ externalTypeKeys: new Set(["Student"]) }), project),
+    );
+    expect(result.targetFile).toBe("domain-types.ts");
+    expect(project.getSourceFile("domain-types.ts")?.getClass("Student")).toBeUndefined();
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -207,6 +217,16 @@ describe("InterfaceEmitter", () => {
     const sf = project.getSourceFileOrThrow("domain-types.ts");
     expect(sf.getClass("Student")).toBeDefined();
     expect(sf.getInterface("Building")).toBeDefined();
+  });
+
+  it("returns targetFile without emitting an interface when the key is in externalTypeKeys", () => {
+    const project = makeProject();
+    const result = emitCmd.run(
+      building,
+      ctx(idx({ externalTypeKeys: new Set(["Building"]) }), project),
+    );
+    expect(result.targetFile).toBe("domain-types.ts");
+    expect(project.getSourceFile("domain-types.ts")?.getInterface("Building")).toBeUndefined();
   });
 });
 
@@ -391,6 +411,101 @@ describe("CommandClassEmitter", () => {
     expect(importedNames).toContain("AccessResult");
     expect(importedNames).not.toContain("Promise<AccessResult>");
   });
+
+  it("adds to an existing value import declaration when the name is not yet present", () => {
+    // ensureValueImport line 45: decl exists but target name is absent → addNamedImport fires
+    const project = makeProject();
+    project.createSourceFile(
+      "commands/access-building.ts",
+      `import { SomeExisting } from "codascon";\n`,
+    );
+    emitCmd.run(cmdEntry, ctx(withTypes, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const valueImports = sf
+      .getImportDeclarations()
+      .filter((d) => d.getModuleSpecifierValue() === "codascon" && !d.isTypeOnly());
+    // Must not create a duplicate — still one value import declaration
+    expect(valueImports).toHaveLength(1);
+    const names = valueImports[0].getNamedImports().map((n) => n.getName());
+    expect(names).toContain("Command"); // newly added
+    expect(names).toContain("SomeExisting"); // pre-existing preserved
+  });
+
+  it("prefixes a relative import specifier with '../' for command-file depth", () => {
+    // toCommandDepth: specifier starts with "./" → "../" prepended so import is correct
+    // from inside commands/ (one level deeper than the namespace root).
+    const index = idx({
+      imports: { "./shared.js": ["Person"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    // toCommandDepth("./shared.js") === ".././shared.js"
+    const personImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === ".././shared.js");
+    expect(personImp).toBeDefined();
+    expect(personImp!.getNamedImports().map((n) => n.getName())).toContain("Person");
+  });
+
+  it("imports a subject type from external source when its key is in configIndex.imports (line 210 true branch)", () => {
+    // The subjectUnion loop at line 209 also checks importSrc: line 210 true branch fires when
+    // a subject key is declared in imports. Existing tests only put non-subject types in imports.
+    const index = idx({
+      imports: { "ext-pkg": ["Student"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "ext-pkg");
+    expect(extImp).toBeDefined();
+    expect(extImp!.getNamedImports().map((n) => n.getName())).toContain("Student");
+  });
+
+  it("skips visit-method generation for a subjectUnion member absent from subjectTypes (line 230 continue)", () => {
+    // configIndex.subjectTypes.get("Ghost") = undefined → !subjectEntry = true → continue at line 230.
+    // No visit method is emitted for "Ghost"; the method for the known subject is still emitted.
+    const ghostCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student", "Ghost"],
+    });
+    const index = idx({
+      subjectTypes: new Map([["Student", student]]), // "Ghost" absent
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", ghostCmd]]),
+    });
+    const project = makeProject();
+    emitCmd.run(ghostCmd, ctx(index, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    const methodNames = cls.getMethods().map((m) => m.getName());
+    expect(methodNames).toContain("resolveStudent"); // known subject → visit method emitted
+    expect(methodNames).not.toContain("resolveGhost"); // "Ghost" absent → skipped
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -526,6 +641,61 @@ describe("AbstractTemplateEmitter", () => {
       .find((d) => d.getModuleSpecifierValue().includes("audit") && !d.isTypeOnly());
     expect(hookImp?.getNamedImports().map((n) => n.getName())).toContain("AuditCommand");
   });
+
+  it("adds a second name to an existing hook value-import when two hooks resolve to the same file path (line 45)", () => {
+    // hookImportPath("FooCommand") = "./foo.js"  (strips "Command" → "Foo" → kebab "foo")
+    // hookImportPath("Foo")        = "./foo.js"  (no "Command" suffix → "Foo" → kebab "foo")
+    // 1st ensureValueImport(sf, "./foo.js", "FooCommand") → creates import { FooCommand } (else branch)
+    // 2nd ensureValueImport(sf, "./foo.js", "Foo")        → decl exists, "Foo" absent → line 45 fires
+    const tplWithTwoHooks = new AbstractTemplateEntry("HookedTemplate", "AccessBuildingCommand", {
+      isParameterized: false,
+      commandHooks: { hookA: "FooCommand", hookB: "Foo" },
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(tplWithTwoHooks, ctx(withCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const fooImport = sf
+      .getImportDeclarations()
+      .find((d) => d.getModuleSpecifierValue() === "./foo.js" && !d.isTypeOnly());
+    expect(fooImport).toBeDefined();
+    const names = fooImport!.getNamedImports().map((n) => n.getName());
+    expect(names).toContain("FooCommand");
+    expect(names).toContain("Foo");
+  });
+
+  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 278/282/285 true branches)", () => {
+    // buildImportSourceMap maps "Student", "AccessResult", "Building" → "external-pkg".
+    // importSrc.has("Student") = true → line 278 true branch; same for returnType and objectType.
+    const index = idx({
+      imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const tpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: false,
+      subjectSubset: ["Student"],
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(tpl, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "external-pkg");
+    expect(extImp).toBeDefined();
+    const importedNames = extImp!.getNamedImports().map((n) => n.getName());
+    expect(importedNames).toContain("Student");
+    expect(importedNames).toContain("AccessResult");
+    expect(importedNames).toContain("Building");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -638,6 +808,39 @@ describe("ConcreteTemplateEmitter", () => {
     expect(execute.getReturnType().getText()).toContain("Promise");
     const t = text(project, "commands/access-building.ts");
     expect(t).toContain("Promise<AccessResult>");
+  });
+
+  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 365/369/371 true branches)", () => {
+    // Parallel to the AbstractTemplateEmitter test: same importSrc.has() ternaries but in
+    // ConcreteTemplateEmitter at lines 365, 369, 371.
+    const index = idx({
+      imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+    });
+    const tpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+      isParameterized: false,
+      subjectSubset: ["Student"],
+      strategies: {},
+    });
+    const project = makeProject();
+    emitCmd.run(tpl, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "external-pkg");
+    expect(extImp).toBeDefined();
+    const importedNames = extImp!.getNamedImports().map((n) => n.getName());
+    expect(importedNames).toContain("Student");
+    expect(importedNames).toContain("AccessResult");
+    expect(importedNames).toContain("Building");
   });
 });
 
@@ -791,6 +994,39 @@ describe("StrategyClassEmitter", () => {
     const execute = cls.getMethodOrThrow("execute");
     expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
     expect(execute.getBodyText()).toContain("@odetovibe-generated");
+  });
+
+  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 447/452/454 true branches)", () => {
+    // Parallel to the AbstractTemplateEmitter test: same importSrc.has() ternaries but in
+    // StrategyClassEmitter at lines 447, 452, 454.
+    const index: ConfigIndex = {
+      imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      externalTypeKeys: new Set(),
+      namespace: undefined,
+      subjectTypes: new Map([
+        ["Student", student],
+        ["Professor", professor],
+      ]),
+      plainTypes: new Map([
+        ["Building", building],
+        ["AccessResult", accessResult],
+      ]),
+      commands: new Map([["AccessBuildingCommand", cmdEntry]]),
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTplEntry]]),
+      concreteTemplates: new Map(),
+      strategies: new Map(),
+    };
+    const project = makeProject();
+    emitCmd.run(stratEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const extImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "external-pkg");
+    expect(extImp).toBeDefined();
+    const importedNames = extImp!.getNamedImports().map((n) => n.getName());
+    expect(importedNames).toContain("Student");
+    expect(importedNames).toContain("AccessResult");
+    expect(importedNames).toContain("Building");
   });
 });
 
