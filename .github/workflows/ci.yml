@@ -105,9 +105,13 @@ jobs:
           # --help must exit 0 and mention the positional arg
           ./node_modules/.bin/odetovibe --help | grep -q "code_config.yaml" && echo "CLI --help: OK"
 
-          # End-to-end: convert smoke.yaml and diff output against golden files
+          # End-to-end: seed output dir with golden files, merge, diff against golden.
+          # Golden files represent user-modified code that must survive re-generation
+          # unchanged — i.e. they are a fixed-point of the merge operation.
           smoke_yaml="${GITHUB_WORKSPACE}/packages/odetovibe/fixtures/smoke.yaml"
           smoke_expected="${GITHUB_WORKSPACE}/packages/odetovibe/fixtures/smoke-expected"
+          mkdir -p /tmp/smoke-out
+          cp -r "$smoke_expected/." /tmp/smoke-out/
           output=$(./node_modules/.bin/odetovibe "$smoke_yaml" --out /tmp/smoke-out 2>&1)
           echo "$output"
           echo "$output" | grep -q "Parsed 1 command(s), namespace: greet" && echo "CLI codegen parse: OK"

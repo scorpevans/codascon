@@ -287,10 +287,8 @@ function mergeMethod(existing: MethodDeclaration, generated: MethodDeclaration):
   }
   existing.set({
     ...genStructure,
-    // `async` is user-owned (like the body): preserve it from the existing
-    // method so that a user who marks an execute() method async does not have
-    // the modifier silently removed on the next codegen run.
-    isAsync: existing.isAsync(),
+    // `async` is codegen-owned (paired with the return type via `returnAsync`):
+    // genStructure.isAsync is the authoritative value.
     statements: existing.getBodyText() ?? "",
     docs: existing.getJsDocs().map((d) => d.getStructure()),
   });
@@ -318,14 +316,10 @@ function implBaseName(text: string): string {
 function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): void {
   const genStruct = generated.getStructure();
 
-  // Normalize generated implements to a string array.
-  const genImpl = (
-    Array.isArray(genStruct.implements)
-      ? genStruct.implements
-      : genStruct.implements != null
-        ? [genStruct.implements]
-        : []
-  ) as string[];
+  // ts-morph always returns [] (never undefined) for the implements structure field,
+  // even when the class has no implements clause. The cast strips WriterFunction
+  // from the element union since generated code only contains string type expressions.
+  const genImpl = genStruct.implements as string[];
 
   const genImplByBase = new Map(genImpl.map((t) => [implBaseName(t), t]));
 
@@ -474,17 +468,14 @@ function ctorParamSignature(ctor: ConstructorDeclaration): string {
 
 /** Canonical signature text for a method (no body, no JSDoc).
  *
- * The `async` modifier is excluded: whether a method is async is an
- * implementation detail owned by the user (like the method body), not
- * a structural contract owned by codegen.  Excluding it prevents
- * spurious conflict detection when the user marks a generated method
- * async and codegen regenerates it without the modifier.
+ * The `async` modifier is included: it is codegen-owned (paired with the
+ * `Promise<T>` return type via `returnAsync`), so a change in async status
+ * is a structural conflict.
  */
 function methodSignature(m: MethodDeclaration): string {
   const mods = m
     .getModifiers()
     .map((mod) => mod.getText())
-    .filter((mod) => mod !== "async")
     .join(" ");
   const params = m
     .getParameters()

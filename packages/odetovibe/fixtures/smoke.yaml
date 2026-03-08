@@ -12,6 +12,7 @@ commands:
     baseType: Person
     objectType: Greeting
     returnType: Greeting
+    returnAsync: True
     subjectUnion:
       - User
     dispatch:

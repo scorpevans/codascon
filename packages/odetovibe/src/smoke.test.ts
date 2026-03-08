@@ -9,7 +9,7 @@
  * package first.
  */
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -183,6 +183,163 @@ describe("smoke", () => {
     expect(content).toContain("class AdminGrant");
   }, 20_000);
 
+  it("returnAsync: true — abstract template execute returns Promise<T>; concrete template and strategy execute are async and return Promise<T>", async () => {
+    tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
+
+    // One command with returnAsync: true.
+    // Uses one abstract template (UserTemplate, with a strategy) and one concrete
+    // template (AdminGreeter), so we can verify all three emitter paths in a
+    // single pipeline run:
+    //   • abstract template execute — no async modifier (forbidden on abstract
+    //     methods in TypeScript), but return type IS Promise<T>
+    //   • concrete template execute — async + Promise<T>
+    //   • strategy execute — async + Promise<T>
+    const asyncYaml = [
+      "namespace: hello",
+      "",
+      "domainTypes:",
+      "  Person:",
+      "  User:",
+      "    visitName: resolveUser",
+      "  Admin:",
+      "    visitName: resolveAdmin",
+      "  Greeting:",
+      "",
+      "commands:",
+      "  HelloCommand:",
+      "    commandName: hello",
+      "    baseType: Person",
+      "    objectType: Greeting",
+      "    returnType: Greeting",
+      "    returnAsync: true",
+      "    subjectUnion: [User, Admin]",
+      "    dispatch:",
+      "      User: UserTemplate.StandardGreet",
+      "      Admin: AdminGreeter",
+      "    templates:",
+      "      UserTemplate:",
+      "        isParameterized: true",
+      "        strategies:",
+      "          StandardGreet:",
+      "            subjectSubset: [User]",
+      "      AdminGreeter:",
+      "        isParameterized: false",
+      "        strategies: {}",
+    ].join("\n");
+
+    writeFileSync(resolve(tmpDir, "hello.yaml"), asyncYaml);
+    const configIndex = parseYaml(resolve(tmpDir, "hello.yaml"));
+    expect(validateYaml(configIndex).valid, "hello.yaml must be valid").toBe(true);
+
+    const project = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project });
+    const written = await writeFiles(project, { targetDir: tmpDir, mode: "overwrite" });
+
+    expect(written.length, "pipeline should write at least one file").toBeGreaterThan(0);
+    for (const r of written) {
+      expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
+    }
+
+    const commandFile = written.find((r) => r.path.includes("/commands/hello.ts"));
+    expect(commandFile, "command file should be written").toBeDefined();
+    const content = readFileSync(commandFile!.path, "utf8");
+
+    // Abstract template: abstract execute must return Promise<Greeting> but
+    // must NOT carry the async keyword (TypeScript forbids async on abstract methods).
+    expect(content).toContain("abstract execute");
+    expect(content).toContain("abstract class UserTemplate");
+    const abstractExecuteMatch = content.match(/abstract\s+execute\([^)]*\)[^{]*/);
+    expect(abstractExecuteMatch, "abstract execute signature found").toBeTruthy();
+    expect(abstractExecuteMatch![0]).toContain("Promise<Greeting>");
+    expect(abstractExecuteMatch![0]).not.toContain("async");
+
+    // Concrete template: async execute + Promise<Greeting>
+    expect(content).toContain("class AdminGreeter");
+    expect(content).toMatch(/async\s+execute[^{]*Promise<Greeting>/);
+
+    // Strategy: async execute + Promise<Greeting>
+    expect(content).toContain("class StandardGreet");
+    // All non-abstract execute methods must be async and return Promise<Greeting>
+    const execMatches = [...content.matchAll(/\b(async\s+)?execute\s*\(/g)];
+    const nonAbstractExec = execMatches.filter(
+      (m) => !content.slice(0, m.index).match(/abstract\s*$/),
+    );
+    expect(
+      nonAbstractExec.length,
+      "at least two non-abstract execute methods",
+    ).toBeGreaterThanOrEqual(2);
+    for (const m of nonAbstractExec) {
+      expect(m[0], `execute at offset ${m.index} should be async`).toContain("async");
+    }
+  }, 20_000);
+
+  it("returnAsync absent — template and strategy execute are not async and return T directly", async () => {
+    tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
+
+    // Same domain structure as the returnAsync test above, but without returnAsync.
+    const syncYaml = [
+      "namespace: hello",
+      "",
+      "domainTypes:",
+      "  Person:",
+      "  User:",
+      "    visitName: resolveUser",
+      "  Admin:",
+      "    visitName: resolveAdmin",
+      "  Greeting:",
+      "",
+      "commands:",
+      "  HelloCommand:",
+      "    commandName: hello",
+      "    baseType: Person",
+      "    objectType: Greeting",
+      "    returnType: Greeting",
+      "    subjectUnion: [User, Admin]",
+      "    dispatch:",
+      "      User: UserTemplate.StandardGreet",
+      "      Admin: AdminGreeter",
+      "    templates:",
+      "      UserTemplate:",
+      "        isParameterized: true",
+      "        strategies:",
+      "          StandardGreet:",
+      "            subjectSubset: [User]",
+      "      AdminGreeter:",
+      "        isParameterized: false",
+      "        strategies: {}",
+    ].join("\n");
+
+    writeFileSync(resolve(tmpDir, "hello-sync.yaml"), syncYaml);
+    const configIndex = parseYaml(resolve(tmpDir, "hello-sync.yaml"));
+    expect(validateYaml(configIndex).valid, "hello-sync.yaml must be valid").toBe(true);
+
+    const project = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project });
+    const written = await writeFiles(project, { targetDir: tmpDir, mode: "overwrite" });
+
+    expect(written.length, "pipeline should write at least one file").toBeGreaterThan(0);
+    for (const r of written) {
+      expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
+    }
+
+    const commandFile = written.find((r) => r.path.includes("/commands/hello.ts"));
+    expect(commandFile, "command file should be written").toBeDefined();
+    const content = readFileSync(commandFile!.path, "utf8");
+
+    // No execute method — abstract or concrete — should have async or Promise<T>
+    expect(content).not.toContain("async execute");
+    expect(content).not.toContain("Promise<Greeting>");
+
+    // All execute return types should be the bare Greeting type
+    const returnTypeMatches = [...content.matchAll(/execute\([^)]*\)[^{]*:\s*([^\s{;]+)/g)];
+    expect(returnTypeMatches.length, "at least one execute return type found").toBeGreaterThan(0);
+    for (const m of returnTypeMatches) {
+      expect(m[1].trim(), `execute return type should be Greeting, not Promise-wrapped`).toBe(
+        "Greeting",
+      );
+    }
+  }, 20_000);
+
   it("generates golden output for smoke.yaml", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
@@ -190,16 +347,21 @@ describe("smoke", () => {
     const result = validateYaml(configIndex);
     expect(result.valid, "smoke.yaml should be valid").toBe(true);
 
+    // Copy golden files into tmpDir as the existing user-modified files, then
+    // merge — the golden files must survive re-generation unchanged.
+    const goldenDir = resolve(fixturesDir, "smoke-expected");
+    cpSync(goldenDir, tmpDir, { recursive: true });
+
     const project = new Project({ useInMemoryFileSystem: true });
     emitAst(configIndex, { configIndex, project });
 
-    const written = await writeFiles(project, { targetDir: tmpDir, mode: "overwrite" });
+    const written = await writeFiles(project, { targetDir: tmpDir, mode: "merge" });
     expect(written.length, "pipeline should write at least one file").toBeGreaterThan(0);
     for (const r of written) {
       expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
       const rel = r.path.slice(tmpDir.length + 1);
       const actual = readFileSync(r.path, "utf8");
-      const expected = readFileSync(resolve(fixturesDir, "smoke-expected", rel), "utf8");
+      const expected = readFileSync(resolve(goldenDir, rel), "utf8");
       expect(actual, `${rel} matches golden file`).toBe(expected);
     }
   }, 20_000);
