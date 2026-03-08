@@ -96,12 +96,12 @@ import { Subject } from "codascon";
 
 class Student extends Subject {
   readonly visitName = "resolveStudent" as const;
-  name = "Student";
+  clearance = "basic";
 }
 
 class Professor extends Subject {
   readonly visitName = "resolveProfessor" as const;
-  name = "Professor";
+  clearance = "full";
 }
 ```
 
@@ -121,7 +121,7 @@ interface AccessResult {
 }
 
 class AccessBuildingCommand extends Command<
-  { name: string }, // base type — any type; all subjects must extend it
+  { clearance: string }, // base type — any type; all subjects must extend it
   Building, // object type — context
   AccessResult, // return type
   [Student, Professor] // subject union
