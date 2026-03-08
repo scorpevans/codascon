@@ -9,7 +9,7 @@
  * package first.
  */
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -190,16 +190,21 @@ describe("smoke", () => {
     const result = validateYaml(configIndex);
     expect(result.valid, "smoke.yaml should be valid").toBe(true);
 
+    // Copy golden files into tmpDir as the existing user-modified files, then
+    // merge — the golden files must survive re-generation unchanged.
+    const goldenDir = resolve(fixturesDir, "smoke-expected");
+    cpSync(goldenDir, tmpDir, { recursive: true });
+
     const project = new Project({ useInMemoryFileSystem: true });
     emitAst(configIndex, { configIndex, project });
 
-    const written = await writeFiles(project, { targetDir: tmpDir, mode: "overwrite" });
+    const written = await writeFiles(project, { targetDir: tmpDir, mode: "merge" });
     expect(written.length, "pipeline should write at least one file").toBeGreaterThan(0);
     for (const r of written) {
       expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
       const rel = r.path.slice(tmpDir.length + 1);
       const actual = readFileSync(r.path, "utf8");
-      const expected = readFileSync(resolve(fixturesDir, "smoke-expected", rel), "utf8");
+      const expected = readFileSync(resolve(goldenDir, rel), "utf8");
       expect(actual, `${rel} matches golden file`).toBe(expected);
     }
   }, 20_000);
