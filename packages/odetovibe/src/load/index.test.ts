@@ -2078,13 +2078,11 @@ describe("MergeWriter — mergeClass genImpl normalization when generated has no
 
 describe("checkDiagnostics — tsconfig branch DiagnosticMessageChain (line 167)", () => {
   it("calls msg.getMessageText() when tsconfig-branch diagnostic has a chain message (line 167 false branch)", async () => {
-    // Write a tsconfig.json to tmpDir so findTsConfigPath finds it → tsconfig branch entered.
-    // A 3-level nested type incompatibility (TS2322) reliably produces a DiagnosticMessageChain:
-    //   "Type '{ a: { b: { c: string } } }' is not assignable to type '{ a: { b: { c: number } } }'"
-    //   → next → "The types of 'a' are incompatible" → next → ... (chain, not plain string).
-    // typeof msg === "string" = false → msg.getMessageText() called → line 167 false arm.
+    // Write a tsconfig.json to tmpDir so findTsConfigPath finds it → tsconfig branch entered (line 147).
+    // TS2420 (class incorrectly implements interface) reliably produces a DiagnosticMessageChain:
+    //   typeof msg === "string" = false → msg.getMessageText() called → line 167 false arm.
     const project = makeProject({
-      "f.ts": 'const x: { a: { b: { c: number } } } = { a: { b: { c: "hello" } } };\n',
+      "f.ts": "interface Foo { bar(): number; }\nclass Baz implements Foo {}\n",
     });
     const sf = project.getSourceFileOrThrow("f.ts");
     const tmpDir = makeTmpDir();
@@ -2101,11 +2099,11 @@ describe("checkDiagnostics — tsconfig branch DiagnosticMessageChain (line 167)
 describe("checkDiagnostics — fallback branch DiagnosticMessageChain (line 179)", () => {
   it("calls msg.getMessageText() when fallback-branch diagnostic has a chain message (line 179 false branch)", async () => {
     // No tsconfig in tmpDir → fallback in-memory ES3 project.
-    // Same 3-level nested type incompatibility: TS2322 is not in FALLBACK_FILTERED_CODES
-    // and always produces a DiagnosticMessageChain for multi-level property mismatches.
-    // typeof msg === "string" = false → msg.getMessageText() called → line 179 false arm.
+    // TS2420 (class incorrectly implements interface) reliably produces a DiagnosticMessageChain.
+    // TS2420 is not in FALLBACK_FILTERED_CODES → surfaced → typeof msg === "string" = false →
+    // msg.getMessageText() called → line 179 false arm.
     const project = makeProject({
-      "f.ts": 'const x: { a: { b: { c: number } } } = { a: { b: { c: "hello" } } };\n',
+      "f.ts": "interface Foo { bar(): number; }\nclass Baz implements Foo {}\n",
     });
     const sf = project.getSourceFileOrThrow("f.ts");
     const tmpDir = makeTmpDir();
@@ -2118,12 +2116,12 @@ describe("checkDiagnostics — fallback branch DiagnosticMessageChain (line 179)
   });
 });
 
-describe("MergeWriter — mergeClass genImpl Array.isArray true branch (lines 323-324)", () => {
-  it("takes the array path when genStruct.implements is an array (lines 323-324)", async () => {
+describe("MergeWriter — mergeClass genImpl Array.isArray true branch", () => {
+  it("takes the array path when genStruct.implements is an array", async () => {
     // Generated: Foo implements SomeIface (no SomeIface definition in generated sf).
     // Existing on disk: SomeIface declared as interface; Foo implements SomeIface.
     // After merge: genStruct.implements = ["SomeIface"] (array) →
-    //   Array.isArray(["SomeIface"]) = true → line 324: genImpl = ["SomeIface"].
+    //   Array.isArray(["SomeIface"]) = true → genImpl = ["SomeIface"].
     // SomeIface is in existing as user-owned interface (never overwritten by merge) →
     //   merged output is valid TS → checkDiagnostics passes → write succeeds.
     const project = makeProject({
@@ -2141,6 +2139,28 @@ describe("MergeWriter — mergeClass genImpl Array.isArray true branch (lines 32
     const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
     expect(written).toContain("implements SomeIface");
     expect(written).toContain("execute");
+  });
+
+  it("takes the empty-array path when genStruct.implements is undefined (false branch)", async () => {
+    // Generated: Foo has NO implements clause → genStruct.implements = undefined →
+    //   Array.isArray(undefined) = false → genImpl = [] (the else branch).
+    // Existing on disk: Foo implements UserIface (user-added, not in generated).
+    // With genImpl = [], genImplByBase is empty → all existing implements are preserved.
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(): void { throw new Error(''); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\ninterface UserIface {}\nexport class Foo implements UserIface { execute(): void { return; } }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    // User-added implements is preserved since generated has no implements.
+    expect(written).toContain("implements UserIface");
   });
 });
 

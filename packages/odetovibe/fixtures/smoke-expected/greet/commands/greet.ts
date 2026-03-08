@@ -3,7 +3,12 @@ import { Command } from "codascon";
 import type { Template } from "codascon";
 import type { Person, Greeting, User } from "../domain-types.js";
 
-export class GreetCommand extends Command<Person, Greeting, Greeting, [User]> {
+export class GreetCommand extends Command<
+  Person,
+  Greeting,
+  Promise<Greeting>,
+  [User]
+> {
   readonly commandName = "greet" as const;
 
   resolveUser(
@@ -18,7 +23,7 @@ export class UserGreeter implements Template<GreetCommand, [], User> {
   /*
   Coder comment
   */
-  execute(subject: User, object: Readonly<Greeting>): Greeting {
+  async execute(subject: User, object: Readonly<Greeting>): Promise<Greeting> {
     // coder comment
     let v1 = 42;
     throw new Error("Not implemented"); // @odetovibe-generated

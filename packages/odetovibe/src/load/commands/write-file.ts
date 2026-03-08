@@ -317,13 +317,9 @@ function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): vo
   const genStruct = generated.getStructure();
 
   // Normalize generated implements to a string array.
-  const genImpl = (
-    Array.isArray(genStruct.implements)
-      ? genStruct.implements
-      : genStruct.implements != null
-        ? [genStruct.implements]
-        : []
-  ) as string[];
+  // ts-morph always serialises implements as string[] or undefined — never as a
+  // bare non-array value — so the two-branch form is exhaustive in practice.
+  const genImpl = (Array.isArray(genStruct.implements) ? genStruct.implements : []) as string[];
 
   const genImplByBase = new Map(genImpl.map((t) => [implBaseName(t), t]));
 
