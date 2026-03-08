@@ -591,6 +591,28 @@ describe("AbstractTemplateEmitter", () => {
       .find((d) => d.getModuleSpecifierValue().includes("audit") && !d.isTypeOnly());
     expect(hookImp?.getNamedImports().map((n) => n.getName())).toContain("AuditCommand");
   });
+
+  it("adds a second name to an existing hook value-import when two hooks resolve to the same file path (line 45)", () => {
+    // hookImportPath("FooCommand") = "./foo.js"  (strips "Command" → "Foo" → kebab "foo")
+    // hookImportPath("Foo")        = "./foo.js"  (no "Command" suffix → "Foo" → kebab "foo")
+    // 1st ensureValueImport(sf, "./foo.js", "FooCommand") → creates import { FooCommand } (else branch)
+    // 2nd ensureValueImport(sf, "./foo.js", "Foo")        → decl exists, "Foo" absent → line 45 fires
+    const tplWithTwoHooks = new AbstractTemplateEntry("HookedTemplate", "AccessBuildingCommand", {
+      isParameterized: false,
+      commandHooks: { hookA: "FooCommand", hookB: "Foo" },
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(tplWithTwoHooks, ctx(withCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const fooImport = sf
+      .getImportDeclarations()
+      .find((d) => d.getModuleSpecifierValue() === "./foo.js" && !d.isTypeOnly());
+    expect(fooImport).toBeDefined();
+    const names = fooImport!.getNamedImports().map((n) => n.getName());
+    expect(names).toContain("FooCommand");
+    expect(names).toContain("Foo");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
