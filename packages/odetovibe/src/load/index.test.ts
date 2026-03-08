@@ -1344,10 +1344,10 @@ describe("StrictMergeWriter — hasConflict additional branches", () => {
     expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
   });
 
-  it("does not flag a conflict when the user added async to a generated method (async is excluded from methodSignature)", async () => {
-    // Generated has a non-async execute; user added 'async' to it.
-    // methodSignature strips 'async' via the .filter() callback (lines 486-487),
-    // so both sides produce the same signature → no conflict.
+  it("flags a conflict when the user added async to a generated non-async method (async is codegen-owned)", async () => {
+    // Generated has a non-async execute; existing has 'async' added by the user.
+    // async is codegen-owned (paired with the Promise<T> return type via returnAsync),
+    // so a mismatch in the async modifier is a structural conflict.
     const project = makeProject({
       "f.ts": "export class Foo { execute(s: string): void { throw new Error(); } }",
     });
@@ -1360,11 +1360,9 @@ describe("StrictMergeWriter — hasConflict additional branches", () => {
 
     const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
 
-    // async was excluded from both signatures → no conflict detected
-    expect(result.conflicted).toBeUndefined();
-    // File merged in-place (not renamed to .ode.ts)
-    expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, "f.ode.ts"))).toBe(false);
+    // async mismatch → conflict detected → .ode.ts written
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
   });
 
   it("does not flag a conflict when a generated method is absent from the existing class (new methods are not conflicts)", async () => {

@@ -18,7 +18,7 @@ export class UserGreeter implements Template<GreetCommand, [], User> {
   /*
   Coder comment
   */
-  async execute(subject: User, object: Readonly<Greeting>): Greeting {
+  execute(subject: User, object: Readonly<Greeting>): Greeting {
     // coder comment
     let v1 = 42;
     throw new Error("Not implemented"); // @odetovibe-generated
