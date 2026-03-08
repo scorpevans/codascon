@@ -1343,6 +1343,29 @@ describe("StrictMergeWriter — hasConflict additional branches", () => {
     expect(result.conflicted).toBe(true);
     expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
   });
+
+  it("does not flag a conflict when the user added async to a generated method (async is excluded from methodSignature)", async () => {
+    // Generated has a non-async execute; user added 'async' to it.
+    // methodSignature strips 'async' via the .filter() callback (lines 486-487),
+    // so both sides produce the same signature → no conflict.
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(s: string): void { throw new Error(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { async execute(s: string): void { return; } }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    // async was excluded from both signatures → no conflict detected
+    expect(result.conflicted).toBeUndefined();
+    // File merged in-place (not renamed to .ode.ts)
+    expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "f.ode.ts"))).toBe(false);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1463,5 +1486,65 @@ describe("formatCode — Prettier error fallback", () => {
     const written = fs.readFileSync(path.join(tmpDir, "f.xyz"), "utf-8");
     // Prettier did not run — single-line form is intact (not expanded)
     expect(written).toContain("{ name: string; }");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MergeWriter — new method in existing class
+//
+// mergeClass adds generated methods that are absent from the existing
+// class (line 401: existing.addMethod).  This is the path taken when
+// a new Subject is added to a Command: re-generation produces a new
+// visit method that the user's file does not yet have.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MergeWriter — new method added to existing class", () => {
+  it("adds a generated method that is absent from the existing class", async () => {
+    // Generated has two methods; existing only has the first.
+    // mergeClass calls existing.addMethod() for the missing one (line 401).
+    const project = makeProject({
+      "f.ts":
+        "export class Foo { a(): void { throw new Error(); } b(): void { throw new Error(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing file only has a() — b() is new in the generated version
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { a(): void { return; /* user impl */ } }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("b()"); // newly added via line 401
+    expect(written).toContain("return; /* user impl */"); // a()'s body preserved
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// checkDiagnostics — FALLBACK_FILTERED_CODES TS2583 suppression
+//
+// When no tsconfig is found (temp dir), checkDiagnostics uses an
+// isolated in-memory ES3 project.  ES2015+ globals like Set are
+// absent from the ES3 lib → TypeScript emits TS2583.
+// FALLBACK_FILTERED_CODES includes 2583 so this is suppressed.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("checkDiagnostics — FALLBACK_FILTERED_CODES TS2583 suppression", () => {
+  it("suppresses TS2583 (Cannot find name Set) so the file is written without compile errors", async () => {
+    // Code uses Set — TS2583 in the isolated ES3 in-memory fallback checker.
+    // FALLBACK_FILTERED_CODES includes 2583 → filtered → no compile errors.
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(): Set<string> { return new Set<string>(); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir));
+
+    // TS2583 was produced but filtered — file written cleanly
+    expect(result.compileErrors).toBeUndefined();
+    expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(true);
   });
 });
