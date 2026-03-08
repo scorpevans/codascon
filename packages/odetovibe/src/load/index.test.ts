@@ -1692,3 +1692,227 @@ describe("checkDiagnostics — tsconfig branch", () => {
     expect(fs.existsSync(path.join(tmpDir, "f.ts"))).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// MergeWriter — mergeFile anonymous class guard (line 431)
+//
+// mergeFile skips generated ClassDeclarations with no name via
+// `if (!name) continue` at line 431.  The only way to produce an
+// anonymous ClassDeclaration is `export default class {}`.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MergeWriter — mergeFile anonymous class guard", () => {
+  it("skips an anonymous default-export class during merge (line 431 continue)", async () => {
+    // export default class {} is a ClassDeclaration with getName() === undefined.
+    // Line 431: if (!name) continue — the anonymous class is skipped entirely.
+    const project = makeProject({ "f.ts": "export default class {}" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    // Existing file has a named class — skipping the generated anonymous class
+    // must leave existing content intact.
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Bar { execute(): void { return; } }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("class Bar");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MergeWriter — mergeFile new interface (lines 440-442)
+//
+// mergeFile adds a generated interface that is absent from the
+// existing file via existing.addInterface() at line 442.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MergeWriter — mergeFile new interface", () => {
+  it("adds a generated interface absent from the existing file (lines 440-442)", async () => {
+    // mergeFile line 440: generated has interface Foo; existing.getInterface("Foo") = undefined.
+    // Line 441: condition true → existing.addInterface(...) at line 442.
+    const project = makeProject({ "f.ts": "export interface Foo { name: string; }" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), "/* @odetovibe-generated */\n");
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("interface Foo");
+    expect(written).toContain("name: string");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hasConflict — typeParameter loop body, line 531 false path
+//
+// When both classes have the same number and text of type parameters,
+// the loop body at line 531 executes but the condition is false —
+// the loop completes without returning, and conflict detection
+// continues to later checks.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict typeParam loop false path", () => {
+  it("executes the type-parameter loop body without returning when texts match (line 531 false)", async () => {
+    // Both classes have <T extends string> — same text → line 531 condition is false.
+    // Loop completes; conflict is detected later from the method return type difference.
+    const project = makeProject({
+      "f.ts": "export class Foo<T extends string> { execute(): number { return 0; } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo<T extends string> { execute(): string { return ''; } }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    // Type-param loop found no conflict; method return type check did
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hasConflict — implements check (lines 534-541)
+//
+// Two scenarios:
+//   - Conflict (line 540 true): same base name, different type args
+//   - No conflict (line 540 false): existing has implements absent
+//     from generated (genNorm is undefined)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict implements check", () => {
+  it("writes .ode.ts when an implements clause type argument changes (lines 534-541, line 540 true)", async () => {
+    // MyTemplate<T> is defined in the file — no TS2304 in checkDiagnostics.
+    // Generated implements MyTemplate<string>; existing implements MyTemplate<number>.
+    // implBaseName("MyTemplate<string>") = implBaseName("MyTemplate<number>") = "MyTemplate".
+    // genImplByBase has "MyTemplate" → "MyTemplate<string>".
+    // Line 537 loop: text = "MyTemplate<number>", genNorm = "MyTemplate<string>" ≠ normalizeWs(text) → return true.
+    const project = makeProject({
+      "f.ts":
+        "export interface MyTemplate<T> {}\nexport class Foo implements MyTemplate<string> { execute() {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport interface MyTemplate<T> {}\nexport class Foo implements MyTemplate<number> { execute() {} }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+
+  it("does not flag a conflict when the user added an implements clause absent from generated (line 540 false, genNorm undefined)", async () => {
+    // Generated class has no implements → genImplByBase = empty Map.
+    // Existing class has implements UserInterface → genNorm = genImplByBase.get("UserInterface") = undefined.
+    // Line 540: genNorm !== undefined → false → no conflict from implements.
+    const project = makeProject({ "f.ts": "export class Foo { execute() {} }" });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo implements UserInterface { execute() {} }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    // hasConflict returned false — user-added implements is not a conflict
+    expect(result.conflicted).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hasConflict — property not found → continue (line 547)
+//
+// When a generated property is absent from the existing class,
+// hasConflict continues without flagging a conflict (line 547).
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict new property is not a conflict", () => {
+  it("does not flag a conflict when a generated property is absent from the existing class (line 547 continue)", async () => {
+    // Generated has x and y; existing only has x.
+    // hasConflict line 546: existingCls.getProperty("y") = undefined.
+    // Line 547: !existingProp → continue — y is skipped (not a conflict).
+    const project = makeProject({
+      "f.ts": 'export class Foo { readonly x = "a"; readonly y = "b"; }',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      '/* @odetovibe-generated */\nexport class Foo { readonly x = "a"; }',
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBeUndefined();
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("readonly y");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hasConflict — constructor count mismatch (line 557)
+//
+// When both the generated and existing classes have constructors
+// (line 556 is true), line 557 checks that the counts match.
+// An existing class with overload signatures has more ConstructorDeclaration
+// nodes than a generated class with a single implementation.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict constructor count mismatch", () => {
+  it("writes .ode.ts when existing has more constructors than generated (line 557)", async () => {
+    // Generated: 1 ConstructorDeclaration. Existing: 2 (overload signature + implementation).
+    // ts-morph getConstructors() returns all declarations including overload signatures.
+    // Line 557: genCtors.length (1) !== existingCtors.length (2) → return true.
+    const project = makeProject({
+      "f.ts": "export class Foo { constructor(x: string) {} }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo { constructor(x: string); constructor(x: string | number) {} }",
+    );
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBe(true);
+    expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hasConflict — import check, line 605 false path (existingDecl undefined)
+//
+// Line 605: if (existingDecl && ...) — the false path is taken when
+// no import from the generated specifier exists in the existing file.
+// A new import in the generated output is not a conflict.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("StrictMergeWriter — hasConflict new import is not a conflict", () => {
+  it("does not flag a conflict when generated has a new import absent from existing (line 605 false, existingDecl undefined)", async () => {
+    // Generated imports { Cmd } from "somemod"; existing has no imports.
+    // sameTypeOnly = undefined (no import from "somemod" in existing).
+    // existingDecl = undefined (same search, less restrictive — still not found).
+    // Line 605: if (undefined && ...) → false → no conflict for this import.
+    const project = makeProject({
+      "f.ts": 'import { Cmd } from "somemod";\nexport class Foo {}',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(path.join(tmpDir, "f.ts"), "/* @odetovibe-generated */\nexport class Foo {}");
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "strict"));
+
+    expect(result.conflicted).toBeUndefined();
+  });
+});
