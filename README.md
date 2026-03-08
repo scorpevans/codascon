@@ -348,19 +348,21 @@ See [`packages/odetovibe/src/schema.ts`](./packages/odetovibe/src/schema.ts) for
 
 ## For AI-Assisted Development
 
-**Codascon** is particularly well-suited for LLM-assisted ("vibe") coding:
+### 1. One-step Vibe coding
+
+Provide a domain description and let the LLM generate the full codascon implementation in one shot:
 
 ```markdown
 You are an expert TypeScript architect. Build a new domain using the **codascon** protocol — a strict, double-dispatch visitor framework.
 
-### Step 1: Understand the Protocol
+#### Step 1: Understand the Protocol
 
 Read both resources in full before writing any code:
 
 - README: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/README.md
 - SOURCE: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/codascon/src/index.ts
 
-### Step 2: Study the Reference Implementation
+#### Step 2: Study the Reference Implementation
 
 Mimic the file structure and patterns from these real-world files exactly:
 
@@ -371,29 +373,63 @@ Mimic the file structure and patterns from these real-world files exactly:
 - YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/transform.yaml
 - YAML (load): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/load.yaml
 
-### Step 3: Apply These Structural Rules
+#### Step 3: Apply These Structural Rules
 
 All output must conform to this layout:
 
     src/
-    └── [namespace]              ← the namespace defined in the domain
-        ├── TypesA.ts            ← Subject classes and plain interfaces
-        ├── TypesB.ts            ← Subject classes and plain interfaces
+    └── [namespace]
+        ├── TypesA.ts
         └── commands/
-            ├── FirstCommand.ts  ← Command + its Templates and Strategies
-            └── SecondCommand.ts ← Command + its Templates and Strategies
+            └── FirstCommand.ts
 
-### Step 4: Implement This Domain
+#### Step 4: Implement This Domain
 
 [INSERT YOUR DOMAIN DESCRIPTION]
 
-Output complete, compile-safe TypeScript with stub strategy implementations — or equivalently, a YAML config in the odetovibe schema format.
+Output complete, compile-safe TypeScript with stub strategy implementations.
 ```
 
-- **Structural rails** — The protocol tells the LLM exactly where new code goes. "Add a `Contractor` subject to `AccessBuildingCommand`" has one unambiguous implementation path.
-- **YAML as prompting surface** — Hand the [**Odetovibe**](https://www.npmjs.com/package/odetovibe) config to the LLM instead of describing changes in prose. Higher fidelity, lower ambiguity.
-- **Compiler as guardrail** — Forgotten visit methods are compile errors, not silent bugs. The LLM gets immediate feedback.
-- **Predictable file structure** — Each `Command` + `Template`s + `Strategy` classes lives in one file. No architectural decisions for the LLM to get wrong across iterations.
+### 2. Step-wise Vibe coding
+
+A more controlled workflow: iterate on your business logic as YAML before any code is generated.
+
+#### Step 1 — Describe your domain, generate a YAML configuration
+
+```markdown
+You are an expert in the codascon protocol. Given the following business domain description, generate a YAML configuration in the odetovibe schema format.
+
+Study the schema and examples before writing the YAML:
+
+- SCHEMA: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/schema.ts
+- YAML (extract): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/extract.yaml
+- YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/transform.yaml
+
+Domain description:
+[INSERT YOUR DOMAIN DESCRIPTION]
+
+Output only the YAML. Do not generate TypeScript.
+```
+
+#### Step 2 — Generate TypeScript scaffolding with stubs
+
+```bash
+npx odetovibe domain.yaml --out src/
+```
+
+#### Step 3 — Implement your strategies
+
+```markdown
+Here are the generated TypeScript files from the codascon scaffolding. Each strategy has a stub `execute` method marked `// @odetovibe-generated`.
+
+Implement the business logic for each stub based on the following rules:
+
+[INSERT YOUR BUSINESS RULES]
+
+[PASTE GENERATED FILES]
+
+Do not modify any class declarations, constructor signatures, or method signatures — only fill in the method bodies and provide new Base Types as may be needed.
+```
 
 ## Project Structure
 
