@@ -96,16 +96,12 @@ import { Subject } from "codascon";
 
 class Student extends Subject {
   readonly visitName = "resolveStudent" as const;
-  constructor(readonly name: string) {
-    super();
-  }
+  name = "Student";
 }
 
 class Professor extends Subject {
   readonly visitName = "resolveProfessor" as const;
-  constructor(readonly name: string) {
-    super();
-  }
+  name = "Professor";
 }
 ```
 
@@ -133,11 +129,11 @@ class AccessBuildingCommand extends Command<
   readonly commandName = "accessBuilding" as const;
 
   resolveStudent(_student: Student, _building: Building) {
-    return new DenyAccess();
+    return new DenyAccess(); // Strategy — defined below
   }
 
   resolveProfessor(_professor: Professor, _building: Building) {
-    return new GrantAccess();
+    return new GrantAccess(); // Strategy — defined below
   }
 }
 ```
@@ -173,7 +169,7 @@ class DenyAccess extends AccessTemplate {
 
 ```typescript
 const cmd = new AccessBuildingCommand();
-const result = cmd.run(new Professor("Prof. Smith"), { name: "Science Hall", department: "CS" });
+const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
 // { granted: true, reason: "Access granted to Science Hall" }
 ```
 
