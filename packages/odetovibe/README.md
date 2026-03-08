@@ -29,16 +29,33 @@ Requires [`codascon`](https://www.npmjs.com/package/codascon) as a peer.
 Run without installing via `npx`:
 
 ```bash
+# See all options
+npx odetovibe --help
+
+# Generate TypeScript scaffolding (default: merge mode — preserves existing method bodies)
 npx odetovibe schema.yaml --out src/
+
+# Unconditional overwrite — replaces all generated files
+npx odetovibe schema.yaml --out src/ --overwrite
+
+# Strict mode — writes .ode.ts alongside the original on conflict instead of overwriting
+npx odetovibe schema.yaml --out src/ --no-overwrite
 ```
 
 Or if installed globally:
 
 ```bash
-odetovibe schema.yaml --out src/
-odetovibe schema.yaml --out src/ --overwrite    # unconditional overwrite
-odetovibe schema.yaml --out src/ --no-overwrite # strict: write .ode.ts on conflict
+# See all options
 odetovibe --help
+
+# Generate TypeScript scaffolding (default: merge mode — preserves existing method bodies)
+odetovibe schema.yaml --out src/
+
+# Unconditional overwrite — replaces all generated files
+odetovibe schema.yaml --out src/ --overwrite
+
+# Strict mode — writes .ode.ts alongside the original on conflict instead of overwriting
+odetovibe schema.yaml --out src/ --no-overwrite
 ```
 
 **Write modes:**
@@ -110,8 +127,9 @@ import { parseYaml, validateYaml, emitAst, writeFiles } from "odetovibe";
 const configIndex = parseYaml("campus.yaml");
 const { valid, validationResults } = validateYaml(configIndex);
 if (!valid) {
-  for (const r of validationResults) {
-    for (const e of r.errors) console.error(`[${e.entryKey}] ${e.rule}: ${e.message}`);
+  for (const validationResult of validationResults) {
+    for (const error of validationResult.errors)
+      console.error(`[${error.entryKey}] ${error.rule}: ${error.message}`);
   }
   process.exit(1);
 }
