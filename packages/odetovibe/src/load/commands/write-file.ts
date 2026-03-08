@@ -574,6 +574,23 @@ function hasConflict(generatedText: string, existingContent: string): boolean {
     }
   }
 
+  // imports — a type-only status change on a matched declaration is a conflict.
+  // Codegen owns whether an import is a value import or a type-only import;
+  // a mismatch means the existing file's import semantics differ from what
+  // codegen expects, and a normal merge would silently leave both coexisting.
+  for (const genDecl of generated.getImportDeclarations()) {
+    const specifier = genDecl.getModuleSpecifierValue();
+    const isNamespace = genDecl.getNamespaceImport() !== undefined;
+    const existingDecl = existing
+      .getImportDeclarations()
+      .find(
+        (d) =>
+          d.getModuleSpecifierValue() === specifier &&
+          (d.getNamespaceImport() !== undefined) === isNamespace,
+      );
+    if (existingDecl && existingDecl.isTypeOnly() !== genDecl.isTypeOnly()) return true;
+  }
+
   return false;
 }
 
