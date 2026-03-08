@@ -42,6 +42,20 @@ function findDomainType(index: ConfigIndex, ref: string) {
   return index.subjectTypes.get(ref) ?? index.plainTypes.get(ref);
 }
 
+/**
+ * Normalize a command key to the base file name it produces:
+ * strip a trailing "Command" suffix, then convert PascalCase to kebab-case.
+ * "AccessBuildingCommand" → "access-building"
+ * "AccessBuilding"        → "access-building"  (collision with above)
+ * "FeedCommand"           → "feed"
+ */
+function normalizeCommandKey(key: string): string {
+  const s = key.replace(/Command$/, "");
+  return s.replace(/([A-Z])/g, (_, c: string, offset: number) =>
+    offset === 0 ? c.toLowerCase() : `-${c.toLowerCase()}`,
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: SubjectTypeValidator
 //
@@ -212,6 +226,20 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
             key,
             "dispatch-target-format",
             `dispatch target "${target}" for "${subjectRef}" is malformed — use "Template" or "Template.Strategy"`,
+          ),
+        );
+      }
+    }
+
+    // commandName-file-unique: normalized file names must be unique across all commands
+    const ownNorm = normalizeCommandKey(key);
+    for (const [otherKey] of object.commands) {
+      if (otherKey !== key && normalizeCommandKey(otherKey) === ownNorm) {
+        errors.push(
+          err(
+            key,
+            "commandName-file-unique",
+            `command "${key}" and "${otherKey}" both normalize to file name "${ownNorm}.ts"`,
           ),
         );
       }

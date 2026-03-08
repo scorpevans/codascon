@@ -209,6 +209,18 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-extra");
   });
 
+  it("[dispatch-coverage + dispatch-extra] both fire when dispatch has wrong subjects", () => {
+    // Professor is in subjectUnion but missing from dispatch → dispatch-coverage
+    // Ghost is in dispatch but not in subjectUnion → dispatch-extra
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccess", Ghost: "GrantAccess" },
+    });
+    const result = validateCmd.run(entry, indexWithCmd(entry));
+    expect(rules(result)).toContain("dispatch-coverage");
+    expect(rules(result)).toContain("dispatch-extra");
+  });
+
   it("[dispatch-target-ref] fails when a bare Template name is not in templates", () => {
     const entry = makeCmd({ dispatch: { Student: "NoSuchTemplate" }, templates: {} });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
@@ -249,6 +261,44 @@ describe("CommandValidator", () => {
   it("[dispatch-target-format] fails when dispatch value has more than two dot-separated parts", () => {
     const entry = makeCmd({ dispatch: { Student: "A.B.C" }, templates: {} });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
+  });
+
+  it("[commandName-file-unique] fails when two command keys normalize to the same file name", () => {
+    // "AccessBuildingCommand" and "AccessBuilding" both normalize to "access-building.ts"
+    const cmd1 = new CommandEntry("AccessBuildingCommand", validCmdConfig);
+    const cmd2 = new CommandEntry("AccessBuilding", validCmdConfig);
+    const index: ConfigIndex = {
+      ...withTypes,
+      commands: new Map([
+        ["AccessBuildingCommand", cmd1],
+        ["AccessBuilding", cmd2],
+      ]),
+    };
+    expect(rules(validateCmd.run(cmd1, index))).toContain("commandName-file-unique");
+    expect(rules(validateCmd.run(cmd2, index))).toContain("commandName-file-unique");
+  });
+
+  it("[commandName-file-unique] passes when command keys normalize to distinct file names", () => {
+    const cmd1 = new CommandEntry("AccessBuildingCommand", validCmdConfig);
+    const cmd2 = new CommandEntry("FeedCommand", validCmdConfig);
+    const index: ConfigIndex = {
+      ...withTypes,
+      commands: new Map([
+        ["AccessBuildingCommand", cmd1],
+        ["FeedCommand", cmd2],
+      ]),
+    };
+    expect(validateCmd.run(cmd1, index).valid).toBe(true);
+  });
+
+  it("reports multiple rule violations for a single entry", () => {
+    // baseType and objectType are both unknown — both errors accumulate; no short-circuit
+    const entry = makeCmd({ baseType: "Unknown", objectType: "AlsoUnknown" });
+    const result = validateCmd.run(entry, indexWithCmd(entry));
+    expect(result.valid).toBe(false);
+    expect(rules(result)).toContain("baseType-ref");
+    expect(rules(result)).toContain("objectType-ref");
+    expect(rules(result)).toHaveLength(2);
   });
 });
 
@@ -687,6 +737,64 @@ commands: {}
     expect(index.externalTypeKeys.has("BaseEntry")).toBe(true);
     expect(index.externalTypeKeys.has("SubjectExt")).toBe(true);
   });
+
+  it("captures imports when present", () => {
+    const index = parseYamlString(`
+imports:
+  React: react
+  lodash: lodash-es
+domainTypes: {}
+commands: {}
+`);
+    expect(index.imports).toEqual({ React: "react", lodash: "lodash-es" });
+  });
+
+  it("defaults imports to empty object when absent", () => {
+    const index = parseYamlString(`
+domainTypes: {}
+commands: {}
+`);
+    expect(index.imports).toEqual({});
+  });
+
+  it("throws for a non-existent file (ENOENT)", () => {
+    expect(() => parseYaml("/nonexistent/path/that/does/not/exist.yaml")).toThrow();
+  });
+
+  it("throws for malformed YAML", () => {
+    expect(() => parseYamlString("key: [unclosed")).toThrow();
+  });
+
+  it("throws for an empty YAML file (yaml.load returns null/undefined)", () => {
+    expect(() => parseYamlString("")).toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// externalTypeKeys — validation compatibility
+// ═══════════════════════════════════════════════════════════════════
+
+describe("externalTypeKeys — validation compatibility", () => {
+  it("[baseType-ref/objectType-ref/returnType-ref] passes when type references resolve to external types", () => {
+    // External types are added to subjectTypes/plainTypes at parse time.
+    // findDomainType() searches those same maps, so *-ref checks pass.
+    const extPerson = new PlainTypeEntry("Person", {});
+    const extBuilding = new PlainTypeEntry("Building", {});
+    const extResult = new PlainTypeEntry("AccessResult", {});
+    const extStudent = new SubjectTypeEntry("Student", { visitName: "resolveStudent" });
+    const entry = new CommandEntry("Cmd", validCmdConfig);
+    const index = idx({
+      externalTypeKeys: new Set(["Person", "Building", "AccessResult", "Student"]),
+      subjectTypes: new Map([["Student", extStudent]]),
+      plainTypes: new Map([
+        ["Person", extPerson],
+        ["Building", extBuilding],
+        ["AccessResult", extResult],
+      ]),
+      commands: new Map([["Cmd", entry]]),
+    });
+    expect(validateCmd.run(entry, index).valid).toBe(true);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -743,5 +851,35 @@ describe("validateYaml", () => {
       plainTypes: new Map([["Building", building]]),
     });
     expect(validateYaml(index).validationResults).toHaveLength(2);
+  });
+
+  it("validates entries in abstractTemplates and strategies maps", () => {
+    // Exercises the two previously uncovered loops in validateYaml (lines 190, 196).
+    const cmdEntry = new CommandEntry("Cmd", {
+      commandName: "cmd",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student"],
+      dispatch: { Student: "AccessTemplate.DepartmentMatch" },
+      templates: {
+        AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
+      },
+    });
+    const tplEntry = new AbstractTemplateEntry("AccessTemplate", "Cmd", {
+      isParameterized: true,
+      strategies: { DepartmentMatch: {} },
+    });
+    const stratEntry = new StrategyEntry("DepartmentMatch", "AccessTemplate", "Cmd", {});
+    const index: ConfigIndex = {
+      ...withTypes,
+      commands: new Map([["Cmd", cmdEntry]]),
+      abstractTemplates: new Map([["Cmd.AccessTemplate", tplEntry]]),
+      strategies: new Map([["Cmd.AccessTemplate.DepartmentMatch", stratEntry]]),
+    };
+    const result = validateYaml(index);
+    expect(result.valid).toBe(true);
+    // subjectTypes(2) + plainTypes(3) + commands(1) + abstractTemplates(1) + strategies(1) = 8
+    expect(result.validationResults).toHaveLength(8);
   });
 });
