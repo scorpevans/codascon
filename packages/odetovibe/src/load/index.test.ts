@@ -2078,6 +2078,74 @@ describe("MergeWriter — mergeClass genImpl normalization when generated has no
   });
 });
 
+describe("checkDiagnostics — tsconfig branch DiagnosticMessageChain (line 167)", () => {
+  it("calls msg.getMessageText() when tsconfig-branch diagnostic has a chain message (line 167 false branch)", async () => {
+    // Write a tsconfig.json to tmpDir so findTsConfigPath finds it → tsconfig branch entered.
+    // A 3-level nested type incompatibility (TS2322) reliably produces a DiagnosticMessageChain:
+    //   "Type '{ a: { b: { c: string } } }' is not assignable to type '{ a: { b: { c: number } } }'"
+    //   → next → "The types of 'a' are incompatible" → next → ... (chain, not plain string).
+    // typeof msg === "string" = false → msg.getMessageText() called → line 167 false arm.
+    const project = makeProject({
+      "f.ts": 'const x: { a: { b: { c: number } } } = { a: { b: { c: "hello" } } };\n',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(path.join(tmpDir, "tsconfig.json"), JSON.stringify({ compilerOptions: {} }));
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "overwrite"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+    expect(typeof result.compileErrors![0]).toBe("string");
+  });
+});
+
+describe("checkDiagnostics — fallback branch DiagnosticMessageChain (line 179)", () => {
+  it("calls msg.getMessageText() when fallback-branch diagnostic has a chain message (line 179 false branch)", async () => {
+    // No tsconfig in tmpDir → fallback in-memory ES3 project.
+    // Same 3-level nested type incompatibility: TS2322 is not in FALLBACK_FILTERED_CODES
+    // and always produces a DiagnosticMessageChain for multi-level property mismatches.
+    // typeof msg === "string" = false → msg.getMessageText() called → line 179 false arm.
+    const project = makeProject({
+      "f.ts": 'const x: { a: { b: { c: number } } } = { a: { b: { c: "hello" } } };\n',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "overwrite"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+    expect(typeof result.compileErrors![0]).toBe("string");
+  });
+});
+
+describe("MergeWriter — mergeClass genImpl Array.isArray true branch (lines 323-324)", () => {
+  it("takes the array path when genStruct.implements is an array (lines 323-324)", async () => {
+    // Generated: Foo implements SomeIface (no SomeIface definition in generated sf).
+    // Existing on disk: SomeIface declared as interface; Foo implements SomeIface.
+    // After merge: genStruct.implements = ["SomeIface"] (array) →
+    //   Array.isArray(["SomeIface"]) = true → line 324: genImpl = ["SomeIface"].
+    // SomeIface is in existing as user-owned interface (never overwritten by merge) →
+    //   merged output is valid TS → checkDiagnostics passes → write succeeds.
+    const project = makeProject({
+      "f.ts": "export class Foo implements SomeIface { execute(): void { throw new Error(''); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\ninterface SomeIface {}\nexport class Foo implements SomeIface { execute(): void { return; } }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("implements SomeIface");
+    expect(written).toContain("execute");
+  });
+});
+
 describe("MergeWriter — mergeClass extendsChanged true branch (line 372)", () => {
   it("updates extends clause when generated extends differs from existing extends (line 372 true branch)", async () => {
     // Generated: Foo extends Bar (Bar not declared in generated — just referenced).
