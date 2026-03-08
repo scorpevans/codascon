@@ -19,7 +19,7 @@ The burden becomes acute as soon as a domain has multiple entity types and multi
 The absence of a formal coding protocol compounds in several directions:
 
 - **No consistent architecture.** Without a shared structural schema, every codebase is a dialect. Onboarding, auditing, and refactoring all require re-learning local conventions before any real work begins.
-- **No compiler-checkable guarantees.** In dynamically typed languages, structurally incorrect code runs until it crashes. Even in statically typed languages, the type system can only enforce what the structure asks it to enforce — which, without a protocol, is rarely the right things.
+- **No compiler-checkable guarantees.** In dynamically typed languages, structurally incorrect code runs until it crashes. Even in statically typed languages, the type system can only enforce what the structure asks it to enforce — which, without a protocol, is rarely the right thing.
 - **Brittle change management.** When business rules change, a developer must reason about the entire codebase to identify what needs updating. Without enforced isolation of concerns, every change carries hidden risk.
 
 With the rise of AI-assisted development, these problems compound further. An LLM generating code without structural rails produces output that is internally inconsistent, architecturally divergent across iterations, and difficult to audit. The more code the AI writes, the more the absence of a formal protocol matters.
@@ -63,30 +63,17 @@ import { Subject } from "codascon";
 
 class Student extends Subject {
   readonly visitName = "resolveStudent" as const;
-  constructor(
-    public readonly name: string,
-    public readonly department: string,
-    public readonly year: 1 | 2 | 3 | 4,
-  ) {
-    super();
-  }
 }
 
 class Professor extends Subject {
   readonly visitName = "resolveProfessor" as const;
-  constructor(
-    public readonly name: string,
-    public readonly tenured: boolean,
-  ) {
-    super();
-  }
 }
 ```
 
 ### Define a Command
 
 ```typescript
-import { Command, type Template, type CommandSubjectUnion } from "codascon";
+import { Command, Subject } from "codascon";
 
 interface Building {
   name: string;
@@ -99,21 +86,19 @@ interface AccessResult {
 }
 
 class AccessBuildingCommand extends Command<
-  { name: string }, // base type — shared interface
+  Subject, // base type — shared base class
   Building, // object type — context
   AccessResult, // return type
   [Student, Professor] // subject union
 > {
   readonly commandName = "accessBuilding" as const;
 
-  resolveStudent(student: Student, building: Readonly<Building>) {
-    if (student.department === building.department) return new GrantAccess();
+  resolveStudent(student: Student, building: Building) {
     return new DenyAccess();
   }
 
-  resolveProfessor(professor: Professor, building: Readonly<Building>) {
-    if (professor.tenured) return new GrantAccess();
-    return new DenyAccess();
+  resolveProfessor(professor: Professor, building: Building) {
+    return new GrantAccess();
   }
 }
 ```
@@ -121,6 +106,8 @@ class AccessBuildingCommand extends Command<
 ### Define a Template and Strategies
 
 ```typescript
+import { type Template, type CommandSubjectUnion } from "codascon";
+
 // CommandSubjectUnion<C> extracts the subject union from a Command —
 // no need to repeat Student | Professor manually
 abstract class AccessTemplate implements Template<AccessBuildingCommand> {
@@ -131,14 +118,14 @@ abstract class AccessTemplate implements Template<AccessBuildingCommand> {
 }
 
 class GrantAccess extends AccessTemplate {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>): AccessResult {
-    return { granted: true, reason: `${subject.name} has access` };
+  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+    return { granted: true, reason: `Access granted to ${building.name}` };
   }
 }
 
 class DenyAccess extends AccessTemplate {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>): AccessResult {
-    return { granted: false, reason: `${subject.name} denied` };
+  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+    return { granted: false, reason: `Access denied to ${building.name}` };
   }
 }
 ```
@@ -147,8 +134,8 @@ class DenyAccess extends AccessTemplate {
 
 ```typescript
 const cmd = new AccessBuildingCommand();
-const result = cmd.run(new Student("Alice", "CS", 3), { name: "Science Hall", department: "CS" });
-// { granted: true, reason: "Alice has access" }
+const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
+// { granted: true, reason: "Access granted to Science Hall" }
 ```
 
 ## Advanced Patterns
@@ -163,10 +150,7 @@ abstract class CheckoutTemplate<SU extends CommandSubjectUnion<CheckoutCmd>> imp
   [AccessBuildingCommand],
   SU
 > {
-  readonly accessBuilding: AccessBuildingCommand;
-  constructor(cmd: AccessBuildingCommand) {
-    this.accessBuilding = cmd;
-  }
+  constructor(readonly accessBuilding: AccessBuildingCommand) {}
 
   execute(subject: SU, equipment: Equipment): CheckoutResult {
     const access = this.accessBuilding.run(subject, equipmentBuilding);
@@ -180,7 +164,7 @@ abstract class CheckoutTemplate<SU extends CommandSubjectUnion<CheckoutCmd>> imp
 // Strategy narrows to Student only
 class StudentCheckout extends CheckoutTemplate<Student> {
   protected computeTerms(student: Student, eq: Equipment): CheckoutResult {
-    return { approved: true, days: student.year >= 3 ? 14 : 7 };
+    return { approved: true, days: 14 };
   }
 }
 ```
