@@ -298,6 +298,8 @@ Domain description:
 Output only the YAML. Do not generate TypeScript.
 ```
 
+Iterate on the YAML with the LLM until the domain structure reflects your intent, before generating any code.
+
 #### Step 2 — Generate TypeScript scaffolding with stubs
 
 ```bash
