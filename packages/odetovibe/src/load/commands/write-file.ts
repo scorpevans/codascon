@@ -581,6 +581,20 @@ function hasConflict(generatedText: string, existingContent: string): boolean {
   for (const genDecl of generated.getImportDeclarations()) {
     const specifier = genDecl.getModuleSpecifierValue();
     const isNamespace = genDecl.getNamespaceImport() !== undefined;
+    // Prefer an existing declaration with the same type-only status (exact match).
+    // Only if no exact match exists, look for one with a different type-only status —
+    // that indicates codegen changed the import from type-only to value or vice versa.
+    // This prevents false conflicts when both a value import and a type-only import
+    // from the same specifier legitimately coexist.
+    const sameTypeOnly = existing
+      .getImportDeclarations()
+      .find(
+        (d) =>
+          d.getModuleSpecifierValue() === specifier &&
+          d.isTypeOnly() === genDecl.isTypeOnly() &&
+          (d.getNamespaceImport() !== undefined) === isNamespace,
+      );
+    if (sameTypeOnly) continue;
     const existingDecl = existing
       .getImportDeclarations()
       .find(
