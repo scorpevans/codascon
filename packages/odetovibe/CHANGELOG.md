@@ -1,5 +1,13 @@
 # odetovibe
 
+## 2026.3.2-beta.4
+
+### Patch Changes
+
+- f3a01d4: README improvements: Quick Start code example clarity, aligned YAML schema example, tightened Solution section.
+- Updated dependencies [f3a01d4]
+  - codascon@2026.3.2-beta.2
+
 ## 2026.3.2-beta.3
 
 ### Patch Changes
