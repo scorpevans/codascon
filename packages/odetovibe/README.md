@@ -56,34 +56,33 @@ Define your domain declaratively:
 namespace: campus
 
 domainTypes:
+  CampusMember: {}
   Student:
     visitName: resolveStudent
   Professor:
     visitName: resolveProfessor
   Building: {}
-  CampusPerson: {}
   AccessResult: {}
 
 commands:
   AccessBuildingCommand:
     commandName: accessBuilding
-    baseType: CampusPerson
+    baseType: CampusMember
     objectType: Building
     returnType: AccessResult
     subjectUnion: [Student, Professor]
     dispatch:
-      Student: AccessTemplate.DepartmentMatch
-      Professor: GrantAccess
+      Student: AccessTemplate.DenyAccess
+      Professor: AccessTemplate.GrantAccess
     templates:
       AccessTemplate:
         isParameterized: true
         subjectSubset: [Student, Professor]
         strategies:
-          DepartmentMatch:
+          DenyAccess:
             subjectSubset: [Student]
-      GrantAccess:
-        isParameterized: false
-        strategies: {}
+          GrantAccess:
+            subjectSubset: [Professor]
 ```
 
 **Key rules:**

@@ -38,17 +38,13 @@ You implement strategies. The compiler tells you what is missing and where.
 
 There is no N×M coverage matrix to keep in your head — the type system holds it. When a new `Subject` is added, every `Command` that must handle it shows a compile error at the exact call site. When a business rule changes for a specific entity-operation pair — say, extending how `Orders` are processed — you add a `Strategy` to the relevant `Command` and update its resolver logic. You do not have to consider the rest of the codebase.
 
-**3. Code organization**
-
-The protocol's separation of concerns — a `Command` with its visit methods, `Templates`, and `Strategies` forming a cohesive unit — naturally maps each operation to a single file. Codascon does not enforce this layout, but the structure makes it the obvious choice: each file is self-contained, adding an operation means adding a file, and the same domain consistently produces the same layout.
-
-**4. Code architecture in YAML**
+**3. Code architecture in YAML**
 
 Codascon provides a consistent schema for expressing code architecture. Every domain built on it follows the same structural shape — `Subject`s, `Command`s, `Templates`, and `Strategies` — with no dialect variation across codebases or teams. Via [**Odetovibe**](https://www.npmjs.com/package/odetovibe), that architecture can be expressed in a declarative YAML schema and scaffolded directly into code, giving you a versioned, reviewable record of your domain structure, separate from implementation. Because the schema is structured and human-readable, non-coders can read it directly — or render it into flowcharts and diagrams — to visualize and reason about the system's architecture without touching the code.
 
-**5. Vibe coding**
+**4. Vibe coding**
 
-With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same file layout, the same type constraints, the same dispatch pattern — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent, auditable, and extensible.
+With a formal protocol in place, an LLM can generate structurally correct code by construction. The same business logic produces the same code — regardless of which model generated it or when. You focus on the business domain; the protocol ensures the output is consistent and auditable.
 
 ## Install
 
@@ -67,17 +63,19 @@ import { Subject } from "codascon";
 
 class Student extends Subject {
   readonly visitName = "resolveStudent" as const;
+  clearance = "basic";
 }
 
 class Professor extends Subject {
   readonly visitName = "resolveProfessor" as const;
+  clearance = "full";
 }
 ```
 
 ### Define a Command
 
 ```typescript
-import { Command, Subject } from "codascon";
+import { Command } from "codascon";
 
 interface Building {
   name: string;
@@ -90,7 +88,7 @@ interface AccessResult {
 }
 
 class AccessBuildingCommand extends Command<
-  Subject, // base type — shared base class
+  { clearance: string }, // base type — any type; all subjects must extend it
   Building, // object type — context
   AccessResult, // return type
   [Student, Professor] // subject union
@@ -98,11 +96,11 @@ class AccessBuildingCommand extends Command<
   readonly commandName = "accessBuilding" as const;
 
   resolveStudent(_student: Student, _building: Building) {
-    return new DenyAccess();
+    return new DenyAccess(); // Strategy — defined below
   }
 
   resolveProfessor(_professor: Professor, _building: Building) {
-    return new GrantAccess();
+    return new GrantAccess(); // Strategy — defined below
   }
 }
 ```
@@ -231,6 +229,8 @@ command.run(subject, object)
 
 ## For AI-Assisted Development
 
+Codascon is particularly well-suited for LLM-assisted ("vibe") coding. Note however that the domain engineering (e.g. `users` vs `student`+`professor` vs ...) and business logic (definition of `average()`) can never be completely outsourced to an LLM or a 3rd party.
+
 ### 1. One-step Vibe coding
 
 Provide a domain description and let the LLM generate the full codascon implementation in one shot:
@@ -295,6 +295,8 @@ Domain description:
 
 Output only the YAML. Do not generate TypeScript.
 ```
+
+Iterate on the YAML with the LLM until the domain structure reflects your intent, before generating any code.
 
 #### Step 2 — Generate TypeScript scaffolding with stubs
 
