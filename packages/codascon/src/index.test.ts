@@ -898,12 +898,12 @@ class DocExportCommand extends Command<Subject, AppContext, string, [TextNode]> 
 
 // ── 16f. Compile: hook that doesn't support target subject ───────
 //
-//   ImageOnlyCommand only visits ImageNode, but we try to use it as
-//   a hook for a TextNode template.  The structural `implements` check
-//   passes (it just requires `imageOnly: ImageOnlyCommand` property),
-//   but the semantic error surfaces at the invocation site — you can't
-//   call imageOnly.run(textNode, ...) because TextNode isn't in
-//   ImageOnlyCommand's subject union.
+//   ImageOnlyCommand only visits ImageNode (declares resolveImageNode).
+//   When used as a hook for Template<..., [ImageOnlyCommand], TextNode>,
+//   CommandHooks checks that ImageOnlyCommand has resolveTextNode — it
+//   does not, so the hook property resolves to `never`.
+//   The @ts-expect-error below proves the error surfaces at the satisfies site.
+//   The invocation-site proof (_16f) shows it's also caught there.
 
 {
   class ImageOnlyCommand extends Command<Subject, AppContext, string, [ImageNode]> {
@@ -923,10 +923,10 @@ class DocExportCommand extends Command<Subject, AppContext, string, [TextNode]> 
 
     resolveTextNode() {
       return {
+        // @ts-expect-error — ImageOnlyCommand lacks resolveTextNode, so CommandHooks
+        // resolves to { imageOnly: "Error: hook Command does not declare visit methods for all subjects in SU" }
         imageOnly: this.imgCmd,
         execute: (subject: TextNode, object: AppContext): string => {
-          // If we tried: this.imgCmd.run(subject, object)
-          // TypeScript would error — TextNode not in ImageOnlyCommand's union.
           return subject.text;
         },
       } satisfies Template<TextCommandWithImageHook, [ImageOnlyCommand], TextNode>;
@@ -937,7 +937,7 @@ class DocExportCommand extends Command<Subject, AppContext, string, [TextNode]> 
   const cmd = new TextCommandWithImageHook(new ImageOnlyCommand());
   const imgCmd = new ImageOnlyCommand();
 
-  // But directly calling the hook on the wrong subject type is caught:
+  // Also caught at the invocation site:
   const _16f = () => {
     // @ts-expect-error — TextNode is not assignable to ImageNode
     imgCmd.run(new TextNode("oops"), { theme: "x" });
