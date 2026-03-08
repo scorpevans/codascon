@@ -59,7 +59,7 @@ With a formal protocol in place, an LLM can generate structurally correct code b
 
 ## How It Works
 
-Codascon currently exposes 4 interfaces: Subject, Command, Template and Strategy.
+Codascon currently exposes four interfaces: Subject, Command, Template and Strategy.
 
 A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
 
@@ -126,11 +126,11 @@ class AccessBuildingCommand extends Command<
 > {
   readonly commandName = "accessBuilding" as const;
 
-  resolveStudent(student: Student, building: Building) {
+  resolveStudent(_student: Student, _building: Building) {
     return new DenyAccess();
   }
 
-  resolveProfessor(professor: Professor, building: Building) {
+  resolveProfessor(_professor: Professor, _building: Building) {
     return new GrantAccess();
   }
 }
