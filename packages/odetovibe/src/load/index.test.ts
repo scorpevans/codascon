@@ -2053,11 +2053,10 @@ describe("MergeWriter — mergeMethod ?? fallback when existing method is abstra
   });
 });
 
-describe("MergeWriter — mergeClass genImpl normalization when generated has no implements clause (lines 325-327)", () => {
-  it("takes the [] path when genStruct.implements is undefined, preserving existing user-added implements (line 327)", async () => {
-    // genStruct.implements = undefined → Array.isArray(undefined) = false → line 325
-    // → undefined != null = false → line 327: genImpl = []
-    // User-added implements on existing class is preserved via preservedImpl.
+describe("MergeWriter — mergeClass genImpl when generated class has no implements clause", () => {
+  it("genImpl is [] when generated class has no implements; existing user-added implements are preserved", async () => {
+    // ts-morph returns [] for genStruct.implements when there is no implements clause →
+    // genImplByBase is empty → all existing implements are treated as user-added and preserved.
     const project = makeProject({
       "f.ts": "export class Foo { execute(): void { throw new Error(''); } }",
     });
@@ -2116,12 +2115,11 @@ describe("checkDiagnostics — fallback branch DiagnosticMessageChain (line 179)
   });
 });
 
-describe("MergeWriter — mergeClass genImpl Array.isArray true branch", () => {
-  it("takes the array path when genStruct.implements is an array", async () => {
-    // Generated: Foo implements SomeIface (no SomeIface definition in generated sf).
+describe("MergeWriter — mergeClass genImpl", () => {
+  it("genImpl is cast from genStruct.implements (ts-morph always returns string[])", async () => {
+    // Generated: Foo implements SomeIface.
     // Existing on disk: SomeIface declared as interface; Foo implements SomeIface.
-    // After merge: genStruct.implements = ["SomeIface"] (array) →
-    //   Array.isArray(["SomeIface"]) = true → genImpl = ["SomeIface"].
+    // genStruct.implements = ["SomeIface"] → genImpl = ["SomeIface"] after cast.
     // SomeIface is in existing as user-owned interface (never overwritten by merge) →
     //   merged output is valid TS → checkDiagnostics passes → write succeeds.
     const project = makeProject({
@@ -2139,28 +2137,6 @@ describe("MergeWriter — mergeClass genImpl Array.isArray true branch", () => {
     const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
     expect(written).toContain("implements SomeIface");
     expect(written).toContain("execute");
-  });
-
-  it("takes the empty-array path when genStruct.implements is undefined (false branch)", async () => {
-    // Generated: Foo has NO implements clause → genStruct.implements = undefined →
-    //   Array.isArray(undefined) = false → genImpl = [] (the else branch).
-    // Existing on disk: Foo implements UserIface (user-added, not in generated).
-    // With genImpl = [], genImplByBase is empty → all existing implements are preserved.
-    const project = makeProject({
-      "f.ts": "export class Foo { execute(): void { throw new Error(''); } }",
-    });
-    const sf = project.getSourceFileOrThrow("f.ts");
-    const tmpDir = makeTmpDir();
-    fs.writeFileSync(
-      path.join(tmpDir, "f.ts"),
-      "/* @odetovibe-generated */\ninterface UserIface {}\nexport class Foo implements UserIface { execute(): void { return; } }",
-    );
-
-    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
-
-    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
-    // User-added implements is preserved since generated has no implements.
-    expect(written).toContain("implements UserIface");
   });
 });
 

@@ -316,10 +316,10 @@ function implBaseName(text: string): string {
 function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): void {
   const genStruct = generated.getStructure();
 
-  // Normalize generated implements to a string array.
-  // ts-morph always serialises implements as string[] or undefined — never as a
-  // bare non-array value — so the two-branch form is exhaustive in practice.
-  const genImpl = (Array.isArray(genStruct.implements) ? genStruct.implements : []) as string[];
+  // ts-morph always returns [] (never undefined) for the implements structure field,
+  // even when the class has no implements clause. The cast strips WriterFunction
+  // from the element union since generated code only contains string type expressions.
+  const genImpl = genStruct.implements as string[];
 
   const genImplByBase = new Map(genImpl.map((t) => [implBaseName(t), t]));
 
