@@ -2013,3 +2013,92 @@ describe("StrictMergeWriter — hasConflict constructor count mismatch (dual-imp
     expect(result.path).toBe(path.join(tmpDir, "f.ode.ts"));
   });
 });
+
+describe("checkDiagnostics — DiagnosticMessageChain fallback (line 179)", () => {
+  it("calls getMessageText() when diagnostic message is a DiagnosticMessageChain, not a plain string (line 179 false branch)", async () => {
+    // TS2345 with a property-level sub-message produces a DiagnosticMessageChain object,
+    // not a plain string. The false branch of `typeof msg === "string"` calls msg.getMessageText().
+    const project = makeProject({
+      "f.ts": 'function foo(x: { bar: number }): void {}\nfoo({ bar: "hello" });\n',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+
+    const result = await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "overwrite"));
+
+    expect(result.compileErrors).toBeDefined();
+    expect(result.compileErrors!.length).toBeGreaterThan(0);
+    expect(typeof result.compileErrors![0]).toBe("string");
+  });
+});
+
+describe("MergeWriter — mergeMethod ?? fallback when existing method is abstract (line 294)", () => {
+  it("uses empty string for body when existing method has no body (abstract), merging in generated concrete body (line 294 ?? arm)", async () => {
+    // Generated has concrete execute(); existing has abstract execute() — no body.
+    // existing.getBodyText() returns undefined → ?? "" fires (line 294).
+    const project = makeProject({
+      "f.ts":
+        'export class Foo { execute(x: string): void { throw new Error("Not implemented"); } }',
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport abstract class Foo { abstract execute(x: string): void; }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("execute");
+    expect(written).not.toContain("abstract execute");
+  });
+});
+
+describe("MergeWriter — mergeClass genImpl normalization when generated has no implements clause (lines 325-327)", () => {
+  it("takes the [] path when genStruct.implements is undefined, preserving existing user-added implements (line 327)", async () => {
+    // genStruct.implements = undefined → Array.isArray(undefined) = false → line 325
+    // → undefined != null = false → line 327: genImpl = []
+    // User-added implements on existing class is preserved via preservedImpl.
+    const project = makeProject({
+      "f.ts": "export class Foo { execute(): void { throw new Error(''); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nexport class Foo implements UserIface { execute(): void { return; } }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("UserIface");
+    expect(written).toContain("execute");
+  });
+});
+
+describe("MergeWriter — mergeClass extendsChanged true branch (line 372)", () => {
+  it("updates extends clause when generated extends differs from existing extends (line 372 true branch)", async () => {
+    // Generated: Foo extends Bar (Bar not declared in generated — just referenced).
+    // Existing on disk: both Bar and Baz declared; Foo extends Baz.
+    // After merge: mergeClass detects normalizeWs("Bar") !== normalizeWs("Baz")
+    // → extendsChanged = true → line 372: { extends: "Bar" } → Foo.extends updated.
+    // Bar remains declared before Foo in the merged output → valid TypeScript.
+    const project = makeProject({
+      "f.ts": "export class Foo extends Bar { execute(): void { throw new Error(''); } }",
+    });
+    const sf = project.getSourceFileOrThrow("f.ts");
+    const tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, "f.ts"),
+      "/* @odetovibe-generated */\nclass Bar {}\nclass Baz {}\nexport class Foo extends Baz { execute(): void { return; } }",
+    );
+
+    await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
+
+    const written = fs.readFileSync(path.join(tmpDir, "f.ts"), "utf-8");
+    expect(written).toContain("extends Bar");
+    expect(written).not.toContain("extends Baz");
+  });
+});
