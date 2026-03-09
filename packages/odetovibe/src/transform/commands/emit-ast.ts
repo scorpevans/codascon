@@ -397,10 +397,36 @@ class FixedTemplateEmitter extends AbstractTemplateEmitter {
 //          readonly hookCmd = new OverrideCmd(); // if hook override declared
 //        }
 // execute is not emitted — inherited from the Template; client fills it in there.
+// Two strategies handle the parent template's isParameterized split:
+//
+// ParameterizedParentStrategyEmitter (parent isParameterized: true):
+//   extends FooTemplate<CommandSubjectUnion<FooCommand>>   // full union
+//   extends FooTemplate<S1>                                // explicit subset
+//
+// FixedParentStrategyEmitter (parent isParameterized: false):
+//   extends FooTemplate   (no type argument)
+//
 // Target: <namespace>/commands/<grandparent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
 abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry> {
+  /** Ensure the subject type imports needed for the extends clause are present. */
+  protected abstract ensureSubjectImports(
+    sf: SourceFile,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+    importSrc: Map<string, string>,
+    dtPath: string,
+  ): void;
+
+  /** Build the extends clause for the emitted strategy class. */
+  protected abstract buildExtendsClause(
+    templateKey: string,
+    commandKey: string,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+  ): string;
+
   execute(subject: StrategyEntry, object: Readonly<EmitContext>): EmitResult {
     const { configIndex } = object;
     const { key, templateKey, commandKey, config } = subject;
@@ -423,14 +449,7 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
         ? tplEntry.config.subjectSubset!
         : cmdEntry.config.subjectUnion;
 
-    if (isFullUnion && tplEntry.config.isParameterized) {
-      ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
-    } else {
-      for (const ref of subjectSubset) {
-        const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
-        ensureTypeImport(sf, src, ref);
-      }
-    }
+    this.ensureSubjectImports(sf, isFullUnion, subjectSubset, importSrc, dtPath);
 
     const retSrc = importSrc.has(cmdEntry.config.returnType)
       ? toCommandDepth(importSrc.get(cmdEntry.config.returnType)!)
@@ -446,15 +465,10 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
       ensureValueImport(sf, hookImportPath(cmdRef, namespace), cmdRef);
     }
 
-    const suArg = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subjectSubset.join(" | ");
-    const extendsClause = tplEntry.config.isParameterized
-      ? `${templateKey}<${suArg}>`
-      : templateKey;
-
     const cls = sf.addClass({
       name: key,
       isExported: false,
-      extends: extendsClause,
+      extends: this.buildExtendsClause(templateKey, commandKey, isFullUnion, subjectSubset),
     });
 
     for (const [propName, cmdRef] of hookOverrides) {
@@ -469,7 +483,58 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
   }
 }
 
-class StrategyClassEmitterDefault extends StrategyClassEmitter {}
+class ParameterizedParentStrategyEmitter extends StrategyClassEmitter {
+  protected ensureSubjectImports(
+    sf: SourceFile,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+    importSrc: Map<string, string>,
+    dtPath: string,
+  ): void {
+    if (isFullUnion) {
+      ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
+    } else {
+      for (const ref of subjectSubset) {
+        const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+        ensureTypeImport(sf, src, ref);
+      }
+    }
+  }
+
+  protected buildExtendsClause(
+    templateKey: string,
+    commandKey: string,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+  ): string {
+    const suArg = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subjectSubset.join(" | ");
+    return `${templateKey}<${suArg}>`;
+  }
+}
+
+class FixedParentStrategyEmitter extends StrategyClassEmitter {
+  protected ensureSubjectImports(
+    sf: SourceFile,
+    _isFullUnion: boolean,
+    subjectSubset: readonly string[],
+    importSrc: Map<string, string>,
+    dtPath: string,
+  ): void {
+    for (const ref of subjectSubset) {
+      const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+      ensureTypeImport(sf, src, ref);
+    }
+  }
+
+  protected buildExtendsClause(
+    templateKey: string,
+    _commandKey: string,
+    _isFullUnion: boolean,
+    _subjectSubset: readonly string[],
+  ): string {
+    return templateKey;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // COMMAND: EmitAstCommand
@@ -480,7 +545,8 @@ const interfaceEmitter = new InterfaceEmitterDefault();
 const commandClassEmitter = new CommandClassEmitterDefault();
 const parameterizedTemplateEmitter = new ParameterizedTemplateEmitter();
 const fixedTemplateEmitter = new FixedTemplateEmitter();
-const strategyClassEmitter = new StrategyClassEmitterDefault();
+const parameterizedParentStrategyEmitter = new ParameterizedParentStrategyEmitter();
+const fixedParentStrategyEmitter = new FixedParentStrategyEmitter();
 
 /** Dispatches each config entry to its TypeScript AST emitter via double dispatch. */
 export class EmitAstCommand extends Command<
@@ -519,6 +585,11 @@ export class EmitAstCommand extends Command<
     subject: StrategyEntry,
     object: Readonly<EmitContext>,
   ): Template<EmitAstCommand, [], StrategyEntry> {
-    return strategyClassEmitter;
+    const tplEntry = object.configIndex.abstractTemplates.get(
+      `${subject.commandKey}.${subject.templateKey}`,
+    )!;
+    return tplEntry.config.isParameterized
+      ? parameterizedParentStrategyEmitter
+      : fixedParentStrategyEmitter;
   }
 }
