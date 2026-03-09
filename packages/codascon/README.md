@@ -52,7 +52,11 @@ pnpm add codascon
 
 ## Quick Start
 
+Codascon currently exposes four primitives: Subject, Command, Template and Strategy.
+
 ### Define Subjects
+
+A **`Subject`** is an entity (`Student`, `Professor`). Codascon enforces that each `Subject` declares a `visitName` — the name of the resolver method it expects its `Command`s to implement.
 
 ```typescript
 import { Subject } from "codascon";
@@ -69,6 +73,8 @@ class Professor extends Subject {
 ```
 
 ### Define a Command
+
+A **`Command`** is an operation (`AccessBuildingCommand`). Each `Command` declares one resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute. Codascon enforces, at the call site, that a `Command` implements the resolver method of each `Subject` in its subject union.
 
 ```typescript
 import { Command } from "codascon";
@@ -103,6 +109,8 @@ class AccessBuildingCommand extends Command<
 
 ### Define a Template and Strategies
 
+A `Template` typically implements how a `Command` is executed. Strategies may extend those implementations, narrowing the subject union. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";
 
@@ -134,6 +142,15 @@ class DenyAccess extends AccessTemplate {
 const cmd = new AccessBuildingCommand();
 const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
 // { granted: true, reason: "Access granted to Science Hall" }
+```
+
+```
+command.run(subject, object)
+  → subject.getCommandStrategy(command, object)     // double dispatch
+    → command[subject.visitName](subject, object)   // resolver method selects strategy
+      → returns a Template                          // the chosen strategy
+  → template.execute(subject, object)               // strategy executes
+  → returns result
 ```
 
 ## Advanced Patterns
@@ -203,21 +220,6 @@ const result = await parkingCmd.run(student, lotA);
 ```
 
 Visit methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
-
-## How It Works
-
-Codascon currently exposes four primitives: Subject, Command, Template and Strategy.
-
-A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
-
-```
-command.run(subject, object)
-  → subject.getCommandStrategy(command, object)     // double dispatch
-    → command[subject.visitName](subject, object)   // resolver method selects strategy
-      → returns a Template                          // the chosen strategy
-  → template.execute(subject, object)               // strategy executes
-  → returns result
-```
 
 ## Real-World Example
 
