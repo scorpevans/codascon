@@ -590,18 +590,38 @@ describe("AbstractTemplateEmitter", () => {
     );
   });
 
-  it("emits an abstract execute method with correct params and return type", () => {
+  it("emits a concrete execute stub with correct params, return type, and @odetovibe-generated comment", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("AccessTemplate");
     const execute = cls.getMethodOrThrow("execute");
-    expect(execute.isAbstract()).toBe(true);
+    expect(execute.isAbstract()).toBe(false);
     expect(execute.getReturnTypeNode()?.getText()).toBe("AccessResult");
+    expect(execute.getBodyText()).toContain("throw new Error");
+    expect(execute.getBodyText()).toContain("@odetovibe-generated");
     const params = execute.getParameters();
     expect(params[0].getName()).toBe("subject");
     expect(params[1].getName()).toBe("object");
     expect(params[1].getTypeNode()?.getText()).toBe("Readonly<Building>");
+  });
+
+  it("execute is async and returns Promise<T> when returnAsync is true", () => {
+    const asyncCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      returnAsync: true,
+    });
+    const project = makeProject();
+    emitCmd.run(
+      tplEntry,
+      ctx({ ...withCmd, commands: new Map([["AccessBuildingCommand", asyncCmd]]) }, project),
+    );
+    const execute = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessTemplate")
+      .getMethodOrThrow("execute");
+    expect(execute.isAsync()).toBe(true);
+    expect(execute.getReturnTypeNode()?.getText()).toBe("Promise<AccessResult>");
   });
 
   it("emits hook properties and imports hook Command class when commandHooks declared", () => {
@@ -898,13 +918,12 @@ describe("StrategyClassEmitter", () => {
     expect(sf.getClassOrThrow("StratA").getExtends()?.getText()).toBe("FlatTemplate");
   });
 
-  it("extends with union type arg and uses union as execute subject when subjectSubset has multiple members", () => {
+  it("extends with union type arg when subjectSubset has multiple members", () => {
     const multiSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
       isParameterized: true,
       subjectSubset: ["Student", "Professor"],
       strategies: { StratA: {} },
     });
-    // Strategy inherits parent template's subjectSubset (no override)
     const multiStrat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {});
     const index: ConfigIndex = {
       ...withCmd,
@@ -912,43 +931,21 @@ describe("StrategyClassEmitter", () => {
     };
     const project = makeProject();
     emitCmd.run(multiStrat, ctx(index, project));
-    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
-    const cls = sf.getClassOrThrow("StratA");
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("StratA");
     expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student | Professor>");
-    expect(cls.getMethodOrThrow("execute").getParameters()[0].getTypeNode()?.getText()).toBe(
-      "Student | Professor",
-    );
+    expect(cls.getMethods()).toHaveLength(0);
   });
 
-  it("emits an execute stub with correct signature and no hook properties", () => {
+  it("emits no execute method and no hook properties when strategy has no overrides", () => {
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
-    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
-    const cls = sf.getClassOrThrow("DepartmentMatch");
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("DepartmentMatch");
     expect(cls.getProperties()).toHaveLength(0);
-    const execute = cls.getMethodOrThrow("execute");
-    expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
-    expect(execute.getParameters()[1].getTypeNode()?.getText()).toBe("Readonly<Building>");
-    expect(execute.getReturnTypeNode()?.getText()).toBe("AccessResult");
-    expect(execute.getBodyText()).toContain("throw new Error");
-    expect(execute.getBodyText()).toContain("@odetovibe-generated");
-  });
-
-  it("execute is async and returns Promise<T> when returnAsync is true", () => {
-    const asyncCmd = new CommandEntry("AccessBuildingCommand", {
-      ...cmdEntry.config,
-      returnAsync: true,
-    });
-    const asyncWithCmdAndTpl: ConfigIndex = {
-      ...withCmdAndTpl,
-      commands: new Map([["AccessBuildingCommand", asyncCmd]]),
-    };
-    const project = makeProject();
-    emitCmd.run(stratEntry, ctx(asyncWithCmdAndTpl, project));
-    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
-    const execute = sf.getClassOrThrow("DepartmentMatch").getMethodOrThrow("execute");
-    expect(execute.isAsync()).toBe(true);
-    expect(execute.getReturnTypeNode()?.getText()).toBe("Promise<AccessResult>");
+    expect(cls.getMethods()).toHaveLength(0);
   });
 
   it("emits hook override properties when strategy declares commandHooks", () => {
@@ -991,9 +988,7 @@ describe("StrategyClassEmitter", () => {
     const cls = project
       .getSourceFileOrThrow("commands/access-building.ts")
       .getClassOrThrow("DepartmentMatch");
-    const execute = cls.getMethodOrThrow("execute");
-    expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
-    expect(execute.getBodyText()).toContain("@odetovibe-generated");
+    expect(cls.getMethods()).toHaveLength(0);
   });
 
   it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 447/452/454 true branches)", () => {

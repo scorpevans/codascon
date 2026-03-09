@@ -249,7 +249,9 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
 // Emits: export abstract class FooTemplate<SU extends S1 | S2>
 //          implements Template<FooCommand, [HookCmd], SU> {
 //          readonly hookCmd = new HookCmd(); // @odetovibe-generated
-//          abstract execute(subject: SU, object: Readonly<O>): R;
+//          execute(subject: SU, object: Readonly<O>): R {
+//            throw new Error("Not implemented"); // @odetovibe-generated
+//          }
 //        }
 // Target: <namespace>/commands/<parent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
@@ -314,8 +316,10 @@ class AbstractTemplateEmitter implements Template<EmitAstCommand, [], AbstractTe
       });
     }
 
-    // Abstract methods declare the contract; async is a concrete-implementation concern.
-    const executeMethod = cls.addMethod({ name: "execute", isAbstract: true });
+    const executeMethod = cls.addMethod({
+      name: "execute",
+      isAsync: cmdEntry.config.returnAsync === true,
+    });
     executeMethod.addParameter({ name: "subject", type: subjectParam });
     executeMethod.addParameter({
       name: "object",
@@ -324,6 +328,7 @@ class AbstractTemplateEmitter implements Template<EmitAstCommand, [], AbstractTe
     executeMethod.setReturnType(
       maybeAsync(cmdEntry.config.returnType, cmdEntry.config.returnAsync),
     );
+    executeMethod.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
 
     return { targetFile: filePath };
   }
@@ -419,10 +424,8 @@ class ConcreteTemplateEmitter implements Template<EmitAstCommand, [], ConcreteTe
 //
 // Emits: export class FooStrategy extends FooTemplate<S1> {
 //          readonly hookCmd = new OverrideCmd(); // if hook override declared
-//          execute(subject: S1, object: Readonly<O>): R {
-//            throw new Error("Not implemented"); // @odetovibe-generated
-//          }
 //        }
+// execute is not emitted — inherited from the Template; client fills it in there.
 // Target: <namespace>/commands/<grandparent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
@@ -479,20 +482,6 @@ class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry
         initializer: `new ${cmdRef}()`, // @odetovibe-generated
       });
     }
-
-    const executeMethod = cls.addMethod({
-      name: "execute",
-      isAsync: cmdEntry.config.returnAsync === true,
-    });
-    executeMethod.addParameter({ name: "subject", type: subsetUnion });
-    executeMethod.addParameter({
-      name: "object",
-      type: `Readonly<${cmdEntry.config.objectType}>`,
-    });
-    executeMethod.setReturnType(
-      maybeAsync(cmdEntry.config.returnType, cmdEntry.config.returnAsync),
-    );
-    executeMethod.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
 
     return { targetFile: filePath };
   }

@@ -94,9 +94,11 @@
  *   receive their dependencies. Hooks may be injected via constructor,
  *   instantiated internally, or inherited from the Template.
  *
- * - **Execute ownership**: Whether `execute` is implemented on the Template
- *   or deferred to Strategies. The recommended pattern is for the Template
- *   to implement `execute` and delegate to abstract/protected methods.
+ * - **Execute body**: Codegen emits a concrete `execute` stub on every
+ *   Template (abstract or concrete). Strategies do not get an `execute`
+ *   scaffold — they inherit it from the Template. Whether the client
+ *   implements the body on the Template, overrides it in a Strategy, or
+ *   delegates to a protected abstract method is entirely their choice.
  *
  * - **Hook instantiation**: Whether a hook is abstract on the Template
  *   (Strategy must instantiate) or concrete (shared across Strategies).

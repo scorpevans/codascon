@@ -183,7 +183,7 @@ describe("smoke", () => {
     expect(content).toContain("class AdminGrant");
   }, 20_000);
 
-  it("returnAsync: true — abstract template execute returns Promise<T>; concrete template and strategy execute are async and return Promise<T>", async () => {
+  it("returnAsync: true — abstract template and concrete template execute are async and return Promise<T>", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
     // One command with returnAsync: true.
@@ -244,36 +244,24 @@ describe("smoke", () => {
     expect(commandFile, "command file should be written").toBeDefined();
     const content = readFileSync(commandFile!.path, "utf8");
 
-    // Abstract template: abstract execute must return Promise<Greeting> but
-    // must NOT carry the async keyword (TypeScript forbids async on abstract methods).
-    expect(content).toContain("abstract execute");
+    // Abstract template: concrete execute stub, async, returns Promise<Greeting>
     expect(content).toContain("abstract class UserTemplate");
-    const abstractExecuteMatch = content.match(/abstract\s+execute\([^)]*\)[^{]*/);
-    expect(abstractExecuteMatch, "abstract execute signature found").toBeTruthy();
-    expect(abstractExecuteMatch![0]).toContain("Promise<Greeting>");
-    expect(abstractExecuteMatch![0]).not.toContain("async");
+    expect(content).not.toContain("abstract execute");
 
     // Concrete template: async execute + Promise<Greeting>
     expect(content).toContain("class AdminGreeter");
-    expect(content).toMatch(/async\s+execute[^{]*Promise<Greeting>/);
 
-    // Strategy: async execute + Promise<Greeting>
+    // Strategy: no execute emitted — inherited from template
     expect(content).toContain("class StandardGreet");
-    // All non-abstract execute methods must be async and return Promise<Greeting>
-    const execMatches = [...content.matchAll(/\b(async\s+)?execute\s*\(/g)];
-    const nonAbstractExec = execMatches.filter(
-      (m) => !content.slice(0, m.index).match(/abstract\s*$/),
-    );
-    expect(
-      nonAbstractExec.length,
-      "at least two non-abstract execute methods",
-    ).toBeGreaterThanOrEqual(2);
-    for (const m of nonAbstractExec) {
-      expect(m[0], `execute at offset ${m.index} should be async`).toContain("async");
-    }
+    expect(content).toMatch(/class StandardGreet[^{]*\{\s*\}/s);
+
+    // All execute methods (template + concrete template) must be async and return Promise<Greeting>
+    const execMatches = [...content.matchAll(/\basync\s+execute\s*\(/g)];
+    expect(execMatches.length, "at least two async execute stubs").toBeGreaterThanOrEqual(2);
+    expect(content).toMatch(/async\s+execute[^{]*Promise<Greeting>/);
   }, 20_000);
 
-  it("returnAsync absent — template and strategy execute are not async and return T directly", async () => {
+  it("returnAsync absent — template execute are not async and return T directly", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
     // Same domain structure as the returnAsync test above, but without returnAsync.
@@ -326,7 +314,7 @@ describe("smoke", () => {
     expect(commandFile, "command file should be written").toBeDefined();
     const content = readFileSync(commandFile!.path, "utf8");
 
-    // No execute method — abstract or concrete — should have async or Promise<T>
+    // No execute method should have async or Promise<T>
     expect(content).not.toContain("async execute");
     expect(content).not.toContain("Promise<Greeting>");
 
