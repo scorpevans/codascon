@@ -171,6 +171,23 @@ const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS"
 
 ## Advanced Patterns
 
+### Command Hooks
+
+`Template`s can declare dependencies on other `Command`s via the `H` parameter:
+
+```typescript
+abstract class AuditedTemplate implements Template<MyCommand, [AuditCommand, LogCommand]> {
+  // Instantiated on the Template — shared across all Strategies
+  readonly log = new LogCommand();
+  // Abstract — each Strategy must provide its own instance
+  abstract readonly audit: AuditCommand;
+}
+
+class MyStrategy extends AuditedTemplate {
+  readonly audit = new AuditCommand(); // Strategy provides the abstract hook
+}
+```
+
 ### Parameterized Templates
 
 A `Template` can leave its subject union as a type parameter, letting `Strategy` classes narrow which `Subject`s they handle:
@@ -197,23 +214,6 @@ class StudentCheckout extends CheckoutTemplate<Student> {
   protected computeTerms(student: Student, eq: Equipment): CheckoutResult {
     return { approved: true, days: 14 };
   }
-}
-```
-
-### Command Hooks
-
-`Template`s can declare dependencies on other `Command`s via the `H` parameter:
-
-```typescript
-abstract class AuditedTemplate implements Template<MyCommand, [AuditCommand, LogCommand]> {
-  // Instantiated on the Template — shared across all Strategies
-  readonly log = new LogCommand();
-  // Abstract — each Strategy must provide its own instance
-  abstract readonly audit: AuditCommand;
-}
-
-class MyStrategy extends AuditedTemplate {
-  readonly audit = new AuditCommand(); // Strategy provides the abstract hook
 }
 ```
 
