@@ -223,7 +223,7 @@ describe("main", () => {
   it("exits 1 and logs compile errors when writeFiles reports them", async () => {
     process.argv = ["node", "cli.js", "/fake/config.yaml"];
     vi.mocked(writeFiles).mockResolvedValue([
-      { path: "/out/f.ts", compileErrors: ["TS2304: Cannot find name 'X'"] },
+      { path: "/out/f.ts", created: false, compileErrors: ["TS2304: Cannot find name 'X'"] },
     ]);
     const err = await main().catch((e) => e);
     expect(err).toBeInstanceOf(ExitError);
@@ -234,7 +234,9 @@ describe("main", () => {
 
   it("logs a conflict warning when writeFiles reports a conflicted file", async () => {
     process.argv = ["node", "cli.js", "/fake/config.yaml"];
-    vi.mocked(writeFiles).mockResolvedValue([{ path: "/out/f.ode.ts", conflicted: true }]);
+    vi.mocked(writeFiles).mockResolvedValue([
+      { path: "/out/f.ode.ts", created: false, conflicted: true },
+    ]);
     await main(); // must not throw
     expect(exitCodes).toEqual([]);
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining("conflict"));
