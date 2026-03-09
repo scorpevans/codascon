@@ -1,6 +1,6 @@
 {
   "name": "codascon",
-  "version": "2026.3.2-beta.2",
+  "version": "2026.3.2-beta.3",
   "description": "A structural protocol for code organization with exhaustive compile-time type checking",
   "license": "MIT",
   "author": "@scorpevans",

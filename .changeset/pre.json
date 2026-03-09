@@ -10,6 +10,7 @@
     "dual-cjs-esm-and-clean-types",
     "exclude-sourcemaps",
     "readme-improvements",
+    "rename-resolver-name",
     "strategy-execute-and-cli-fixes"
   ]
 }
