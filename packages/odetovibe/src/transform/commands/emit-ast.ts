@@ -319,7 +319,7 @@ abstract class AbstractTemplateEmitter implements Template<
     const hooksParam = hookTypes.length > 0 ? `[${hookTypes.join(", ")}]` : "[]";
     const subjectParam = config.isParameterized ? "SU" : suRef;
 
-    const cls = sf.addClass({ name: key, isAbstract: true, isExported: true });
+    const cls = sf.addClass({ name: key, isAbstract: true, isExported: false });
 
     if (config.isParameterized) {
       cls.addTypeParameter({ name: "SU", constraint: suRef });
@@ -419,7 +419,7 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
 
     const cls = sf.addClass({
       name: key,
-      isExported: true,
+      isExported: false,
       extends: extendsClause,
     });
 

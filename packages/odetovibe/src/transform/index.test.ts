@@ -522,12 +522,12 @@ describe("AbstractTemplateEmitter — AbstractTemplateEntry", () => {
     expect(result.targetFile).toBe("commands/access-building.ts");
   });
 
-  it("emits an exported abstract class", () => {
+  it("emits a non-exported abstract class", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("AccessTemplate");
-    expect(cls.isExported()).toBe(true);
+    expect(cls.isExported()).toBe(false);
     expect(cls.isAbstract()).toBe(true);
   });
 
@@ -760,12 +760,12 @@ describe("AbstractTemplateEmitter — isParameterized: false", () => {
     expect(result.targetFile).toBe("commands/access-building.ts");
   });
 
-  it("emits an exported abstract class", () => {
+  it("emits a non-exported abstract class", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("GrantAccess");
-    expect(cls.isExported()).toBe(true);
+    expect(cls.isExported()).toBe(false);
     expect(cls.isAbstract()).toBe(true);
   });
 
@@ -931,12 +931,12 @@ describe("StrategyClassEmitter", () => {
     expect(result.targetFile).toBe("commands/access-building.ts");
   });
 
-  it("emits an exported class extending the parameterized template with the subject type arg", () => {
+  it("emits a non-exported class extending the parameterized template with the subject type arg", () => {
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("DepartmentMatch");
-    expect(cls.isExported()).toBe(true);
+    expect(cls.isExported()).toBe(false);
     expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student>");
   });
 
