@@ -96,11 +96,11 @@ class AccessBuildingCommand extends Command<
   readonly commandName = "accessBuilding" as const;
 
   resolveStudent(_student: Student, _building: Building) {
-    return new DenyAccess(); // Strategy — defined below
+    return new StudentAccess(); // Strategy — defined below
   }
 
   resolveProfessor(_professor: Professor, _building: Building) {
-    return new GrantAccess(); // Strategy — defined below
+    return new ProfessorAccess(); // Strategy — defined below
   }
 }
 ```
@@ -112,34 +112,22 @@ A `Template` abstract class implements how a `Command` is executed. It may be co
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";
 
-// CommandSubjectUnion<C> extracts the subject union from a Command —
-// no need to repeat Student | Professor manually
 abstract class AccessTemplate implements Template<AccessBuildingCommand> {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
-    console.log(`${subject.clearance} attempting access to ${building.name}`);
-    return this.check(subject, building);
+  execute(_subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+    return { granted: true, reason: this.doAccess(building) };
   }
-  protected abstract check(
-    subject: CommandSubjectUnion<AccessBuildingCommand>,
-    building: Building,
-  ): AccessResult;
+  protected abstract doAccess(building: Building): string;
 }
 
-class GrantAccess extends AccessTemplate {
-  protected check(
-    _subject: CommandSubjectUnion<AccessBuildingCommand>,
-    building: Building,
-  ): AccessResult {
-    return { granted: true, reason: `Access granted to ${building.name}` };
+class StudentAccess extends AccessTemplate {
+  protected doAccess(building: Building): string {
+    return `student can access ${building.name} through the front door`;
   }
 }
 
-class DenyAccess extends AccessTemplate {
-  protected check(
-    _subject: CommandSubjectUnion<AccessBuildingCommand>,
-    building: Building,
-  ): AccessResult {
-    return { granted: false, reason: `Access denied to ${building.name}` };
+class ProfessorAccess extends AccessTemplate {
+  protected doAccess(building: Building): string {
+    return `professor can access ${building.name} through the back door`;
   }
 }
 ```
@@ -149,7 +137,7 @@ class DenyAccess extends AccessTemplate {
 ```typescript
 const cmd = new AccessBuildingCommand();
 const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
-// { granted: true, reason: "Access granted to Science Hall" }
+// { granted: true, reason: "professor can access Science Hall through the back door" }
 ```
 
 ```

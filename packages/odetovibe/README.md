@@ -72,14 +72,14 @@ commands:
     returnType: AccessResult
     subjectUnion: [Student, Professor]
     dispatch:
-      Student: DenyAccess
-      Professor: GrantAccess
+      Student: StudentAccess
+      Professor: ProfessorAccess
     templates:
       AccessTemplate:
         isParameterized: false
         strategies:
-          DenyAccess: {}
-          GrantAccess: {}
+          StudentAccess: {}
+          ProfessorAccess: {}
 ```
 
 **Key rules:**
