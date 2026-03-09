@@ -555,6 +555,21 @@ describe("AbstractTemplateEmitter — AbstractTemplateEntry", () => {
     expect(typeParams[0].getConstraint()?.getText()).toBe("Student | Professor");
   });
 
+  it("constrains SU to CommandSubjectUnion when subjectSubset is empty array", () => {
+    const emptySubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: [],
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(emptySubsetTpl, ctx(withCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const typeParams = sf.getClassOrThrow("AccessTemplate").getTypeParameters();
+    expect(typeParams[0].getConstraint()?.getText()).toBe(
+      "CommandSubjectUnion<AccessBuildingCommand>",
+    );
+  });
+
   it("has no type parameter when not isParameterized", () => {
     const nonParam = new AbstractTemplateEntry("FlatTemplate", "AccessBuildingCommand", {
       isParameterized: false,
@@ -749,6 +764,20 @@ describe("AbstractTemplateEmitter — isParameterized: false", () => {
     );
   });
 
+  it("implements Template<Command, [], CommandSubjectUnion<Command>> when subjectSubset is empty array", () => {
+    const emptySubsetTpl = new AbstractTemplateEntry("FlatTemplate", "AccessBuildingCommand", {
+      isParameterized: false,
+      subjectSubset: [],
+      strategies: {},
+    });
+    const project = makeProject();
+    emitCmd.run(emptySubsetTpl, ctx(withCmd, project));
+    const t = text(project, "commands/access-building.ts");
+    expect(t).toContain(
+      "Template<AccessBuildingCommand, [], CommandSubjectUnion<AccessBuildingCommand>>",
+    );
+  });
+
   it("implements Template with narrowed subjectSubset when subjectSubset is declared", () => {
     const narrowed = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
@@ -931,6 +960,46 @@ describe("StrategyClassEmitter", () => {
       .getClassOrThrow("StratA");
     expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student | Professor>");
     expect(cls.getMethods()).toHaveLength(0);
+  });
+
+  it("extends with full command union when template's subjectSubset is empty array", () => {
+    const emptySubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: [],
+      strategies: { StratA: {} },
+    });
+    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {});
+    const index: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", emptySubsetTpl]]),
+    };
+    const project = makeProject();
+    emitCmd.run(strat, ctx(index, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("StratA");
+    expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student | Professor>");
+  });
+
+  it("extends with template's subjectSubset when strategy's subjectSubset is empty array", () => {
+    const tplWithSubset = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: ["Student"],
+      strategies: { StratA: {} },
+    });
+    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {
+      subjectSubset: [],
+    });
+    const index: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", tplWithSubset]]),
+    };
+    const project = makeProject();
+    emitCmd.run(strat, ctx(index, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("StratA");
+    expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student>");
   });
 
   it("emits no execute method and no hook properties when strategy has no overrides", () => {

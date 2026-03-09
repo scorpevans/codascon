@@ -289,9 +289,9 @@ abstract class AbstractTemplateEmitter implements Template<
     ensureTypeImport(sf, "codascon", "Template");
 
     const cmdEntry = configIndex.commands.get(commandKey)!;
-    const subjectSubset = config.subjectSubset ?? cmdEntry.config.subjectUnion;
+    const isFullUnion = !config.subjectSubset?.length;
+    const subjectSubset = isFullUnion ? cmdEntry.config.subjectUnion : config.subjectSubset!;
     const subsetUnion = subjectSubset.join(" | ");
-    const isFullUnion = !config.subjectSubset;
     const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
 
     if (isFullUnion) ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
@@ -379,8 +379,11 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
     const tplEntry = configIndex.abstractTemplates.get(`${commandKey}.${templateKey}`)!;
     const cmdEntry = configIndex.commands.get(commandKey)!;
 
-    const subjectSubset =
-      config.subjectSubset ?? tplEntry.config.subjectSubset ?? cmdEntry.config.subjectUnion;
+    const subjectSubset = config.subjectSubset?.length
+      ? config.subjectSubset
+      : tplEntry.config.subjectSubset?.length
+        ? tplEntry.config.subjectSubset
+        : cmdEntry.config.subjectUnion;
     const subsetUnion = subjectSubset.join(" | ");
 
     for (const ref of subjectSubset) {
