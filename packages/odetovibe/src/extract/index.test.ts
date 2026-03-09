@@ -223,24 +223,32 @@ describe("CommandValidator", () => {
     expect(rules(result)).toContain("dispatch-extra");
   });
 
-  it("[dispatch-target-ref] fails when a bare Template name is not in templates", () => {
-    const entry = makeCmd({ dispatch: { Student: "NoSuchTemplate" }, templates: {} });
+  it("[dispatch-target-ref] fails when a bare name is not a strategy in any template", () => {
+    const entry = makeCmd({ dispatch: { Student: "NoSuchStrategy" }, templates: {} });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
   });
 
-  it("[dispatch-target-abstract] fails when a bare dispatch target has strategies (abstract)", () => {
+  it("[dispatch-target-ref] fails when a bare template name is used (templates are abstract, only strategy names are valid)", () => {
     const entry = makeCmd({
-      dispatch: { Student: "AccessTemplate" }, // bare reference to abstract template
+      dispatch: { Student: "AccessTemplate" }, // template name, not a strategy name
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
-      "dispatch-target-abstract",
-    );
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
   });
 
-  it("[dispatch-target-ref] fails when the Template part of Template.Strategy is not in templates", () => {
+  it("accepts a plain strategy name as a bare dispatch target", () => {
+    const entry = makeCmd({
+      dispatch: { Student: "DepartmentMatch" }, // plain strategy name, no dot notation
+      templates: {
+        AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
+      },
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("[dispatch-target-ref] fails when the Template part of a dot-notation value is not in templates", () => {
     const entry = makeCmd({
       dispatch: { Student: "NoSuchTemplate.SomeStrategy" },
       templates: {},
@@ -248,7 +256,7 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
   });
 
-  it("[dispatch-target-strategy] fails when the Strategy part of Template.Strategy is not in the template", () => {
+  it("[dispatch-target-strategy] fails when the Strategy part of a dot-notation value is not in the template", () => {
     const entry = makeCmd({
       dispatch: { Student: "AccessTemplate.NoSuchStrategy" },
       templates: {
@@ -323,7 +331,7 @@ describe("CommandValidator", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("AbstractTemplateValidator", () => {
-  // Command that correctly uses Template.Strategy format in dispatch
+  // Command that correctly uses a plain strategy name in dispatch
   const cmdEntry = new CommandEntry("Cmd", {
     commandName: "cmd",
     baseType: "Person",

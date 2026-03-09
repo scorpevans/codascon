@@ -114,8 +114,7 @@ class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainType
 //   - baseType, objectType, returnType must reference known domainTypes
 //   - subjectUnion entries must reference subjectTypes (types with resolverName)
 //   - dispatch must have exactly one entry per subjectUnion member
-//   - dispatch values must resolve to concrete Templates or Template.Strategy
-//     within this Command's own templates map
+//   - dispatch values must be strategy names within this Command's own templates map
 // ═══════════════════════════════════════════════════════════════════
 
 class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntry> {
@@ -182,21 +181,14 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
       const parts = target.split(".");
 
       if (parts.length === 1) {
-        const tpl = ownTemplates[target];
-        if (!tpl) {
+        // Only strategy names are valid as bare dispatch targets — all templates are abstract
+        const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
+        if (!isStrategy) {
           errors.push(
             err(
               key,
               "dispatch-target-ref",
-              `dispatch target "${target}" for "${subjectRef}" not found in this Command's templates`,
-            ),
-          );
-        } else if (Object.keys(tpl.strategies).length > 0) {
-          errors.push(
-            err(
-              key,
-              "dispatch-target-abstract",
-              `dispatch target "${target}" for "${subjectRef}" has strategies — use ${target}.StrategyName`,
+              `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
             ),
           );
         }
@@ -225,7 +217,7 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
           err(
             key,
             "dispatch-target-format",
-            `dispatch target "${target}" for "${subjectRef}" is malformed — use "Template" or "Template.Strategy"`,
+            `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
           ),
         );
       }
@@ -311,7 +303,7 @@ class AbstractTemplateValidator implements Template<
           err(
             key,
             "abstract-in-dispatch",
-            `abstract template "${key}" is referenced directly in "${commandKey}" dispatch — use ${key}.StrategyName`,
+            `abstract template "${key}" is referenced directly in "${commandKey}" dispatch — use a plain strategy name instead`,
           ),
         );
       }

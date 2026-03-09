@@ -129,7 +129,7 @@ describe("smoke", () => {
 
     // smoke.yaml has only a concrete template; this covers the abstract template +
     // strategy code path: parameterized abstract class, two strategies with
-    // distinct subjectSubsets, dispatch via Template.Strategy dotted format.
+    // distinct subjectSubsets, dispatch via plain strategy names.
     const strategyYaml = [
       "namespace: access",
       "",
