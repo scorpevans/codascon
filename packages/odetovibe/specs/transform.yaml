@@ -93,26 +93,28 @@ commands:
       - ConcreteTemplateEntry
       - StrategyEntry
     dispatch:
-      SubjectTypeEntry: SubjectClassEmitter
-      PlainTypeEntry: InterfaceEmitter
-      CommandEntry: CommandClassEmitter
-      AbstractTemplateEntry: AbstractTemplateEmitter
-      ConcreteTemplateEntry: ConcreteTemplateEmitter
-      StrategyEntry: StrategyClassEmitter
+      SubjectTypeEntry: SubjectClassEmitterDefault
+      PlainTypeEntry: InterfaceEmitterDefault
+      CommandEntry: CommandClassEmitterDefault
+      AbstractTemplateEntry: AbstractTemplateEmitterDefault
+      ConcreteTemplateEntry: ConcreteTemplateEmitterDefault
+      StrategyEntry: StrategyClassEmitterDefault
     templates:
       # Emits: class Foo extends Subject { readonly resolverName = "resolveFoo" as const; ... }
       # Target: domain-types.ts
       SubjectClassEmitter:
         isParameterized: false
         subjectSubset: [SubjectTypeEntry]
-        strategies: {}
+        strategies:
+          SubjectClassEmitterDefault: {}
 
       # Emits: interface Foo { ... }
       # Target: domain-types.ts
       InterfaceEmitter:
         isParameterized: false
         subjectSubset: [PlainTypeEntry]
-        strategies: {}
+        strategies:
+          InterfaceEmitterDefault: {}
 
       # Emits: class FooCommand extends Command<B, O, R, [S1, S2]> {
       #          readonly commandName = "foo" as const;
@@ -123,20 +125,22 @@ commands:
       CommandClassEmitter:
         isParameterized: false
         subjectSubset: [CommandEntry]
-        strategies: {}
+        strategies:
+          CommandClassEmitterDefault: {}
 
       # Emits: abstract class FooTemplate<SU extends CommandSubjectUnion<FooCommand>>
       #          implements Template<FooCommand, [HookCmd], SU> {
       #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
-      #          abstract execute(subject: SU, object: Readonly<O>): R;
+      #          execute(subject: SU, object: Readonly<O>): R { ... }
       #        }
       # Target: commands/<parent-cmd-name>.ts (same file as CommandClassEmitter)
       AbstractTemplateEmitter:
         isParameterized: false
         subjectSubset: [AbstractTemplateEntry]
-        strategies: {}
+        strategies:
+          AbstractTemplateEmitterDefault: {}
 
-      # Emits: class FooTemplate implements Template<FooCommand, [HookCmd], S1 | S2> {
+      # Emits: abstract class FooTemplate implements Template<FooCommand, [HookCmd], S1 | S2> {
       #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
       #          execute(subject: S1 | S2, object: Readonly<O>): R { ... }
       #        }
@@ -144,7 +148,8 @@ commands:
       ConcreteTemplateEmitter:
         isParameterized: false
         subjectSubset: [ConcreteTemplateEntry]
-        strategies: {}
+        strategies:
+          ConcreteTemplateEmitterDefault: {}
 
       # Emits: class FooStrategy extends FooTemplate<S1> {
       #          // hook override if declared in strategy commandHooks
@@ -153,4 +158,5 @@ commands:
       StrategyClassEmitter:
         isParameterized: false
         subjectSubset: [StrategyEntry]
-        strategies: {}
+        strategies:
+          StrategyClassEmitterDefault: {}
