@@ -135,7 +135,7 @@ function maybeAsync(typeRef: string, returnAsync: boolean | undefined): string {
   return returnAsync ? `Promise<${typeRef}>` : typeRef;
 }
 
-class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEntry> {
+abstract class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEntry> {
   execute(subject: SubjectTypeEntry, object: Readonly<EmitContext>): EmitResult {
     const filePath = domainTypesFilePath(object.configIndex.namespace);
     if (object.configIndex.externalTypeKeys.has(subject.key)) return { targetFile: filePath };
@@ -157,6 +157,8 @@ class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEnt
   }
 }
 
+class SubjectClassEmitterDefault extends SubjectClassEmitter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: InterfaceEmitter
 //
@@ -164,7 +166,7 @@ class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEnt
 // Target: <ns>/domain-types.ts  (or domain-types.ts if no namespace)
 // ═══════════════════════════════════════════════════════════════════
 
-class InterfaceEmitter implements Template<EmitAstCommand, [], PlainTypeEntry> {
+abstract class InterfaceEmitter implements Template<EmitAstCommand, [], PlainTypeEntry> {
   execute(subject: PlainTypeEntry, object: Readonly<EmitContext>): EmitResult {
     const filePath = domainTypesFilePath(object.configIndex.namespace);
     if (object.configIndex.externalTypeKeys.has(subject.key)) return { targetFile: filePath };
@@ -173,6 +175,8 @@ class InterfaceEmitter implements Template<EmitAstCommand, [], PlainTypeEntry> {
     return { targetFile: filePath };
   }
 }
+
+class InterfaceEmitterDefault extends InterfaceEmitter {}
 
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: CommandClassEmitter
@@ -187,7 +191,7 @@ class InterfaceEmitter implements Template<EmitAstCommand, [], PlainTypeEntry> {
 // Target: <namespace>/commands/<cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
-class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> {
+abstract class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> {
   execute(subject: CommandEntry, object: Readonly<EmitContext>): EmitResult {
     const { configIndex } = object;
     const { key, config } = subject;
@@ -241,6 +245,8 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
   }
 }
 
+class CommandClassEmitterDefault extends CommandClassEmitter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: TemplateEmitter
 //
@@ -266,7 +272,7 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
 // Target: <namespace>/commands/<parent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
-class TemplateEmitter implements Template<EmitAstCommand, [], AbstractTemplateEntry> {
+abstract class TemplateEmitter implements Template<EmitAstCommand, [], AbstractTemplateEntry> {
   execute(subject: AbstractTemplateEntry, object: Readonly<EmitContext>): EmitResult {
     const { configIndex } = object;
     const { key, commandKey, config } = subject;
@@ -344,6 +350,8 @@ class TemplateEmitter implements Template<EmitAstCommand, [], AbstractTemplateEn
   }
 }
 
+class TemplateEmitterDefault extends TemplateEmitter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: StrategyClassEmitter
 //
@@ -354,7 +362,7 @@ class TemplateEmitter implements Template<EmitAstCommand, [], AbstractTemplateEn
 // Target: <namespace>/commands/<grandparent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
-class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry> {
+abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry> {
   execute(subject: StrategyEntry, object: Readonly<EmitContext>): EmitResult {
     const { configIndex } = object;
     const { key, templateKey, commandKey, config } = subject;
@@ -412,15 +420,17 @@ class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry
   }
 }
 
+class StrategyClassEmitterDefault extends StrategyClassEmitter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // COMMAND: EmitAstCommand
 // ═══════════════════════════════════════════════════════════════════
 
-const subjectClassEmitter = new SubjectClassEmitter();
-const interfaceEmitter = new InterfaceEmitter();
-const commandClassEmitter = new CommandClassEmitter();
-const templateEmitter = new TemplateEmitter();
-const strategyClassEmitter = new StrategyClassEmitter();
+const subjectClassEmitter = new SubjectClassEmitterDefault();
+const interfaceEmitter = new InterfaceEmitterDefault();
+const commandClassEmitter = new CommandClassEmitterDefault();
+const templateEmitter = new TemplateEmitterDefault();
+const strategyClassEmitter = new StrategyClassEmitterDefault();
 
 /** Dispatches each config entry to its TypeScript AST emitter via double dispatch. */
 export class EmitAstCommand extends Command<

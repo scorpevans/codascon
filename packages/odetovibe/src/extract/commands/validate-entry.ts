@@ -63,7 +63,11 @@ function normalizeCommandKey(key: string): string {
 //   - resolverName must be unique across all subjectTypes
 // ═══════════════════════════════════════════════════════════════════
 
-class SubjectTypeValidator implements Template<ValidateEntryCommand, [], SubjectTypeEntry> {
+abstract class SubjectTypeValidator implements Template<
+  ValidateEntryCommand,
+  [],
+  SubjectTypeEntry
+> {
   execute(subject: SubjectTypeEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, config } = subject;
@@ -94,17 +98,21 @@ class SubjectTypeValidator implements Template<ValidateEntryCommand, [], Subject
   }
 }
 
+class SubjectTypeValidatorDefault extends SubjectTypeValidator {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: PlainTypeValidator
 //
 // Plain types have no resolverName — no structural constraints to check.
 // ═══════════════════════════════════════════════════════════════════
 
-class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainTypeEntry> {
+abstract class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainTypeEntry> {
   execute(subject: PlainTypeEntry, object: Readonly<ConfigIndex>): ValidationResult {
     return ok();
   }
 }
+
+class PlainTypeValidatorDefault extends PlainTypeValidator {}
 
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: CommandValidator
@@ -118,7 +126,7 @@ class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainType
 //   - strategy names must be unique across all templates within a Command
 // ═══════════════════════════════════════════════════════════════════
 
-class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntry> {
+abstract class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntry> {
   execute(subject: CommandEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, config } = subject;
@@ -239,6 +247,8 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
   }
 }
 
+class CommandValidatorDefault extends CommandValidator {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: AbstractTemplateValidator
 //
@@ -248,7 +258,7 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
 //   - must not appear directly in parent Command's dispatch (abstract — use Strategy.*)
 // ═══════════════════════════════════════════════════════════════════
 
-class AbstractTemplateValidator implements Template<
+abstract class AbstractTemplateValidator implements Template<
   ValidateEntryCommand,
   [],
   AbstractTemplateEntry
@@ -311,6 +321,8 @@ class AbstractTemplateValidator implements Template<
   }
 }
 
+class AbstractTemplateValidatorDefault extends AbstractTemplateValidator {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: StrategyValidator
 //
@@ -322,7 +334,7 @@ class AbstractTemplateValidator implements Template<
 //   - commandHooks values must reference known Commands
 // ═══════════════════════════════════════════════════════════════════
 
-class StrategyValidator implements Template<ValidateEntryCommand, [], StrategyEntry> {
+abstract class StrategyValidator implements Template<ValidateEntryCommand, [], StrategyEntry> {
   execute(subject: StrategyEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, templateKey, commandKey, config } = subject;
@@ -396,15 +408,17 @@ class StrategyValidator implements Template<ValidateEntryCommand, [], StrategyEn
   }
 }
 
+class StrategyValidatorDefault extends StrategyValidator {}
+
 // ═══════════════════════════════════════════════════════════════════
 // COMMAND: ValidateEntryCommand
 // ═══════════════════════════════════════════════════════════════════
 
-const subjectTypeValidator = new SubjectTypeValidator();
-const plainTypeValidator = new PlainTypeValidator();
-const commandValidator = new CommandValidator();
-const abstractTemplateValidator = new AbstractTemplateValidator();
-const strategyValidator = new StrategyValidator();
+const subjectTypeValidator = new SubjectTypeValidatorDefault();
+const plainTypeValidator = new PlainTypeValidatorDefault();
+const commandValidator = new CommandValidatorDefault();
+const abstractTemplateValidator = new AbstractTemplateValidatorDefault();
+const strategyValidator = new StrategyValidatorDefault();
 
 /** Dispatches each config entry to its schema validator via double dispatch. */
 export class ValidateEntryCommand extends Command<

@@ -621,7 +621,7 @@ function conflictPath(outputPath: string): string {
 // directories, and writes the SourceFile's full text to disk.
 // ═══════════════════════════════════════════════════════════════════
 
-class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
+abstract class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   async execute(subject: SourceFileEntry, object: Readonly<WriteContext>): Promise<WriteResult> {
     const outputPath = resolveOutputPath(subject.sourceFile.getFilePath(), object.targetDir);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -635,6 +635,8 @@ class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry>
   }
 }
 
+class OverwriteWriterDefault extends OverwriteWriter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: MergeWriter
 //
@@ -644,7 +646,7 @@ class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry>
 // module.
 // ═══════════════════════════════════════════════════════════════════
 
-class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
+abstract class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   async execute(subject: SourceFileEntry, object: Readonly<WriteContext>): Promise<WriteResult> {
     const outputPath = resolveOutputPath(subject.sourceFile.getFilePath(), object.targetDir);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -669,6 +671,8 @@ class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   }
 }
 
+class MergeWriterDefault extends MergeWriter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: StrictMergeWriter
 //
@@ -679,7 +683,7 @@ class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
 // If no conflict, performs a normal merge in-place.
 // ═══════════════════════════════════════════════════════════════════
 
-class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
+abstract class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   async execute(subject: SourceFileEntry, object: Readonly<WriteContext>): Promise<WriteResult> {
     const outputPath = resolveOutputPath(subject.sourceFile.getFilePath(), object.targetDir);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -714,13 +718,15 @@ class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntr
   }
 }
 
+class StrictMergeWriterDefault extends StrictMergeWriter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // COMMAND: WriteFileCommand
 // ═══════════════════════════════════════════════════════════════════
 
-const overwriteWriter = new OverwriteWriter();
-const mergeWriter = new MergeWriter();
-const strictMergeWriter = new StrictMergeWriter();
+const overwriteWriter = new OverwriteWriterDefault();
+const mergeWriter = new MergeWriterDefault();
+const strictMergeWriter = new StrictMergeWriterDefault();
 
 const WRITER_BY_MODE: Record<WriteMode, Template<WriteFileCommand, [], SourceFileEntry>> = {
   overwrite: overwriteWriter,
