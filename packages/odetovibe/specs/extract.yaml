@@ -5,7 +5,7 @@
 #   1. Parsing a YAML config file into a typed ConfigIndex (parseYaml)
 #   2. Validating all entries against schema rules (validateYaml)
 #
-# Domain types with `visitName` are split into SubjectTypeEntry at
+# Domain types with `resolverName` are split into SubjectTypeEntry at
 # parse time; types without become PlainTypeEntry. Templates are
 # similarly split: non-empty strategies → AbstractTemplateEntry,
 # empty strategies → ConcreteTemplateEntry. This ensures the
@@ -31,22 +31,22 @@ domainTypes:
 
   # ── Subjects ────────────────────────────────────────────────────
   SubjectTypeEntry:
-    visitName: resolveSubjectType
+    resolverName: resolveSubjectType
 
   PlainTypeEntry:
-    visitName: resolvePlainType
+    resolverName: resolvePlainType
 
   CommandEntry:
-    visitName: resolveCommand
+    resolverName: resolveCommand
 
   AbstractTemplateEntry:
-    visitName: resolveAbstractTemplate
+    resolverName: resolveAbstractTemplate
 
   ConcreteTemplateEntry:
-    visitName: resolveConcreteTemplate
+    resolverName: resolveConcreteTemplate
 
   StrategyEntry:
-    visitName: resolveStrategy
+    resolverName: resolveStrategy
 
   # ── Object type ─────────────────────────────────────────────────
   ConfigIndex:
@@ -79,13 +79,13 @@ commands:
       ConcreteTemplateEntry: ConcreteTemplateValidator
       StrategyEntry: StrategyValidator
     templates:
-      # Checks visitName prefix ("resolve") and uniqueness across subjectTypes
+      # Checks resolverName prefix ("resolve") and uniqueness across subjectTypes
       SubjectTypeValidator:
         isParameterized: false
         subjectSubset: [SubjectTypeEntry]
         strategies: {}
 
-      # Plain types have no visitName — no structural constraints
+      # Plain types have no resolverName — no structural constraints
       PlainTypeValidator:
         isParameterized: false
         subjectSubset: [PlainTypeEntry]

@@ -23,25 +23,25 @@ export interface ConfigEntry {
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * A domain type with a `visitName` — generates a Subject class.
- * Produces `class Foo extends Subject { readonly visitName = "resolveFoo" }`.
+ * A domain type with a `resolverName` — generates a Subject class.
+ * Produces `class Foo extends Subject { readonly resolverName = "resolveFoo" }`.
  */
 export class SubjectTypeEntry extends Subject implements ConfigEntry {
-  readonly visitName = "resolveSubjectType" as const;
+  readonly resolverName = "resolveSubjectType" as const;
   constructor(
     public readonly key: string,
-    public readonly config: DomainType & { visitName: string },
+    public readonly config: DomainType & { resolverName: string },
   ) {
     super();
   }
 }
 
 /**
- * A domain type without a `visitName` — generates a plain interface.
+ * A domain type without a `resolverName` — generates a plain interface.
  * Produces `interface Foo { ... }`.
  */
 export class PlainTypeEntry extends Subject implements ConfigEntry {
-  readonly visitName = "resolvePlainType" as const;
+  readonly resolverName = "resolvePlainType" as const;
   constructor(
     public readonly key: string,
     public readonly config: DomainType,
@@ -52,7 +52,7 @@ export class PlainTypeEntry extends Subject implements ConfigEntry {
 
 /** A parsed `commands` entry from the YAML config. */
 export class CommandEntry extends Subject implements ConfigEntry {
-  readonly visitName = "resolveCommand" as const;
+  readonly resolverName = "resolveCommand" as const;
   constructor(
     public readonly key: string,
     public readonly config: Command,
@@ -66,7 +66,7 @@ export class CommandEntry extends Subject implements ConfigEntry {
  * Carries `commandKey` (the parent Command's key).
  */
 export class AbstractTemplateEntry extends Subject implements ConfigEntry {
-  readonly visitName = "resolveAbstractTemplate" as const;
+  readonly resolverName = "resolveAbstractTemplate" as const;
   constructor(
     public readonly key: string,
     public readonly commandKey: string,
@@ -81,7 +81,7 @@ export class AbstractTemplateEntry extends Subject implements ConfigEntry {
  * Carries `commandKey` (the parent Command's key).
  */
 export class ConcreteTemplateEntry extends Subject implements ConfigEntry {
-  readonly visitName = "resolveConcreteTemplate" as const;
+  readonly resolverName = "resolveConcreteTemplate" as const;
   constructor(
     public readonly key: string,
     public readonly commandKey: string,
@@ -96,7 +96,7 @@ export class ConcreteTemplateEntry extends Subject implements ConfigEntry {
  * Carries both `templateKey` and `commandKey` for ancestry lookup.
  */
 export class StrategyEntry extends Subject implements ConfigEntry {
-  readonly visitName = "resolveStrategy" as const;
+  readonly resolverName = "resolveStrategy" as const;
   constructor(
     public readonly key: string,
     public readonly templateKey: string,

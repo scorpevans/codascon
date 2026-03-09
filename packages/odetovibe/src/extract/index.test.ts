@@ -65,8 +65,8 @@ function parseYamlString(content: string): ConfigIndex {
 
 // ─── Shared entries ──────────────────────────────────────────────────────────
 
-const student = new SubjectTypeEntry("Student", { visitName: "resolveStudent" });
-const professor = new SubjectTypeEntry("Professor", { visitName: "resolveProfessor" });
+const student = new SubjectTypeEntry("Student", { resolverName: "resolveStudent" });
+const professor = new SubjectTypeEntry("Professor", { resolverName: "resolveProfessor" });
 const person = new PlainTypeEntry("Person", {});
 const building = new PlainTypeEntry("Building", {});
 const accessResult = new PlainTypeEntry("AccessResult", {});
@@ -107,24 +107,24 @@ describe("SubjectTypeValidator", () => {
     expect(validateCmd.run(student, index).valid).toBe(true);
   });
 
-  it("[visitName-prefix] fails when visitName does not start with 'resolve'", () => {
-    const entry = new SubjectTypeEntry("Student", { visitName: "visitStudent" });
+  it("[resolverName-prefix] fails when resolverName does not start with 'resolve'", () => {
+    const entry = new SubjectTypeEntry("Student", { resolverName: "visitStudent" });
     const index = idx({ subjectTypes: new Map([["Student", entry]]) });
-    expect(rules(validateCmd.run(entry, index))).toContain("visitName-prefix");
+    expect(rules(validateCmd.run(entry, index))).toContain("resolverName-prefix");
   });
 
-  it("[visitName-unique] fails when two subjects share the same visitName", () => {
-    const clash = new SubjectTypeEntry("Professor", { visitName: "resolveStudent" });
+  it("[resolverName-unique] fails when two subjects share the same resolverName", () => {
+    const clash = new SubjectTypeEntry("Professor", { resolverName: "resolveStudent" });
     const index = idx({
       subjectTypes: new Map([
         ["Student", student],
         ["Professor", clash],
       ]),
     });
-    expect(rules(validateCmd.run(student, index))).toContain("visitName-unique");
+    expect(rules(validateCmd.run(student, index))).toContain("resolverName-unique");
   });
 
-  it("[visitName-unique] does not flag an entry against its own visitName", () => {
+  it("[resolverName-unique] does not flag an entry against its own resolverName", () => {
     const index = idx({ subjectTypes: new Map([["Student", student]]) });
     expect(validateCmd.run(student, index).valid).toBe(true);
   });
@@ -189,9 +189,11 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("subjectUnion-ref");
   });
 
-  it("[subjectUnion-visitName] fails when a subjectUnion entry is a plain type (no visitName)", () => {
+  it("[subjectUnion-resolverName] fails when a subjectUnion entry is a plain type (no resolverName)", () => {
     const entry = makeCmd({ subjectUnion: ["Building"], dispatch: { Building: "GrantAccess" } });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("subjectUnion-visitName");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
+      "subjectUnion-resolverName",
+    );
   });
 
   it("[dispatch-coverage] fails when a subjectUnion member has no dispatch entry", () => {
@@ -684,19 +686,19 @@ describe("StrategyValidator", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("parseYaml", () => {
-  it("places domain types with visitName into subjectTypes", () => {
+  it("places domain types with resolverName into subjectTypes", () => {
     const index = parseYamlString(`
 domainTypes:
   Student:
-    visitName: resolveStudent
+    resolverName: resolveStudent
 commands: {}
 `);
     expect(index.subjectTypes.has("Student")).toBe(true);
     expect(index.plainTypes.has("Student")).toBe(false);
-    expect(index.subjectTypes.get("Student")?.config.visitName).toBe("resolveStudent");
+    expect(index.subjectTypes.get("Student")?.config.resolverName).toBe("resolveStudent");
   });
 
-  it("places domain types without visitName into plainTypes", () => {
+  it("places domain types without resolverName into plainTypes", () => {
     const index = parseYamlString(`
 domainTypes:
   Building:
@@ -714,7 +716,7 @@ domainTypes:
   Obj: {}
   Ret: {}
   Subj:
-    visitName: resolveSubj
+    resolverName: resolveSubj
 commands:
   MyCmd:
     commandName: myCmd
@@ -741,7 +743,7 @@ domainTypes:
   Obj: {}
   Ret: {}
   Subj:
-    visitName: resolveSubj
+    resolverName: resolveSubj
 commands:
   MyCmd:
     commandName: myCmd
@@ -767,7 +769,7 @@ domainTypes:
   Obj: {}
   Ret: {}
   Subj:
-    visitName: resolveSubj
+    resolverName: resolveSubj
 commands:
   MyCmd:
     commandName: myCmd
@@ -808,12 +810,12 @@ commands: {}
     //   domainTypes:
     //     ConfigEntry:       ← js-yaml produces null, not {}
     //     SubjectType:
-    //       visitName: resolveSubjectType
+    //       resolverName: resolveSubjectType
     const index = parseYamlString(`
 domainTypes:
   ConfigEntry:
   SubjectType:
-    visitName: resolveSubjectType
+    resolverName: resolveSubjectType
 commands: {}
 `);
     expect(index.plainTypes.has("ConfigEntry")).toBe(true);
@@ -825,7 +827,7 @@ commands: {}
 externalTypes:
   BaseEntry:
   SubjectExt:
-    visitName: resolveSubjectExt
+    resolverName: resolveSubjectExt
 domainTypes: {}
 commands: {}
 `);
@@ -892,7 +894,7 @@ domainTypes:
   Item: {}
   Result: {}
   Student:
-    visitName: resolveStudent
+    resolverName: resolveStudent
 commands:
   Cmd:
     commandName: cmd
@@ -920,7 +922,7 @@ describe("externalTypeKeys — validation compatibility", () => {
     const extPerson = new PlainTypeEntry("Person", {});
     const extBuilding = new PlainTypeEntry("Building", {});
     const extResult = new PlainTypeEntry("AccessResult", {});
-    const extStudent = new SubjectTypeEntry("Student", { visitName: "resolveStudent" });
+    const extStudent = new SubjectTypeEntry("Student", { resolverName: "resolveStudent" });
     const entry = new CommandEntry("Cmd", validCmdConfig);
     const index = idx({
       externalTypeKeys: new Set(["Person", "Building", "AccessResult", "Student"]),
@@ -958,8 +960,8 @@ describe("validateYaml", () => {
   });
 
   it("returns valid:false when any entry fails", () => {
-    const s1 = new SubjectTypeEntry("Student", { visitName: "resolvePerson" });
-    const s2 = new SubjectTypeEntry("Professor", { visitName: "resolvePerson" });
+    const s1 = new SubjectTypeEntry("Student", { resolverName: "resolvePerson" });
+    const s2 = new SubjectTypeEntry("Professor", { resolverName: "resolvePerson" });
     const index = idx({
       subjectTypes: new Map([
         ["Student", s1],
@@ -970,9 +972,9 @@ describe("validateYaml", () => {
   });
 
   it("collects errors from all failing entries", () => {
-    // Both subjects share a visitName — both report visitName-unique
-    const s1 = new SubjectTypeEntry("Student", { visitName: "resolvePerson" });
-    const s2 = new SubjectTypeEntry("Professor", { visitName: "resolvePerson" });
+    // Both subjects share a resolverName — both report resolverName-unique
+    const s1 = new SubjectTypeEntry("Student", { resolverName: "resolvePerson" });
+    const s2 = new SubjectTypeEntry("Professor", { resolverName: "resolvePerson" });
     const index = idx({
       subjectTypes: new Map([
         ["Student", s1],
@@ -981,7 +983,7 @@ describe("validateYaml", () => {
     });
     const result = validateYaml(index);
     const allRules = result.validationResults.flatMap((r) => r.errors.map((e) => e.rule));
-    expect(allRules.filter((r) => r === "visitName-unique")).toHaveLength(2);
+    expect(allRules.filter((r) => r === "resolverName-unique")).toHaveLength(2);
   });
 
   it("produces one ValidationResult per entry", () => {

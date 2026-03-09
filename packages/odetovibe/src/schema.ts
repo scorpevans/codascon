@@ -17,7 +17,7 @@
  *
  * ## Key Concepts
  *
- * - **DomainType**: Any type in the domain. Types with a `visitName` are
+ * - **DomainType**: Any type in the domain. Types with a `resolverName` are
  *   Subjects (entities that participate in double dispatch). Types without
  *   are plain types used as object types, return types, or base types.
  *
@@ -54,12 +54,12 @@
  *    referencing a Strategy use the `TemplateName.StrategyName` format, and
  *    both parts must resolve to entries in the parent Command's `templates` map.
  *
- * 3. **Subject identity**: A `domainTypes` entry with a `visitName` property
+ * 3. **Subject identity**: A `domainTypes` entry with a `resolverName` property
  *    is a Subject; without it, a plain type. All entries in a Command's
- *    `subjectUnion` must reference Subjects (types with `visitName`).
+ *    `subjectUnion` must reference Subjects (types with `resolverName`).
  *
- * 4. **visitName convention**: By convention, `visitName` should be prefixed
- *    with `"resolve"` (e.g. `"resolveStudent"`). The visitName must be unique
+ * 4. **resolverName convention**: By convention, `resolverName` should be prefixed
+ *    with `"resolve"` (e.g. `"resolveStudent"`). The resolverName must be unique
  *    across all Subjects used within the same Command's subject union.
  *
  * 5. **Template subjectSubset**: When provided, must be a subset of the
@@ -88,7 +88,7 @@
  *
  * - **Instantiation strategy**: Whether strategies are singletons, shared
  *   instances, or newly constructed per dispatch. This is determined by the
- *   Command's visit method implementation.
+ *   Command's resolver method implementation.
  *
  * - **Constructor wiring / DI**: How Commands, Templates, and Strategies
  *   receive their dependencies. Hooks may be injected via constructor,
@@ -116,11 +116,11 @@
  *     name: string
  *     department: string
  *   Student:
- *     visitName: resolveStudent
+ *     resolverName: resolveStudent
  *     year: number
  *     gpa: number
  *   Professor:
- *     visitName: resolveProfessor
+ *     resolverName: resolveProfessor
  *     tenured: boolean
  *   Building:
  *     name: string
@@ -165,7 +165,7 @@
 /** Key in `domainTypes` — any domain type, plain or Subject. */
 export type DomainTypeRef = string;
 
-/** Key in `domainTypes` that must have `visitName` (a Subject). */
+/** Key in `domainTypes` that must have `resolverName` (a Subject). */
 export type SubjectRef = string;
 
 /** Key in `commands`. */
@@ -183,18 +183,18 @@ export type StrategyRef = string;
  * A type referenced in the codascon protocol — as a base type, object type,
  * return type, or Subject (dispatch participant).
  *
- * The presence of `visitName` is the only structural distinction:
+ * The presence of `resolverName` is the only structural distinction:
  *
- * **With `visitName`**: This is a Subject — an entity that participates in
- * double dispatch. The `visitName` must be a unique string literal, by
+ * **With `resolverName`**: This is a Subject — an entity that participates in
+ * double dispatch. The `resolverName` must be a unique string literal, by
  * convention prefixed with `"resolve"` (e.g. `"resolveStudent"`).
  *
- * **Without `visitName`**: This is a plain type — an interface, result type,
+ * **Without `resolverName`**: This is a plain type — an interface, result type,
  * context object, or base type. It does not participate in dispatch.
  */
-/** A domain type: plain type (no `visitName`) or Subject (has `visitName`). */
+/** A domain type: plain type (no `resolverName`) or Subject (has `resolverName`). */
 export type DomainType = {
-  visitName?: string;
+  resolverName?: string;
 };
 
 // ─── Command ─────────────────────────────────────────────────────
@@ -203,10 +203,10 @@ export type DomainType = {
  * An operation that can be performed on Subjects.
  *
  * Maps directly to a class extending `Command<B, O, R, CSU>` in the
- * framework. The Command's visit methods (one per Subject in the union)
+ * framework. The Command's resolver methods (one per Subject in the union)
  * are not declared here — they are derived from `subjectUnion` entries
- * and their `visitName` values. The `dispatch` map specifies which
- * Template or Strategy each visit method resolves to.
+ * and their `resolverName` values. The `dispatch` map specifies which
+ * Template or Strategy each resolver method resolves to.
  *
  * @property commandName    — The string literal used as the Command's
  *                            `commandName` property. Also used as the key
@@ -228,8 +228,8 @@ export type DomainType = {
  *                            async Commands.
  *
  * @property subjectUnion   — The `CSU` tuple. References to domain types
- *                            that have `visitName` (i.e. Subjects). Each
- *                            entry requires a corresponding visit method
+ *                            that have `resolverName` (i.e. Subjects). Each
+ *                            entry requires a corresponding resolver method
  *                            on the Command class, enforced at compile time
  *                            by `CommandSubjectStrategies<C>`.
  *
@@ -239,8 +239,8 @@ export type DomainType = {
  *                            - `"TemplateName"` for concrete Templates
  *                              (those with `strategies: {}`)
  *                            - `"TemplateName.StrategyName"` for Strategies
- *                            The visitName for each Subject key is derived
- *                            from the Subject's `visitName` in `domainTypes`.
+ *                            The resolverName for each Subject key is derived
+ *                            from the Subject's `resolverName` in `domainTypes`.
  *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
@@ -440,7 +440,7 @@ export type Strategy = {
  *                            Command dispatches over but does not own.
  *
  * @property domainTypes    — All types in the domain, keyed by name.
- *                            Types with `visitName` are Subjects; types
+ *                            Types with `resolverName` are Subjects; types
  *                            without are plain types (interfaces, result
  *                            types, context objects, base types).
  *

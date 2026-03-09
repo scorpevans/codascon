@@ -69,10 +69,10 @@ jobs:
           import {
             Subject, Command, Template,
             CommandSubjectUnion, CommandObject, CommandReturn,
-            SubjectVisitName, CommandName,
+            SubjectResolverName, CommandName,
           } from "codascon";
-          class Foo extends Subject { readonly visitName = "resolveFoo" as const; }
-          class Bar extends Subject { readonly visitName = "resolveBar" as const; }
+          class Foo extends Subject { readonly resolverName = "resolveFoo" as const; }
+          class Bar extends Subject { readonly resolverName = "resolveBar" as const; }
           interface Item {}
           interface Result {}
           class ProcessCmd extends Command<object, Item, Result, [Foo, Bar]> {
@@ -86,7 +86,7 @@ jobs:
           type _SU = CommandSubjectUnion<ProcessCmd>;
           type _O  = CommandObject<ProcessCmd>;
           type _R  = CommandReturn<ProcessCmd>;
-          type _VN = SubjectVisitName<Foo>;
+          type _VN = SubjectResolverName<Foo>;
           type _CN = CommandName<ProcessCmd>;
           TSEOF
           echo '{"compilerOptions":{"strict":true,"module":"esnext","moduleResolution":"bundler","target":"es2022","noEmit":true}}' > tsconfig.json

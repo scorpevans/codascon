@@ -3,7 +3,7 @@
 #
 # Responsible for converting a validated ConfigIndex into TypeScript
 # code using ts-morph. Each Subject type dispatches to a distinct
-# emitter — no runtime branching in visit methods.
+# emitter — no runtime branching in resolver methods.
 #
 # The split made in the Extract domain (SubjectTypeEntry vs PlainTypeEntry,
 # AbstractTemplateEntry vs ConcreteTemplateEntry) ensures that
@@ -55,22 +55,22 @@ externalTypes:
   ConfigEntry:
 
   SubjectTypeEntry:
-    visitName: resolveSubjectType
+    resolverName: resolveSubjectType
 
   PlainTypeEntry:
-    visitName: resolvePlainType
+    resolverName: resolvePlainType
 
   CommandEntry:
-    visitName: resolveCommand
+    resolverName: resolveCommand
 
   AbstractTemplateEntry:
-    visitName: resolveAbstractTemplate
+    resolverName: resolveAbstractTemplate
 
   ConcreteTemplateEntry:
-    visitName: resolveConcreteTemplate
+    resolverName: resolveConcreteTemplate
 
   StrategyEntry:
-    visitName: resolveStrategy
+    resolverName: resolveStrategy
 
 domainTypes:
   # ── Object type ─────────────────────────────────────────────────
@@ -100,7 +100,7 @@ commands:
       ConcreteTemplateEntry: ConcreteTemplateEmitter
       StrategyEntry: StrategyClassEmitter
     templates:
-      # Emits: class Foo extends Subject { readonly visitName = "resolveFoo" as const; ... }
+      # Emits: class Foo extends Subject { readonly resolverName = "resolveFoo" as const; ... }
       # Target: domain-types.ts
       SubjectClassEmitter:
         isParameterized: false

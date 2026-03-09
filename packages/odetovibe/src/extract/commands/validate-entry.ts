@@ -60,8 +60,8 @@ function normalizeCommandKey(key: string): string {
 // TEMPLATE: SubjectTypeValidator
 //
 // Rules:
-//   - visitName must be prefixed with "resolve"
-//   - visitName must be unique across all subjectTypes
+//   - resolverName must be prefixed with "resolve"
+//   - resolverName must be unique across all subjectTypes
 // ═══════════════════════════════════════════════════════════════════
 
 class SubjectTypeValidator implements Template<ValidateEntryCommand, [], SubjectTypeEntry> {
@@ -69,23 +69,23 @@ class SubjectTypeValidator implements Template<ValidateEntryCommand, [], Subject
     const errors: ValidationError[] = [];
     const { key, config } = subject;
 
-    if (!config.visitName.startsWith("resolve")) {
+    if (!config.resolverName.startsWith("resolve")) {
       errors.push(
         err(
           key,
-          "visitName-prefix",
-          `visitName "${config.visitName}" should be prefixed with "resolve"`,
+          "resolverName-prefix",
+          `resolverName "${config.resolverName}" should be prefixed with "resolve"`,
         ),
       );
     }
 
     for (const [otherKey, other] of object.subjectTypes) {
-      if (otherKey !== key && other.config.visitName === config.visitName) {
+      if (otherKey !== key && other.config.resolverName === config.resolverName) {
         errors.push(
           err(
             key,
-            "visitName-unique",
-            `visitName "${config.visitName}" is also declared by "${otherKey}"`,
+            "resolverName-unique",
+            `resolverName "${config.resolverName}" is also declared by "${otherKey}"`,
           ),
         );
       }
@@ -98,7 +98,7 @@ class SubjectTypeValidator implements Template<ValidateEntryCommand, [], Subject
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: PlainTypeValidator
 //
-// Plain types have no visitName — no structural constraints to check.
+// Plain types have no resolverName — no structural constraints to check.
 // ═══════════════════════════════════════════════════════════════════
 
 class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainTypeEntry> {
@@ -112,7 +112,7 @@ class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainType
 //
 // Rules:
 //   - baseType, objectType, returnType must reference known domainTypes
-//   - subjectUnion entries must reference subjectTypes (types with visitName)
+//   - subjectUnion entries must reference subjectTypes (types with resolverName)
 //   - dispatch must have exactly one entry per subjectUnion member
 //   - dispatch values must resolve to concrete Templates or Template.Strategy
 //     within this Command's own templates map
@@ -133,7 +133,7 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
       }
     }
 
-    // subjectUnion entries must reference subjectTypes (types with visitName)
+    // subjectUnion entries must reference subjectTypes (types with resolverName)
     for (const subjectRef of config.subjectUnion) {
       if (!findDomainType(object, subjectRef)) {
         errors.push(
@@ -147,8 +147,8 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
         errors.push(
           err(
             key,
-            "subjectUnion-visitName",
-            `subjectUnion entry "${subjectRef}" is not a Subject (no visitName)`,
+            "subjectUnion-resolverName",
+            `subjectUnion entry "${subjectRef}" is not a Subject (no resolverName)`,
           ),
         );
       }

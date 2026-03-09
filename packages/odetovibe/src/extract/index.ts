@@ -61,8 +61,8 @@ export { ValidateEntryCommand } from "./commands/validate-entry.js";
  *
  * Reads the file, parses via `js-yaml`, and builds Maps of all
  * config entries. Domain types are split at parse time:
- *   - Types with `visitName` → `SubjectTypeEntry` (will generate a Subject class)
- *   - Types without `visitName` → `PlainTypeEntry` (will generate an interface)
+ *   - Types with `resolverName` → `SubjectTypeEntry` (will generate a Subject class)
+ *   - Types without `resolverName` → `PlainTypeEntry` (will generate an interface)
  *
  * Templates are similarly split:
  *   - Templates with non-empty `strategies` → `AbstractTemplateEntry`
@@ -94,24 +94,24 @@ export function parseYaml(yamlPath: string): ConfigIndex {
   for (const [key, rawConfig] of Object.entries(parsed.externalTypes ?? {})) {
     const config = rawConfig ?? {};
     externalTypeKeys.add(key);
-    if (config.visitName !== undefined) {
+    if (config.resolverName !== undefined) {
       subjectTypes.set(
         key,
-        new SubjectTypeEntry(key, config as typeof config & { visitName: string }),
+        new SubjectTypeEntry(key, config as typeof config & { resolverName: string }),
       );
     } else {
       plainTypes.set(key, new PlainTypeEntry(key, config));
     }
   }
 
-  // ── Domain types — split on visitName ────────────────────────────
+  // ── Domain types — split on resolverName ────────────────────────────
 
   for (const [key, rawConfig] of Object.entries(parsed.domainTypes ?? {})) {
     const config = rawConfig ?? {};
-    if (config.visitName !== undefined) {
+    if (config.resolverName !== undefined) {
       subjectTypes.set(
         key,
-        new SubjectTypeEntry(key, config as typeof config & { visitName: string }),
+        new SubjectTypeEntry(key, config as typeof config & { resolverName: string }),
       );
     } else {
       plainTypes.set(key, new PlainTypeEntry(key, config));

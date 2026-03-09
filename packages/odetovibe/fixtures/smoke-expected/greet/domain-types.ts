@@ -2,7 +2,7 @@
 import { Subject } from "codascon";
 
 export class User extends Subject {
-  readonly visitName = "resolveUser" as const;
+  readonly resolverName = "resolveUser" as const;
 }
 
 export interface Person {}
