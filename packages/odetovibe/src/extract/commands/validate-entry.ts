@@ -250,19 +250,124 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
 class CommandValidatorDefault extends CommandValidator {}
 
 // ═══════════════════════════════════════════════════════════════════
+// COMMAND: ValidateCommandHooksCommand
+//
+// Validates `commandHooks` entries in a template or strategy config:
+//   - AbstractTemplateEntry: hook values must reference known Commands
+//   - StrategyEntry: hook keys must be a subset of the parent Template's
+//     hook keys; hook values must reference known Commands
+//
+// Used as a hook in AbstractTemplateValidator and StrategyValidator to
+// centralise commandHooks validation without duplicating logic.
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class AbstractTemplateHooksValidator implements Template<
+  ValidateCommandHooksCommand,
+  [],
+  AbstractTemplateEntry
+> {
+  execute(subject: AbstractTemplateEntry, object: Readonly<ConfigIndex>): ValidationResult {
+    const { key, config } = subject;
+    if (!config.commandHooks) return ok();
+    const errors: ValidationError[] = [];
+    for (const [propName, cmdRef] of Object.entries(config.commandHooks)) {
+      if (!object.commands.has(cmdRef)) {
+        errors.push(
+          err(
+            key,
+            "commandHook-ref",
+            `commandHook "${propName}" references unknown command "${cmdRef}"`,
+          ),
+        );
+      }
+    }
+    return errors.length > 0 ? fail(...errors) : ok();
+  }
+}
+
+class AbstractTemplateHooksValidatorDefault extends AbstractTemplateHooksValidator {}
+
+abstract class StrategyHooksValidator implements Template<
+  ValidateCommandHooksCommand,
+  [],
+  StrategyEntry
+> {
+  execute(subject: StrategyEntry, object: Readonly<ConfigIndex>): ValidationResult {
+    const { key, templateKey, commandKey, config } = subject;
+    if (!config.commandHooks) return ok();
+    const tpl = object.abstractTemplates.get(`${commandKey}.${templateKey}`);
+    if (!tpl) return ok(); // parent-template error is already reported by StrategyValidator
+    const parentHookKeys = new Set(Object.keys(tpl.config.commandHooks ?? {}));
+    const errors: ValidationError[] = [];
+    for (const [hookKey, cmdRef] of Object.entries(config.commandHooks)) {
+      if (!parentHookKeys.has(hookKey)) {
+        errors.push(
+          err(
+            key,
+            "commandHook-key",
+            `commandHook "${hookKey}" is not declared by parent template "${templateKey}"`,
+          ),
+        );
+      }
+      if (!object.commands.has(cmdRef)) {
+        errors.push(
+          err(
+            key,
+            "commandHook-ref",
+            `commandHook "${hookKey}" references unknown command "${cmdRef}"`,
+          ),
+        );
+      }
+    }
+    return errors.length > 0 ? fail(...errors) : ok();
+  }
+}
+
+class StrategyHooksValidatorDefault extends StrategyHooksValidator {}
+
+const abstractTemplateHooksValidator = new AbstractTemplateHooksValidatorDefault();
+const strategyHooksValidator = new StrategyHooksValidatorDefault();
+
+/** Validates `commandHooks` entries in an AbstractTemplateEntry or StrategyEntry. */
+class ValidateCommandHooksCommand extends Command<
+  ConfigEntry,
+  ConfigIndex,
+  ValidationResult,
+  [AbstractTemplateEntry, StrategyEntry]
+> {
+  readonly commandName = "validateCommandHooks" as const;
+
+  resolveAbstractTemplate(
+    subject: AbstractTemplateEntry,
+    object: Readonly<ConfigIndex>,
+  ): Template<ValidateCommandHooksCommand, [], AbstractTemplateEntry> {
+    return abstractTemplateHooksValidator;
+  }
+
+  resolveStrategy(
+    subject: StrategyEntry,
+    object: Readonly<ConfigIndex>,
+  ): Template<ValidateCommandHooksCommand, [], StrategyEntry> {
+    return strategyHooksValidator;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: AbstractTemplateValidator
 //
 // Rules:
 //   - subjectSubset (if present) must be subset of parent Command's subjectUnion
-//   - commandHooks values must reference known Commands
+//   - commandHooks delegated to ValidateCommandHooksCommand hook
 //   - must not appear directly in parent Command's dispatch (abstract — use Strategy.*)
 // ═══════════════════════════════════════════════════════════════════
 
 abstract class AbstractTemplateValidator implements Template<
   ValidateEntryCommand,
-  [],
+  [ValidateCommandHooksCommand],
   AbstractTemplateEntry
 > {
+  readonly validateCommandHooks = new ValidateCommandHooksCommand();
+
   execute(subject: AbstractTemplateEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, commandKey, config } = subject;
@@ -290,19 +395,7 @@ abstract class AbstractTemplateValidator implements Template<
       }
     }
 
-    if (config.commandHooks) {
-      for (const [propName, cmdRef] of Object.entries(config.commandHooks)) {
-        if (!object.commands.has(cmdRef)) {
-          errors.push(
-            err(
-              key,
-              "commandHook-ref",
-              `commandHook "${propName}" references unknown command "${cmdRef}"`,
-            ),
-          );
-        }
-      }
-    }
+    errors.push(...this.validateCommandHooks.run(subject, object).errors);
 
     // Abstract templates must not appear directly in dispatch
     for (const [, target] of Object.entries(cmdEntry.config.dispatch)) {
@@ -330,11 +423,16 @@ class AbstractTemplateValidatorDefault extends AbstractTemplateValidator {}
 //   - parent must be an AbstractTemplateEntry within the same Command
 //   - subjectSubset (if present) must be subset of parent Template's effective subjectSubset
 //   - subjectSubset is only meaningful when parent Template isParameterized
-//   - commandHooks keys must be subset of parent Template's commandHooks keys
-//   - commandHooks values must reference known Commands
+//   - commandHooks delegated to ValidateCommandHooksCommand hook
 // ═══════════════════════════════════════════════════════════════════
 
-abstract class StrategyValidator implements Template<ValidateEntryCommand, [], StrategyEntry> {
+abstract class StrategyValidator implements Template<
+  ValidateEntryCommand,
+  [ValidateCommandHooksCommand],
+  StrategyEntry
+> {
+  readonly validateCommandHooks = new ValidateCommandHooksCommand();
+
   execute(subject: StrategyEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, templateKey, commandKey, config } = subject;
@@ -380,29 +478,7 @@ abstract class StrategyValidator implements Template<ValidateEntryCommand, [], S
       }
     }
 
-    if (config.commandHooks) {
-      const parentHookKeys = new Set(Object.keys(tpl.config.commandHooks ?? {}));
-      for (const [hookKey, cmdRef] of Object.entries(config.commandHooks)) {
-        if (!parentHookKeys.has(hookKey)) {
-          errors.push(
-            err(
-              key,
-              "commandHook-key",
-              `commandHook "${hookKey}" is not declared by parent template "${templateKey}"`,
-            ),
-          );
-        }
-        if (!object.commands.has(cmdRef)) {
-          errors.push(
-            err(
-              key,
-              "commandHook-ref",
-              `commandHook "${hookKey}" references unknown command "${cmdRef}"`,
-            ),
-          );
-        }
-      }
-    }
+    errors.push(...this.validateCommandHooks.run(subject, object).errors);
 
     return errors.length > 0 ? fail(...errors) : ok();
   }
