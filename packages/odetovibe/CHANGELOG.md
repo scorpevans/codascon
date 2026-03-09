@@ -1,5 +1,13 @@
 # odetovibe
 
+## 2026.3.2-beta.5
+
+### Patch Changes
+
+- f5237c8: Rename Subject.visitName to resolverName and update resolver method terminology throughout.
+- Updated dependencies [f5237c8]
+  - codascon@2026.3.2-beta.3
+
 ## 2026.3.2-beta.4
 
 ### Patch Changes

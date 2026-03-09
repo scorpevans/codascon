@@ -1,5 +1,11 @@
 # codascon
 
+## 2026.3.2-beta.3
+
+### Patch Changes
+
+- f5237c8: Rename Subject.visitName to resolverName and update resolver method terminology throughout.
+
 ## 2026.3.2-beta.2
 
 ### Patch Changes
