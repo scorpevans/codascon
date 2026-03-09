@@ -19,7 +19,7 @@ export class GreetCommand extends Command<
   }
 }
 
-export class UserGreeter implements Template<GreetCommand, [], User> {
+export abstract class UserGreeter implements Template<GreetCommand, [], User> {
   /*
   Coder comment
   */

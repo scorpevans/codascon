@@ -5,8 +5,8 @@
  *   - SubjectClassEmitter: minimal stub — extends Subject + resolverName only
  *   - InterfaceEmitter: empty stub — name only, content is user-owned
  *   - CommandClassEmitter: class generics, commandName, resolver methods, file path, imports
- *   - AbstractTemplateEmitter: abstract class, type parameter, implements, hooks, execute
- *   - ConcreteTemplateEmitter: concrete class, implements, hooks, execute stub
+ *   - TemplateEmitter (AbstractTemplateEntry): abstract class, type parameter, implements, hooks, execute
+ *   - TemplateEmitter (ConcreteTemplateEntry): abstract class, implements, hooks, execute stub
  *   - StrategyClassEmitter: extends clause, hook overrides, execute stub (sync + async), file path
  *   - emitAst: orchestration, file accumulation, namespace routing
  */
@@ -509,10 +509,10 @@ describe("CommandClassEmitter", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// AbstractTemplateEmitter
+// TemplateEmitter — AbstractTemplateEntry path
 // ═══════════════════════════════════════════════════════════════════
 
-describe("AbstractTemplateEmitter", () => {
+describe("TemplateEmitter — AbstractTemplateEntry", () => {
   const tplEntry = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
     isParameterized: true,
     subjectSubset: ["Student"],
@@ -719,10 +719,10 @@ describe("AbstractTemplateEmitter", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// ConcreteTemplateEmitter
+// TemplateEmitter — ConcreteTemplateEntry path
 // ═══════════════════════════════════════════════════════════════════
 
-describe("ConcreteTemplateEmitter", () => {
+describe("TemplateEmitter — ConcreteTemplateEntry", () => {
   const tplEntry = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
     isParameterized: false,
     strategies: {},
@@ -734,13 +734,13 @@ describe("ConcreteTemplateEmitter", () => {
     expect(result.targetFile).toBe("commands/access-building.ts");
   });
 
-  it("emits an exported non-abstract class", () => {
+  it("emits an exported abstract class", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("GrantAccess");
     expect(cls.isExported()).toBe(true);
-    expect(cls.isAbstract()).toBe(false);
+    expect(cls.isAbstract()).toBe(true);
   });
 
   it("implements Template<Command, [], CommandSubjectUnion<Command>> (full union when no subjectSubset)", () => {
@@ -831,8 +831,8 @@ describe("ConcreteTemplateEmitter", () => {
   });
 
   it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 365/369/371 true branches)", () => {
-    // Parallel to the AbstractTemplateEmitter test: same importSrc.has() ternaries but in
-    // ConcreteTemplateEmitter at lines 365, 369, 371.
+    // Parallel to the AbstractTemplateEntry path test: same importSrc.has() ternaries
+    // exercised via the ConcreteTemplateEntry dispatch path of TemplateEmitter.
     const index = idx({
       imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
       subjectTypes: new Map([

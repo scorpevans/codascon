@@ -248,8 +248,8 @@ describe("smoke", () => {
     expect(content).toContain("abstract class UserTemplate");
     expect(content).not.toContain("abstract execute");
 
-    // Concrete template: async execute + Promise<Greeting>
-    expect(content).toContain("class AdminGreeter");
+    // Concrete template (no strategies): also abstract class + async execute + Promise<Greeting>
+    expect(content).toContain("abstract class AdminGreeter");
 
     // Strategy: no execute emitted — inherited from template
     expect(content).toContain("class StandardGreet");
@@ -313,6 +313,10 @@ describe("smoke", () => {
     const commandFile = written.find((r) => r.path.includes("/commands/hello.ts"));
     expect(commandFile, "command file should be written").toBeDefined();
     const content = readFileSync(commandFile!.path, "utf8");
+
+    // All templates (regardless of strategy presence) emit abstract class
+    expect(content).toContain("abstract class UserTemplate");
+    expect(content).toContain("abstract class AdminGreeter");
 
     // No execute method should have async or Promise<T>
     expect(content).not.toContain("async execute");

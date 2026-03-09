@@ -8,8 +8,8 @@
  * File placement:
  *   SubjectTypeEntry / PlainTypeEntry  →  <ns>/domain-types.ts  (or domain-types.ts if no namespace)
  *   CommandEntry                       →  <ns>/commands/<cmd-name>.ts
- *   AbstractTemplateEntry              →  same file as parent Command
- *   ConcreteTemplateEntry              →  same file as parent Command
+ *   AbstractTemplateEntry              →  same file as parent Command   ─┐ both handled
+ *   ConcreteTemplateEntry              →  same file as parent Command   ─┘ by TemplateEmitter
  *   StrategyEntry                      →  same file as grandparent Command
  */
 
@@ -244,20 +244,41 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// TEMPLATE: AbstractTemplateEmitter
+// TEMPLATE: TemplateEmitter
 //
-// Emits: export abstract class FooTemplate<SU extends S1 | S2>
-//          implements Template<FooCommand, [HookCmd], SU> {
-//          readonly hookCmd = new HookCmd(); // @odetovibe-generated
-//          execute(subject: SU, object: Readonly<O>): R {
-//            throw new Error("Not implemented"); // @odetovibe-generated
-//          }
-//        }
+// Handles both AbstractTemplateEntry (has strategies) and
+// ConcreteTemplateEntry (no strategies). All templates generate an
+// abstract class with a concrete execute stub.
+//
+// AbstractTemplateEntry (isParameterized: true):
+//   export abstract class FooTemplate<SU extends S1 | S2>
+//     implements Template<FooCommand, [HookCmd], SU> {
+//     readonly hookCmd = new HookCmd(); // @odetovibe-generated
+//     execute(subject: SU, object: Readonly<O>): R {
+//       throw new Error("Not implemented"); // @odetovibe-generated
+//     }
+//   }
+//
+// ConcreteTemplateEntry (isParameterized: false):
+//   export abstract class FooTemplate
+//     implements Template<FooCommand, [], S1 | S2> {
+//     execute(subject: S1 | S2, object: Readonly<O>): R {
+//       throw new Error("Not implemented"); // @odetovibe-generated
+//     }
+//   }
+//
 // Target: <namespace>/commands/<parent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
-class AbstractTemplateEmitter implements Template<EmitAstCommand, [], AbstractTemplateEntry> {
-  execute(subject: AbstractTemplateEntry, object: Readonly<EmitContext>): EmitResult {
+class TemplateEmitter
+  implements
+    Template<EmitAstCommand, [], AbstractTemplateEntry>,
+    Template<EmitAstCommand, [], ConcreteTemplateEntry>
+{
+  execute(
+    subject: AbstractTemplateEntry | ConcreteTemplateEntry,
+    object: Readonly<EmitContext>,
+  ): EmitResult {
     const { configIndex } = object;
     const { key, commandKey, config } = subject;
     const namespace = configIndex.namespace;
@@ -321,91 +342,6 @@ class AbstractTemplateEmitter implements Template<EmitAstCommand, [], AbstractTe
       isAsync: cmdEntry.config.returnAsync === true,
     });
     executeMethod.addParameter({ name: "subject", type: subjectParam });
-    executeMethod.addParameter({
-      name: "object",
-      type: `Readonly<${cmdEntry.config.objectType}>`,
-    });
-    executeMethod.setReturnType(
-      maybeAsync(cmdEntry.config.returnType, cmdEntry.config.returnAsync),
-    );
-    executeMethod.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
-
-    return { targetFile: filePath };
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// TEMPLATE: ConcreteTemplateEmitter
-//
-// Emits: export class FooTemplate implements Template<FooCommand, [HookCmd], S1 | S2> {
-//          readonly hookCmd = new HookCmd(); // @odetovibe-generated
-//          execute(subject: S1 | S2, object: Readonly<O>): R {
-//            throw new Error("Not implemented"); // @odetovibe-generated
-//          }
-//        }
-// Target: <namespace>/commands/<parent-cmd-name>.ts
-// ═══════════════════════════════════════════════════════════════════
-
-class ConcreteTemplateEmitter implements Template<EmitAstCommand, [], ConcreteTemplateEntry> {
-  execute(subject: ConcreteTemplateEntry, object: Readonly<EmitContext>): EmitResult {
-    const { configIndex } = object;
-    const { key, commandKey, config } = subject;
-    const namespace = configIndex.namespace;
-    const filePath = commandFilePath(commandKey, namespace);
-    const sf = getOrCreate(object.project, filePath);
-    const dtPath = domainTypesRelPath(namespace);
-    const importSrc = buildImportSourceMap(configIndex);
-
-    ensureTypeImport(sf, "codascon", "Template");
-
-    const cmdEntry = configIndex.commands.get(commandKey)!;
-    const subjectSubset = config.subjectSubset ?? cmdEntry.config.subjectUnion;
-    const subsetUnion = subjectSubset.join(" | ");
-    const isFullUnion = !config.subjectSubset;
-    const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
-
-    if (isFullUnion) ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
-
-    for (const ref of subjectSubset) {
-      const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
-      ensureTypeImport(sf, src, ref);
-    }
-    const retSrc = importSrc.has(cmdEntry.config.returnType)
-      ? toCommandDepth(importSrc.get(cmdEntry.config.returnType)!)
-      : dtPath;
-    const objSrc = importSrc.has(cmdEntry.config.objectType)
-      ? toCommandDepth(importSrc.get(cmdEntry.config.objectType)!)
-      : dtPath;
-    ensureTypeImport(sf, retSrc, cmdEntry.config.returnType);
-    ensureTypeImport(sf, objSrc, cmdEntry.config.objectType);
-
-    const hookEntries = Object.entries(config.commandHooks ?? {});
-    const hookTypes = hookEntries.map(([, cmdRef]) => cmdRef);
-
-    for (const cmdRef of hookTypes) {
-      ensureValueImport(sf, hookImportPath(cmdRef, namespace), cmdRef);
-    }
-
-    const hooksParam = hookTypes.length > 0 ? `[${hookTypes.join(", ")}]` : "[]";
-
-    const cls = sf.addClass({ name: key, isExported: true });
-    cls.addImplements(`Template<${commandKey}, ${hooksParam}, ${suRef}>`);
-
-    for (const [propName, cmdRef] of hookEntries) {
-      cls.addProperty({
-        name: propName,
-        isReadonly: true,
-        initializer: `new ${cmdRef}()`, // @odetovibe-generated
-      });
-    }
-
-    // Mark execute async when returnAsync is true so the scaffold is
-    // immediately valid for await-based implementations.
-    const executeMethod = cls.addMethod({
-      name: "execute",
-      isAsync: cmdEntry.config.returnAsync === true,
-    });
-    executeMethod.addParameter({ name: "subject", type: suRef });
     executeMethod.addParameter({
       name: "object",
       type: `Readonly<${cmdEntry.config.objectType}>`,
@@ -494,8 +430,7 @@ class StrategyClassEmitter implements Template<EmitAstCommand, [], StrategyEntry
 const subjectClassEmitter = new SubjectClassEmitter();
 const interfaceEmitter = new InterfaceEmitter();
 const commandClassEmitter = new CommandClassEmitter();
-const abstractTemplateEmitter = new AbstractTemplateEmitter();
-const concreteTemplateEmitter = new ConcreteTemplateEmitter();
+const templateEmitter = new TemplateEmitter();
 const strategyClassEmitter = new StrategyClassEmitter();
 
 /** Dispatches each config entry to its TypeScript AST emitter via double dispatch. */
@@ -536,13 +471,13 @@ export class EmitAstCommand extends Command<
     subject: AbstractTemplateEntry,
     object: Readonly<EmitContext>,
   ): Template<EmitAstCommand, [], AbstractTemplateEntry> {
-    return abstractTemplateEmitter;
+    return templateEmitter;
   }
   resolveConcreteTemplate(
     subject: ConcreteTemplateEntry,
     object: Readonly<EmitContext>,
   ): Template<EmitAstCommand, [], ConcreteTemplateEntry> {
-    return concreteTemplateEmitter;
+    return templateEmitter;
   }
   resolveStrategy(
     subject: StrategyEntry,
