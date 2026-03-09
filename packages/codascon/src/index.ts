@@ -7,12 +7,12 @@
  *
  * **Subject** — An entity that participates in double dispatch. Each Subject
  * declares a unique `visitName` string literal (e.g. `"resolveStudent"`) which
- * the framework uses to route dispatch to the correct visit method on a Command.
+ * the framework uses to route dispatch to the correct resolver method on a Command.
  * Subjects extend the abstract `Subject` base class.
  *
  * **Command** — An operation that can be performed on Subjects. A Command
- * declares visit methods — one per Subject in its subject union — each named
- * after that Subject's `visitName`. The visit method receives the Subject and
+ * declares resolver methods — one per Subject in its subject union — each named
+ * after that Subject's `visitName`. The resolver method receives the Subject and
  * the operation's object (context/payload), inspects both, and returns a
  * Template (strategy) to execute. Commands extend the abstract `Command` base
  * class, which provides the `run` method that orchestrates dispatch.
@@ -28,7 +28,7 @@
  * ```
  * command.run(subject, object)
  *   → subject.getCommandStrategy(command, object)     // Subject initiates double dispatch
- *     → command[subject.visitName](subject, object)   // Command's visit method selects strategy
+ *     → command[subject.visitName](subject, object)   // Command's resolver method selects strategy
  *       → returns a Template instance                 // The chosen strategy
  *   → template.execute(subject, object)               // Strategy executes
  *   → returns R                                       // Result
@@ -36,9 +36,9 @@
  *
  * ## Type Safety Guarantees
  *
- * - **Exhaustive visit methods**: A Command's `run` method has a `this` parameter
+ * - **Exhaustive resolver methods**: A Command's `run` method has a `this` parameter
  *   constrained by `CommandSubjectStrategies<C>`, which maps each Subject's
- *   `visitName` to its required visit method signature. If any visit method is
+ *   `visitName` to its required resolver method signature. If any resolver method is
  *   missing, `run` becomes uncallable at the call site.
  *
  * - **Subject union enforcement**: `run` only accepts Subjects that are in the
@@ -47,7 +47,7 @@
  *
  * - **Literal visitName**: `SubjectVisitName<S>` returns `never` for non-literal
  *   `string` visitNames. When `never` is a mapped type key the entry is dropped,
- *   so visit method requirements for Subjects with non-literal visitNames are
+ *   so resolver method requirements for Subjects with non-literal visitNames are
  *   omitted from `CommandSubjectStrategies` — and `RequireLiteralVisitNames`
  *   makes `run` uncallable with a descriptive error property name.
  *
@@ -59,8 +59,8 @@
  *
  * - **Hook presence and subject coverage**: `CommandHooks<H, SU>` requires the
  *   Template to have a property for each hook Command, keyed by `commandName`,
- *   AND enforces that each hook Command declares visit methods for every Subject
- *   in `SU`. A hook missing any required visit method resolves to an error string
+ *   AND enforces that each hook Command declares resolver methods for every Subject
+ *   in `SU`. A hook missing any required resolver method resolves to an error string
  *   at the `implements` site — no value of the hook's class satisfies the string
  *   literal type, producing a compile error.
  *
@@ -91,7 +91,7 @@
  * - Abstract on the Template, instantiated by the Strategy
  * - Concrete on the Template (shared across all Strategies)
  * - Overridden by the Strategy
- * - Injected via constructor during strategy resolution in the Command's visit method
+ * - Injected via constructor during strategy resolution in the Command's resolver method
  *
  * **SU parameterization:**
  * A Template can parameterize its SU (`T<SU extends ...>`), allowing Strategies
@@ -100,7 +100,7 @@
  * dispatch that routes Students to it.
  *
  * **Async support:**
- * Set `R = Promise<Result>` on the Command. Visit methods (strategy selection)
+ * Set `R = Promise<Result>` on the Command. Resolver methods (strategy selection)
  * remain synchronous; only `execute` returns the Promise.
  */
 
@@ -112,7 +112,7 @@
  * Returns `never` for `any` (IsAny guard) and for non-literal `string`
  * visitNames. When `never` is used as a mapped type key it produces `{}`,
  * so `Visit<C, S>` and `CommandSubjectStrategies<C>` collapse to `{}`
- * for Subjects with non-literal visitNames — the visit method requirement
+ * for Subjects with non-literal visitNames — the resolver method requirement
  * for that Subject is silently dropped at the type level.
  *
  * @example
@@ -171,14 +171,14 @@ export type CommandName<C> =
  * Extracts the object type (`O`) from a Command's generic parameters.
  *
  * The object is the context/payload passed alongside the Subject when
- * running a Command. It is available to both the visit method (for strategy
+ * running a Command. It is available to both the resolver method (for strategy
  * selection) and the Template's execute method (for execution).
  *
  * @example
  * class AccessCmd extends Command<Person, Building, Result, [Student]> { ... }
  * type T = CommandObject<AccessCmd>;  // Building
  */
-/** Extracts the object type (`O`) from a Command — the context/payload passed to visit methods and `execute`. Returns `never` if `C` does not extend `Command`. */
+/** Extracts the object type (`O`) from a Command — the context/payload passed to resolver methods and `execute`. Returns `never` if `C` does not extend `Command`. */
 export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : never;
 
 /*
@@ -228,17 +228,17 @@ export type CommandSubjectUnion<C> =
       : never;
 
 /*
- * Defines the signature of a single visit method on a Command.
+ * Defines the signature of a single resolver method on a Command.
  *
  * For a given Command `C` and Subject `BS`, produces an object type with a
  * single method keyed by `SubjectVisitName<BS>`. The method receives the
  * Subject and a `Readonly` view of the object, and returns a Template.
  *
- * The object is `Readonly` in the visit method signature to signal that
+ * The object is `Readonly` in the resolver method signature to signal that
  * strategy selection should not mutate the object — mutation belongs in
  * `execute`. Hook validation occurs at the Template implementation site
- * (`implements Template<C, H, SU>`), not at the visit-method return boundary,
- * so visit methods only need to return something with `execute`. Any Template
+ * (`implements Template<C, H, SU>`), not at the resolver method return boundary,
+ * so resolver methods only need to return something with `execute`. Any Template
  * with concrete hooks satisfies the return type structurally.
  *
  * **Why `Template<C, any[], BS>` (not `Template<C, [], BS>`):**
@@ -274,7 +274,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
   : never;
 
 /*
- * Computes the full set of visit methods a Command must implement.
+ * Computes the full set of resolver methods a Command must implement.
  *
  * Iterates over `CommandSubjectUnion<C>` (the union of all Subjects in the
  * Command's BSL tuple), remaps each Subject `SU` to its `visitName` key via
@@ -286,7 +286,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * method signatures for the shared key, making the method unimplementable.
  *
  * This type is used as a `this` parameter constraint on `Command.run()`.
- * If the Command subclass is missing any visit method, the `this` constraint
+ * If the Command subclass is missing any resolver method, the `this` constraint
  * is unsatisfied and `run` becomes uncallable at the call site.
  *
  * @example
@@ -335,7 +335,7 @@ type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
  *
  * A Subject is an entity that participates in double dispatch. Each Subject
  * subclass must declare a `visitName` as a string literal, which serves as
- * the key for the corresponding visit method on Commands.
+ * the key for the corresponding resolver method on Commands.
  *
  * ## The `visitName` Convention
  *
@@ -347,12 +347,12 @@ type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
  * The `visitName` must be:
  * - A string literal type (not the wide `string` type) — enforced by
  *   `SubjectVisitName<S>` which returns `never` for non-literals, silently
- *   dropping the visit method requirement from `CommandSubjectStrategies`.
+ *   dropping the resolver method requirement from `CommandSubjectStrategies`.
  *   `RequireLiteralVisitNames` separately makes `run` uncallable with a
  *   descriptive error.
  * - Unique across all Subjects used within the same Command's subject union —
  *   duplicates cause `CommandSubjectStrategies` to intersect the conflicting
- *   method signatures, making the visit method unimplementable.
+ *   method signatures, making the resolver method unimplementable.
  *
  * ## The `getCommandStrategy` Method
  *
@@ -362,7 +362,7 @@ type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
  * `command[this.visitName]` and invokes it with `(this, object)`.
  *
  * The method call `command[methodName](this, object)` preserves `this`
- * binding on the Command, allowing visit methods to access Command
+ * binding on the Command, allowing resolver methods to access Command
  * instance state via `this`.
  *
  * The `this` parameter constraint (`this & BS`) ensures the Subject
@@ -407,8 +407,8 @@ export abstract class Subject {
  * Subclasses must:
  *
  * 1. Declare `readonly commandName` as a string literal (used for hook keying).
- * 2. Implement one visit method per Subject in `BSL`, named after that Subject's
- *    `visitName`. Each visit method receives the Subject and the object, and
+ * 2. Implement one resolver method per Subject in `BSL`, named after that Subject's
+ *    `visitName`. Each resolver method receives the Subject and the object, and
  *    returns a Template (strategy) to execute.
  *
  * ## Generic Parameters
@@ -416,13 +416,13 @@ export abstract class Subject {
  * - `B` — Base type. All Subjects in `BSL` must extend `B & Subject`.
  *         Allows constraining Subjects to share a common interface
  *         (e.g. `Person`, `Node`).
- * - `O` — Object type. The context/payload passed to both visit methods
+ * - `O` — Object type. The context/payload passed to both resolver methods
  *         and `execute`. Available during strategy selection and execution.
  * - `R` — Return type. The result of `execute` and `run`. Use `Promise<T>`
  *         for async Commands.
  * - `BSL` — Subject tuple. The ordered list of Subject types this Command
  *           dispatches to. Each element must extend `B & Subject`. The tuple
- *           drives exhaustive visit method checking.
+ *           drives exhaustive resolver method checking.
  *
  * ## The `run` Method
  *
@@ -430,22 +430,22 @@ export abstract class Subject {
  * 1. Calls `subject.getCommandStrategy(this, object)` — Subject initiates
  *    double dispatch by calling `this[subject.visitName](subject, object)`
  *    on the Command.
- * 2. The visit method inspects the Subject and object, selects and returns
+ * 2. The resolver method inspects the Subject and object, selects and returns
  *    a Template (strategy).
  * 3. `run` calls `template.execute(subject, object)` and returns the result.
  *
  * The `this` parameter constraint
  * (`this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralVisitNames<BSL>`)
- * ensures all visit methods are present and all `visitName`s are literals.
- * The error surfaces at the call site when any visit method is missing or a
+ * ensures all resolver methods are present and all `visitName`s are literals.
+ * The error surfaces at the call site when any resolver method is missing or a
  * `visitName` is non-literal — `run` becomes uncallable.
  *
  * `run` can be overridden by subclasses (e.g. for auditing, logging,
  * pre/post-processing) using `super.run(subject, object)`.
  *
- * ## Visit Method Semantics
+ * ## Resolver Method Semantics
  *
- * Visit methods are the **strategy selection** phase. They should:
+ * Resolver methods are the **strategy selection** phase. They should:
  * - Inspect the Subject's state and the object to choose a strategy
  * - Return a Template instance (which may be a new instance, a singleton,
  *   a shared instance, etc. — client's choice)
@@ -471,7 +471,7 @@ export abstract class Subject {
  */
 /**
  * Abstract base class for Commands. Declare `readonly commandName` as a string literal
- * and implement one visit method per Subject (named after that Subject's `visitName`).
+ * and implement one resolver method per Subject (named after that Subject's `visitName`).
  * Call `run(subject, object)` to dispatch.
  */
 export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
@@ -492,13 +492,13 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
 
 /*
  * Maps a tuple of hook Commands to an object type keyed by their `commandName`,
- * enforcing that each hook Command has a visit method for every Subject in `SU`.
+ * enforcing that each hook Command has a resolver method for every Subject in `SU`.
  *
  * For each hook Command `Cmd` in `H`:
- * - If `Cmd` declares a visit method for every Subject in `SU`
+ * - If `Cmd` declares a resolver method for every Subject in `SU`
  *   (i.e. has a property matching each `SubjectVisitName<SU>` key),
  *   the property resolves to `Cmd` — the implementing class satisfies it normally.
- * - If the hook is missing any visit method required by `SU`, the property
+ * - If the hook is missing any resolver method required by `SU`, the property
  *   resolves to an error string — no value of type `Cmd` can satisfy a string
  *   literal type, so the `implements` check fails at the declaration site.
  *
@@ -520,7 +520,7 @@ type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
     [K in SubjectVisitName<SU>]: any;
   }
     ? Cmd
-    : "Error: hook Command does not declare visit methods for all subjects in SU";
+    : "Error: hook Command does not declare resolver methods for all subjects in SU";
 };
 // ─── Template ────────────────────────────────────────────────────
 
@@ -607,7 +607,7 @@ type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
  * - Hooks can be concrete on the Template (shared) or abstract (Strategy provides)
  * - Strategies may override concrete hooks from the Template
  * - Hooks can also be injected via constructor during strategy resolution
- *   in the Command's visit method
+ *   in the Command's resolver method
  *
  * **Execute ownership:**
  * - `execute` can be implemented on the Template or left abstract for Strategies
@@ -623,9 +623,9 @@ type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
  * 1. **Presence** — a property must exist for each hook Command, keyed by its
  *    `commandName`. Missing a hook property is a compile error.
  *
- * 2. **Subject coverage** — each hook Command must declare visit methods for
+ * 2. **Subject coverage** — each hook Command must declare resolver methods for
  *    every Subject in `SU` (checked via `SubjectVisitName<SU>` key presence).
- *    If a hook is missing any required visit method, its property type resolves
+ *    If a hook is missing any required resolver method, its property type resolves
  *    to an error string, making the `implements` check fail. For example, a
  *    `LogCommand` that only handles `Cat` (declaring only `resolveCat`) cannot
  *    satisfy `Template<C, [LogCommand], Cat | Dog>` because it is missing

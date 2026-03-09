@@ -262,13 +262,13 @@ type _T18 = Expect<Equal<CommandSubjectUnion<string>, never>>;
 //
 // The constraint is proven indirectly:
 // - _CSS3 below: a correctly implemented Command satisfies the constraint
-//   (cmd.run() compiles; if any visit method were missing, the call site would fail)
-// - §14: incorrect implementations are rejected (missing visit method, wrong types, etc.)
+//   (cmd.run() compiles; if any resolver method were missing, the call site would fail)
+// - §14: incorrect implementations are rejected (missing resolver method, wrong types, etc.)
 //
 // Shape note (documented in typescript-gotchas.md): CommandSubjectStrategies<FeedCommand>
 // (concrete class) evaluates to {} due to circular inference in run()'s this constraint.
 // The base class form Command<B, O, R, CSU> evaluates correctly to the expected
-// intersection of per-subject visit methods, but requires the type to be importable.
+// intersection of per-subject resolver methods, but requires the type to be importable.
 
 // A correctly implemented Command satisfies its own CommandSubjectStrategies —
 // proved by the function body compiling: if FeedCommand violated the this constraint,
@@ -295,7 +295,7 @@ describe("§11 type-level assertions", () => {
 //   should reject.  Compilation success = all constraints hold.
 // ═══════════════════════════════════════════════════════════════════
 
-// ── 14a. Missing visit method on Command ─────────────────────────
+// ── 14a. Missing resolver method on Command ─────────────────────────
 
 {
   class IncompleteFeedCommand extends Command<
@@ -351,13 +351,13 @@ describe("§11 type-level assertions", () => {
 
 // ── 14d. Hook command that doesn't visit the subject union ───────
 //
-//   CommandHooks<H, SU> checks that each hook Command declares visit methods
+//   CommandHooks<H, SU> checks that each hook Command declares resolver methods
 //   for every Subject in SU (via `SubjectVisitName<SU>` key presence).
 //   This is a simple structural extends check — no `infer` involved —
 //   so TypeScript evaluates it concretely even inside mapped type bodies.
 //
 //   Enforcement happens at TWO sites:
-//     1. `implements` site — if the hook is missing a visit method for any Subject
+//     1. `implements` site — if the hook is missing a resolver method for any Subject
 //        in SU, the hook property resolves to `never` (proven in the `it` block)
 //     2. Invocation site — calling hook.run(subject) with the wrong subject is
 //        also rejected by the hook Command's own this-constraint (proven below)
@@ -404,7 +404,7 @@ describe("§11 type-level assertions", () => {
   };
 }
 
-// ── 14f. Wrong return type from visit method ─────────────────────
+// ── 14f. Wrong return type from resolver method ─────────────────────
 
 {
   class WrongReturnCommand extends Command<Person, { time: string }, FeedResult, [Dog]> {
@@ -491,7 +491,7 @@ describe("§14 compile-time constraint tests", () => {
   // block above proves the framework rejects the invalid usage — if the error
   // disappears, tsc fails. No runtime assertions are needed; compilation = proof.
 
-  it("14a: missing visit method rejected at call site", () => void 0);
+  it("14a: missing resolver method rejected at call site", () => void 0);
   it("14b: unsupported subject rejected at call site", () => void 0);
   it("14c: template missing hook dependency (absent property) rejected at implements", () =>
     void 0);
@@ -511,7 +511,7 @@ describe("§14 compile-time constraint tests", () => {
 
     class MiswiredTemplate implements Template<DogOnlyCommand, [CatOnlyCommand], Dog> {
       // @ts-expect-error — CatOnlyCommand doesn't handle Dog (no resolveDog),
-      // so CommandHooks resolves to { catOnly: "Error: hook Command does not declare visit methods for all subjects in SU" }
+      // so CommandHooks resolves to { catOnly: "Error: hook Command does not declare resolver methods for all subjects in SU" }
       catOnly: CatOnlyCommand;
       constructor(c: CatOnlyCommand) {
         this.catOnly = c;
@@ -544,8 +544,8 @@ describe("§14 compile-time constraint tests", () => {
   it("14h: non-Subject in CSU tuple rejected", () => void 0);
   it("14i: duplicate visitName — conflicting handlers rejected", () => void 0);
 
-  it("14j: visit method returning wrong-SU template rejected at call site", () => {
-    // A visit method declared to return Template<C, [], Dog> must return a Template
+  it("14j: resolver method returning wrong-SU template rejected at call site", () => {
+    // A resolver method declared to return Template<C, [], Dog> must return a Template
     // whose execute accepts Dog. Returning a Cat-scoped Template is a compile error
     // because execute<T extends Cat> is incompatible with execute<T extends Dog>.
     class WrongSUCommand extends Command<{}, string, string, [Dog, Cat]> {

@@ -540,8 +540,8 @@ class StatefulFeedCommand extends Command<Person, { time: string }, FeedResult, 
   }
 }
 
-describe("§9 command preserves `this` in visit methods", () => {
-  it("stateful visit methods access command instance correctly", () => {
+describe("§9 command preserves `this` in resolver methods", () => {
+  it("stateful resolver methods access command instance correctly", () => {
     const cmd = new StatefulFeedCommand();
 
     const r1 = cmd.run(new Dog("A", "Lab"), { time: "am" });
@@ -852,7 +852,7 @@ class DocExportCommand extends Command<Subject, AppContext, string, [TextNode]> 
   }
 }
 
-// ── 16c. Compile: missing visit method on RenderCommand variant ──
+// ── 16c. Compile: missing resolver method on RenderCommand variant ──
 
 {
   class IncompleteRenderCommand extends Command<
@@ -924,7 +924,7 @@ class DocExportCommand extends Command<Subject, AppContext, string, [TextNode]> 
     resolveTextNode() {
       return {
         // @ts-expect-error — ImageOnlyCommand lacks resolveTextNode, so CommandHooks
-        // resolves to { imageOnly: "Error: hook Command does not declare visit methods for all subjects in SU" }
+        // resolves to { imageOnly: "Error: hook Command does not declare resolver methods for all subjects in SU" }
         imageOnly: this.imgCmd,
         execute: (subject: TextNode, object: AppContext): string => {
           return subject.text;
@@ -1043,7 +1043,7 @@ describe("§17 multi-hook template — H = [LogCommand, GroomCommand]", () => {
 // ═══════════════════════════════════════════════════════════════════
 // §18 · STRATEGY STATEFULNESS — cached vs. fresh instance lifetime
 //
-//   The visit method controls strategy lifetime. When it returns a new
+//   The resolver method controls strategy lifetime. When it returns a new
 //   object on every call (the default pattern), state on that object is
 //   discarded after each run(). When it returns the same cached instance,
 //   state accumulates. The framework is neutral — both are valid — but
