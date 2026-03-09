@@ -67,9 +67,9 @@ describe("printUsage", () => {
     expect(output).toContain("Path to the code's YAML-config file");
   });
 
-  it("lists the --out flag in usage", () => {
+  it("lists the --outDir flag in usage", () => {
     const { output } = capture();
-    expect(output).toContain("--out");
+    expect(output).toContain("--outDir");
   });
 
   it("lists the --overwrite flag in usage", () => {
@@ -210,8 +210,8 @@ describe("main", () => {
     );
   });
 
-  it("passes custom --out dir to writeFiles", async () => {
-    process.argv = ["node", "cli.js", "/fake/config.yaml", "--out", "/custom/out"];
+  it("passes custom --outDir to writeFiles", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml", "--outDir", "/custom/out"];
     await main();
     expect(vi.mocked(writeFiles)).toHaveBeenCalledWith(
       expect.anything(),
