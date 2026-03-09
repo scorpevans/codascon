@@ -16,9 +16,10 @@ commands:
     subjectUnion:
       - User
     dispatch:
-      User: UserGreeter
+      User: UserGreeterDefault
     templates:
       UserGreeter:
         isParameterized: false
         subjectSubset: [User]
-        strategies: {}
+        strategies:
+          UserGreeterDefault: {}

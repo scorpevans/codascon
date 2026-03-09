@@ -34,7 +34,6 @@ const fakeConfigIndex: ConfigIndex = {
   plainTypes: new Map(),
   commands: new Map([["TestCommand", null as never]]),
   abstractTemplates: new Map(),
-  concreteTemplates: new Map(),
   strategies: new Map(),
 };
 

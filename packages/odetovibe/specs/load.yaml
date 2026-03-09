@@ -56,7 +56,7 @@ commands:
     # Routing is mode-based (WriteContext.mode), not subject-type-based.
     # The dispatch entry below names the default template (mode: "merge").
     dispatch:
-      SourceFileEntry: MergeWriter
+      SourceFileEntry: MergeWriterDefault
     templates:
       # Unconditionally overwrites the output file.
       # Prepends /* @odetovibe-generated */ header, creates parent dirs.
@@ -64,7 +64,8 @@ commands:
       OverwriteWriter:
         isParameterized: false
         subjectSubset: [SourceFileEntry]
-        strategies: {}
+        strategies:
+          OverwriteWriterDefault: {}
 
       # Reconciles generated structure with existing user code (default).
       # Selected when WriteContext.mode is "merge".
@@ -79,7 +80,8 @@ commands:
       MergeWriter:
         isParameterized: false
         subjectSubset: [SourceFileEntry]
-        strategies: {}
+        strategies:
+          MergeWriterDefault: {}
 
       # Strict merge: conflict-safe variant of MergeWriter.
       # Selected when WriteContext.mode is "strict".
@@ -90,4 +92,5 @@ commands:
       StrictMergeWriter:
         isParameterized: false
         subjectSubset: [SourceFileEntry]
-        strategies: {}
+        strategies:
+          StrictMergeWriterDefault: {}

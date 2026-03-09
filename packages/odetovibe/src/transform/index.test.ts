@@ -5,8 +5,7 @@
  *   - SubjectClassEmitter: minimal stub — extends Subject + resolverName only
  *   - InterfaceEmitter: empty stub — name only, content is user-owned
  *   - CommandClassEmitter: class generics, commandName, resolver methods, file path, imports
- *   - AbstractTemplateEmitter: abstract class, type parameter, implements, hooks, execute
- *   - ConcreteTemplateEmitter: concrete class, implements, hooks, execute stub
+ *   - AbstractTemplateEmitter: abstract class, type parameter / fixed SU, implements, hooks, execute
  *   - StrategyClassEmitter: extends clause, hook overrides, execute stub (sync + async), file path
  *   - emitAst: orchestration, file accumulation, namespace routing
  */
@@ -18,7 +17,6 @@ import {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
 } from "../extract/domain-types.js";
 import type { ConfigIndex } from "../extract/domain-types.js";
@@ -42,7 +40,6 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     plainTypes: new Map(),
     commands: new Map(),
     abstractTemplates: new Map(),
-    concreteTemplates: new Map(),
     strategies: new Map(),
     ...overrides,
   };
@@ -509,10 +506,10 @@ describe("CommandClassEmitter", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// AbstractTemplateEmitter
+// AbstractTemplateEmitter — AbstractTemplateEntry path
 // ═══════════════════════════════════════════════════════════════════
 
-describe("AbstractTemplateEmitter", () => {
+describe("AbstractTemplateEmitter — AbstractTemplateEntry", () => {
   const tplEntry = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
     isParameterized: true,
     subjectSubset: ["Student"],
@@ -525,12 +522,12 @@ describe("AbstractTemplateEmitter", () => {
     expect(result.targetFile).toBe("commands/access-building.ts");
   });
 
-  it("emits an exported abstract class", () => {
+  it("emits a non-exported abstract class", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("AccessTemplate");
-    expect(cls.isExported()).toBe(true);
+    expect(cls.isExported()).toBe(false);
     expect(cls.isAbstract()).toBe(true);
   });
 
@@ -556,6 +553,35 @@ describe("AbstractTemplateEmitter", () => {
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const typeParams = sf.getClassOrThrow("AccessTemplate").getTypeParameters();
     expect(typeParams[0].getConstraint()?.getText()).toBe("Student | Professor");
+  });
+
+  it("constrains SU to CommandSubjectUnion when subjectSubset is absent", () => {
+    const noSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(noSubsetTpl, ctx(withCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const typeParams = sf.getClassOrThrow("AccessTemplate").getTypeParameters();
+    expect(typeParams[0].getConstraint()?.getText()).toBe(
+      "CommandSubjectUnion<AccessBuildingCommand>",
+    );
+  });
+
+  it("constrains SU to CommandSubjectUnion when subjectSubset is empty array", () => {
+    const emptySubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: [],
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(emptySubsetTpl, ctx(withCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const typeParams = sf.getClassOrThrow("AccessTemplate").getTypeParameters();
+    expect(typeParams[0].getConstraint()?.getText()).toBe(
+      "CommandSubjectUnion<AccessBuildingCommand>",
+    );
   });
 
   it("has no type parameter when not isParameterized", () => {
@@ -590,18 +616,38 @@ describe("AbstractTemplateEmitter", () => {
     );
   });
 
-  it("emits an abstract execute method with correct params and return type", () => {
+  it("emits a concrete execute stub with correct params, return type, and @odetovibe-generated comment", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("AccessTemplate");
     const execute = cls.getMethodOrThrow("execute");
-    expect(execute.isAbstract()).toBe(true);
+    expect(execute.isAbstract()).toBe(false);
     expect(execute.getReturnTypeNode()?.getText()).toBe("AccessResult");
+    expect(execute.getBodyText()).toContain("throw new Error");
+    expect(execute.getBodyText()).toContain("@odetovibe-generated");
     const params = execute.getParameters();
     expect(params[0].getName()).toBe("subject");
     expect(params[1].getName()).toBe("object");
     expect(params[1].getTypeNode()?.getText()).toBe("Readonly<Building>");
+  });
+
+  it("execute is async and returns Promise<T> when returnAsync is true", () => {
+    const asyncCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      returnAsync: true,
+    });
+    const project = makeProject();
+    emitCmd.run(
+      tplEntry,
+      ctx({ ...withCmd, commands: new Map([["AccessBuildingCommand", asyncCmd]]) }, project),
+    );
+    const execute = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessTemplate")
+      .getMethodOrThrow("execute");
+    expect(execute.isAsync()).toBe(true);
+    expect(execute.getReturnTypeNode()?.getText()).toBe("Promise<AccessResult>");
   });
 
   it("emits hook properties and imports hook Command class when commandHooks declared", () => {
@@ -699,11 +745,11 @@ describe("AbstractTemplateEmitter", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// ConcreteTemplateEmitter
+// AbstractTemplateEmitter — isParameterized: false path
 // ═══════════════════════════════════════════════════════════════════
 
-describe("ConcreteTemplateEmitter", () => {
-  const tplEntry = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+describe("AbstractTemplateEmitter — isParameterized: false", () => {
+  const tplEntry = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
     isParameterized: false,
     strategies: {},
   });
@@ -714,13 +760,13 @@ describe("ConcreteTemplateEmitter", () => {
     expect(result.targetFile).toBe("commands/access-building.ts");
   });
 
-  it("emits an exported non-abstract class", () => {
+  it("emits a non-exported abstract class", () => {
     const project = makeProject();
     emitCmd.run(tplEntry, ctx(withCmd, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("GrantAccess");
-    expect(cls.isExported()).toBe(true);
-    expect(cls.isAbstract()).toBe(false);
+    expect(cls.isExported()).toBe(false);
+    expect(cls.isAbstract()).toBe(true);
   });
 
   it("implements Template<Command, [], CommandSubjectUnion<Command>> (full union when no subjectSubset)", () => {
@@ -732,8 +778,22 @@ describe("ConcreteTemplateEmitter", () => {
     );
   });
 
+  it("implements Template<Command, [], CommandSubjectUnion<Command>> when subjectSubset is empty array", () => {
+    const emptySubsetTpl = new AbstractTemplateEntry("FlatTemplate", "AccessBuildingCommand", {
+      isParameterized: false,
+      subjectSubset: [],
+      strategies: {},
+    });
+    const project = makeProject();
+    emitCmd.run(emptySubsetTpl, ctx(withCmd, project));
+    const t = text(project, "commands/access-building.ts");
+    expect(t).toContain(
+      "Template<AccessBuildingCommand, [], CommandSubjectUnion<AccessBuildingCommand>>",
+    );
+  });
+
   it("implements Template with narrowed subjectSubset when subjectSubset is declared", () => {
-    const narrowed = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const narrowed = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       subjectSubset: ["Student"],
       strategies: {},
@@ -764,7 +824,7 @@ describe("ConcreteTemplateEmitter", () => {
       dispatch: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
-    const tplWithHook = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const tplWithHook = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       commandHooks: { audit: "AuditCommand" },
       strategies: {},
@@ -810,9 +870,7 @@ describe("ConcreteTemplateEmitter", () => {
     expect(t).toContain("Promise<AccessResult>");
   });
 
-  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 365/369/371 true branches)", () => {
-    // Parallel to the AbstractTemplateEmitter test: same importSrc.has() ternaries but in
-    // ConcreteTemplateEmitter at lines 365, 369, 371.
+  it("imports subject, returnType and objectType from external sources in configIndex.imports", () => {
     const index = idx({
       imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
       subjectTypes: new Map([
@@ -825,7 +883,7 @@ describe("ConcreteTemplateEmitter", () => {
       ]),
       commands: new Map([["AccessBuildingCommand", cmdEntry]]),
     });
-    const tpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const tpl = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       subjectSubset: ["Student"],
       strategies: {},
@@ -873,12 +931,12 @@ describe("StrategyClassEmitter", () => {
     expect(result.targetFile).toBe("commands/access-building.ts");
   });
 
-  it("emits an exported class extending the parameterized template with the subject type arg", () => {
+  it("emits a non-exported class extending the parameterized template with the subject type arg", () => {
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("DepartmentMatch");
-    expect(cls.isExported()).toBe(true);
+    expect(cls.isExported()).toBe(false);
     expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student>");
   });
 
@@ -898,13 +956,12 @@ describe("StrategyClassEmitter", () => {
     expect(sf.getClassOrThrow("StratA").getExtends()?.getText()).toBe("FlatTemplate");
   });
 
-  it("extends with union type arg and uses union as execute subject when subjectSubset has multiple members", () => {
+  it("extends with union type arg when subjectSubset has multiple members", () => {
     const multiSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
       isParameterized: true,
       subjectSubset: ["Student", "Professor"],
       strategies: { StratA: {} },
     });
-    // Strategy inherits parent template's subjectSubset (no override)
     const multiStrat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {});
     const index: ConfigIndex = {
       ...withCmd,
@@ -912,43 +969,87 @@ describe("StrategyClassEmitter", () => {
     };
     const project = makeProject();
     emitCmd.run(multiStrat, ctx(index, project));
-    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
-    const cls = sf.getClassOrThrow("StratA");
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("StratA");
     expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student | Professor>");
-    expect(cls.getMethodOrThrow("execute").getParameters()[0].getTypeNode()?.getText()).toBe(
-      "Student | Professor",
+    expect(cls.getMethods()).toHaveLength(0);
+  });
+
+  it("extends with CommandSubjectUnion when neither strategy nor template has a subjectSubset", () => {
+    const noSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      strategies: { StratA: {} },
+    });
+    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {});
+    const index: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", noSubsetTpl]]),
+    };
+    const project = makeProject();
+    emitCmd.run(strat, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    expect(sf.getClassOrThrow("StratA").getExtends()?.getText()).toBe(
+      "AccessTemplate<CommandSubjectUnion<AccessBuildingCommand>>",
+    );
+    const codasconImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "codascon");
+    expect(codasconImp?.getNamedImports().map((n) => n.getName())).toContain("CommandSubjectUnion");
+  });
+
+  it("extends with CommandSubjectUnion when strategy and template both have empty subjectSubset array", () => {
+    const emptySubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: [],
+      strategies: { StratA: {} },
+    });
+    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {
+      subjectSubset: [],
+    });
+    const index: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", emptySubsetTpl]]),
+    };
+    const project = makeProject();
+    emitCmd.run(strat, ctx(index, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("StratA");
+    expect(cls.getExtends()?.getText()).toBe(
+      "AccessTemplate<CommandSubjectUnion<AccessBuildingCommand>>",
     );
   });
 
-  it("emits an execute stub with correct signature and no hook properties", () => {
-    const project = makeProject();
-    emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
-    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
-    const cls = sf.getClassOrThrow("DepartmentMatch");
-    expect(cls.getProperties()).toHaveLength(0);
-    const execute = cls.getMethodOrThrow("execute");
-    expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
-    expect(execute.getParameters()[1].getTypeNode()?.getText()).toBe("Readonly<Building>");
-    expect(execute.getReturnTypeNode()?.getText()).toBe("AccessResult");
-    expect(execute.getBodyText()).toContain("throw new Error");
-    expect(execute.getBodyText()).toContain("@odetovibe-generated");
-  });
-
-  it("execute is async and returns Promise<T> when returnAsync is true", () => {
-    const asyncCmd = new CommandEntry("AccessBuildingCommand", {
-      ...cmdEntry.config,
-      returnAsync: true,
+  it("extends with template's subjectSubset when strategy's subjectSubset is empty array", () => {
+    const tplWithSubset = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      subjectSubset: ["Student"],
+      strategies: { StratA: {} },
     });
-    const asyncWithCmdAndTpl: ConfigIndex = {
-      ...withCmdAndTpl,
-      commands: new Map([["AccessBuildingCommand", asyncCmd]]),
+    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {
+      subjectSubset: [],
+    });
+    const index: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", tplWithSubset]]),
     };
     const project = makeProject();
-    emitCmd.run(stratEntry, ctx(asyncWithCmdAndTpl, project));
-    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
-    const execute = sf.getClassOrThrow("DepartmentMatch").getMethodOrThrow("execute");
-    expect(execute.isAsync()).toBe(true);
-    expect(execute.getReturnTypeNode()?.getText()).toBe("Promise<AccessResult>");
+    emitCmd.run(strat, ctx(index, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("StratA");
+    expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student>");
+  });
+
+  it("emits no execute method and no hook properties when strategy has no overrides", () => {
+    const project = makeProject();
+    emitCmd.run(stratEntry, ctx(withCmdAndTpl, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("DepartmentMatch");
+    expect(cls.getProperties()).toHaveLength(0);
+    expect(cls.getMethods()).toHaveLength(0);
   });
 
   it("emits hook override properties when strategy declares commandHooks", () => {
@@ -991,9 +1092,7 @@ describe("StrategyClassEmitter", () => {
     const cls = project
       .getSourceFileOrThrow("commands/access-building.ts")
       .getClassOrThrow("DepartmentMatch");
-    const execute = cls.getMethodOrThrow("execute");
-    expect(execute.getParameters()[0].getTypeNode()?.getText()).toBe("Student");
-    expect(execute.getBodyText()).toContain("@odetovibe-generated");
+    expect(cls.getMethods()).toHaveLength(0);
   });
 
   it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 447/452/454 true branches)", () => {
@@ -1013,7 +1112,6 @@ describe("StrategyClassEmitter", () => {
       ]),
       commands: new Map([["AccessBuildingCommand", cmdEntry]]),
       abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTplEntry]]),
-      concreteTemplates: new Map(),
       strategies: new Map(),
     };
     const project = makeProject();
@@ -1036,16 +1134,16 @@ describe("StrategyClassEmitter", () => {
 
 describe("emitAst", () => {
   it("returns one EmitResult per entry across all maps", () => {
-    const tplEntry = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const tplEntry = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       strategies: {},
     });
     const index: ConfigIndex = {
       ...withCmd,
-      concreteTemplates: new Map([["AccessBuildingCommand.GrantAccess", tplEntry]]),
+      abstractTemplates: new Map([["AccessBuildingCommand.GrantAccess", tplEntry]]),
     };
     const project = makeProject();
-    // subjectTypes(2) + plainTypes(3) + commands(1) + concreteTemplates(1)
+    // subjectTypes(2) + plainTypes(3) + commands(1) + abstractTemplates(1)
     const results = emitAst(index, { configIndex: index, project });
     expect(results).toHaveLength(7);
   });
@@ -1067,7 +1165,7 @@ describe("emitAst", () => {
       subjectSubset: ["Student"],
       strategies: { DepartmentMatch: {} },
     });
-    const concreteTpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const nonParameterizedTpl = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       strategies: {},
     });
@@ -1079,8 +1177,10 @@ describe("emitAst", () => {
     );
     const index: ConfigIndex = {
       ...withCmd,
-      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
-      concreteTemplates: new Map([["AccessBuildingCommand.GrantAccess", concreteTpl]]),
+      abstractTemplates: new Map([
+        ["AccessBuildingCommand.AccessTemplate", abstractTpl],
+        ["AccessBuildingCommand.GrantAccess", nonParameterizedTpl],
+      ]),
       strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", stratEntry]]),
     };
     const project = makeProject();
@@ -1210,7 +1310,7 @@ describe("TypeScript diagnostics (pre-Load AST gate)", () => {
       subjectSubset: ["Student"],
       strategies: { DepartmentMatch: {} },
     });
-    const concreteTpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const nonParameterizedTpl = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       strategies: {},
     });
@@ -1222,8 +1322,10 @@ describe("TypeScript diagnostics (pre-Load AST gate)", () => {
     );
     const fullIndex: ConfigIndex = {
       ...withCmd,
-      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
-      concreteTemplates: new Map([["AccessBuildingCommand.GrantAccess", concreteTpl]]),
+      abstractTemplates: new Map([
+        ["AccessBuildingCommand.AccessTemplate", abstractTpl],
+        ["AccessBuildingCommand.GrantAccess", nonParameterizedTpl],
+      ]),
       strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", stratEntry]]),
     };
     const project = makeProject();

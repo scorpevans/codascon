@@ -6,10 +6,10 @@
 #   2. Validating all entries against schema rules (validateYaml)
 #
 # Domain types with `resolverName` are split into SubjectTypeEntry at
-# parse time; types without become PlainTypeEntry. Templates are
-# similarly split: non-empty strategies → AbstractTemplateEntry,
-# empty strategies → ConcreteTemplateEntry. This ensures the
-# ValidateEntryCommand dispatches structurally with no runtime branching.
+# parse time; types without become PlainTypeEntry. Templates always
+# become AbstractTemplateEntry entries (all templates are abstract).
+# This ensures the ValidateEntryCommand dispatches structurally with
+# no runtime branching.
 #
 # Public API exposed to clients:
 #   - parseYaml(yamlPath: string): ConfigIndex
@@ -42,9 +42,6 @@ domainTypes:
   AbstractTemplateEntry:
     resolverName: resolveAbstractTemplate
 
-  ConcreteTemplateEntry:
-    resolverName: resolveConcreteTemplate
-
   StrategyEntry:
     resolverName: resolveStrategy
 
@@ -69,48 +66,45 @@ commands:
       - PlainTypeEntry
       - CommandEntry
       - AbstractTemplateEntry
-      - ConcreteTemplateEntry
       - StrategyEntry
     dispatch:
-      SubjectTypeEntry: SubjectTypeValidator
-      PlainTypeEntry: PlainTypeValidator
-      CommandEntry: CommandValidator
-      AbstractTemplateEntry: AbstractTemplateValidator
-      ConcreteTemplateEntry: ConcreteTemplateValidator
-      StrategyEntry: StrategyValidator
+      SubjectTypeEntry: SubjectTypeValidatorDefault
+      PlainTypeEntry: PlainTypeValidatorDefault
+      CommandEntry: CommandValidatorDefault
+      AbstractTemplateEntry: AbstractTemplateValidatorDefault
+      StrategyEntry: StrategyValidatorDefault
     templates:
       # Checks resolverName prefix ("resolve") and uniqueness across subjectTypes
       SubjectTypeValidator:
         isParameterized: false
         subjectSubset: [SubjectTypeEntry]
-        strategies: {}
+        strategies:
+          SubjectTypeValidatorDefault: {}
 
       # Plain types have no resolverName — no structural constraints
       PlainTypeValidator:
         isParameterized: false
         subjectSubset: [PlainTypeEntry]
-        strategies: {}
+        strategies:
+          PlainTypeValidatorDefault: {}
 
       # Checks type refs, subjectUnion validity, dispatch coverage and targets
       CommandValidator:
         isParameterized: false
         subjectSubset: [CommandEntry]
-        strategies: {}
+        strategies:
+          CommandValidatorDefault: {}
 
       # Checks subjectSubset, commandHooks, and that it is not in dispatch directly
       AbstractTemplateValidator:
         isParameterized: false
         subjectSubset: [AbstractTemplateEntry]
-        strategies: {}
-
-      # Checks subjectSubset and commandHooks (may appear directly in dispatch)
-      ConcreteTemplateValidator:
-        isParameterized: false
-        subjectSubset: [ConcreteTemplateEntry]
-        strategies: {}
+        strategies:
+          AbstractTemplateValidatorDefault: {}
 
       # Checks parent AbstractTemplateEntry, subjectSubset, commandHooks subset
       StrategyValidator:
         isParameterized: false
         subjectSubset: [StrategyEntry]
-        strategies: {}
+        strategies:
+          StrategyValidatorDefault: {}

@@ -72,17 +72,14 @@ commands:
     returnType: AccessResult
     subjectUnion: [Student, Professor]
     dispatch:
-      Student: AccessTemplate.DenyAccess
-      Professor: AccessTemplate.GrantAccess
+      Student: BasicAccess
+      Professor: FullAccess
     templates:
       AccessTemplate:
-        isParameterized: true
-        subjectSubset: [Student, Professor]
+        isParameterized: false
         strategies:
-          DenyAccess:
-            subjectSubset: [Student]
-          GrantAccess:
-            subjectSubset: [Professor]
+          BasicAccess: {}
+          FullAccess: {}
 ```
 
 **Key rules:**
@@ -90,7 +87,7 @@ commands:
 - `domainTypes` with `resolverName` become Subject classes; without become interfaces
 - Every entry in `subjectUnion` must appear in `dispatch`
 - `dispatch` values are `TemplateName` (concrete) or `TemplateName.StrategyName` (abstract)
-- Templates with non-empty `strategies` are abstract; those with `strategies: {}` are concrete
+- All Templates generate as abstract classes, regardless of whether `strategies` is empty or not
 - Template `subjectSubset` must be a subset of the parent Command's `subjectUnion`
 - Strategy `subjectSubset` must be a subset of the parent Template's `subjectSubset`
 
@@ -131,14 +128,13 @@ for (const fileResult of results) {
 
 For each YAML entry, odetovibe emits:
 
-| YAML entry                                 | Generated output                                                          |
-| ------------------------------------------ | ------------------------------------------------------------------------- |
-| `domainType` with `resolverName`           | `class SubjectName extends Subject`                                       |
-| `domainType` without `resolverName`        | `interface TypeName`                                                      |
-| `command`                                  | `class CommandName extends Command<...>` with typed resolver method stubs |
-| Abstract template (non-empty `strategies`) | `abstract class TemplateName implements Template<...>`                    |
-| Concrete template (`strategies: {}`)       | `class TemplateName implements Template<...>`                             |
-| `strategy`                                 | `class StrategyName extends TemplateName`                                 |
+| YAML entry                          | Generated output                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `domainType` with `resolverName`    | `class SubjectName extends Subject`                                                   |
+| `domainType` without `resolverName` | `interface TypeName`                                                                  |
+| `command`                           | `class CommandName extends Command<...>` with typed resolver method stubs             |
+| template                            | `abstract class TemplateName implements Template<...>` with a concrete `execute` stub |
+| `strategy`                          | `class StrategyName extends TemplateName`                                             |
 
 All classes are fully typed — generic parameters, resolver method signatures, hook properties — so the compiler enforces the codascon protocol from the first run.
 

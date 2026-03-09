@@ -62,26 +62,11 @@ export class CommandEntry extends Subject implements ConfigEntry {
 }
 
 /**
- * A Template with a non-empty `strategies` map — generates an abstract class.
+ * A Template entry — generates an abstract class.
  * Carries `commandKey` (the parent Command's key).
  */
 export class AbstractTemplateEntry extends Subject implements ConfigEntry {
   readonly resolverName = "resolveAbstractTemplate" as const;
-  constructor(
-    public readonly key: string,
-    public readonly commandKey: string,
-    public readonly config: Template,
-  ) {
-    super();
-  }
-}
-
-/**
- * A Template with an empty `strategies` map — generates a concrete class.
- * Carries `commandKey` (the parent Command's key).
- */
-export class ConcreteTemplateEntry extends Subject implements ConfigEntry {
-  readonly resolverName = "resolveConcreteTemplate" as const;
   constructor(
     public readonly key: string,
     public readonly commandKey: string,
@@ -130,7 +115,6 @@ export interface ConfigIndex {
   readonly plainTypes: ReadonlyMap<string, PlainTypeEntry>;
   readonly commands: ReadonlyMap<string, CommandEntry>;
   readonly abstractTemplates: ReadonlyMap<string, AbstractTemplateEntry>;
-  readonly concreteTemplates: ReadonlyMap<string, ConcreteTemplateEntry>;
   readonly strategies: ReadonlyMap<string, StrategyEntry>;
 }
 

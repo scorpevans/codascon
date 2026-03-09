@@ -35,12 +35,11 @@
  *
  * ## Dispatch Reference Format
  *
- * The `dispatch` map on a Command maps Subject names to resolution targets:
+ * The `dispatch` map on a Command maps Subject names to resolution targets.
+ * The only valid format is a plain Strategy name:
  *
- * - `"TemplateName"` — Dispatches directly to a concrete Template
- *   (only valid when the Template has no strategies, i.e. `strategies: {}`)
- * - `"TemplateName.StrategyName"` — Dispatches to a specific Strategy
- *   within a Template
+ * - `"StrategyName"` — Dispatches to a Strategy by its unqualified name,
+ *   looked up across the Templates of the same Command
  *
  * ## Validation Rules
  *
@@ -49,10 +48,8 @@
  * 1. **Dispatch coverage**: Every Subject in a Command's `subjectUnion` must
  *    have exactly one entry in its `dispatch` map.
  *
- * 2. **Dispatch target validity**: Values referencing a Template directly are
- *    only valid when that Template's `strategies` is empty (`{}`). Values
- *    referencing a Strategy use the `TemplateName.StrategyName` format, and
- *    both parts must resolve to entries in the parent Command's `templates` map.
+ * 2. **Dispatch target validity**: All dispatch targets must be plain Strategy
+ *    names, looked up across the Templates of the same Command.
  *
  * 3. **Subject identity**: A `domainTypes` entry with a `resolverName` property
  *    is a Subject; without it, a plain type. All entries in a Command's
@@ -76,11 +73,9 @@
  *
  * 8. **Template commandHooks values**: Must reference entries in `commands`.
  *
- * 9. **Template abstractness**: A Template with a non-empty `strategies` map
- *    should be generated as an abstract class. Dispatch should not reference
- *    such a Template directly (only its Strategies). A Template with an empty
- *    `strategies` map (`{}`) is concrete and may be referenced directly in
- *    dispatch.
+ * 9. **Template abstractness**: All Templates generate as abstract classes.
+ *    Dispatch must not reference Templates directly — only Strategy names
+ *    (from a Template's `strategies` map) are valid dispatch targets.
  *
  * ## Out of Scope
  *
@@ -94,9 +89,11 @@
  *   receive their dependencies. Hooks may be injected via constructor,
  *   instantiated internally, or inherited from the Template.
  *
- * - **Execute ownership**: Whether `execute` is implemented on the Template
- *   or deferred to Strategies. The recommended pattern is for the Template
- *   to implement `execute` and delegate to abstract/protected methods.
+ * - **Execute body**: Codegen emits a concrete `execute` stub on every
+ *   Template (abstract or concrete). Strategies do not get an `execute`
+ *   scaffold — they inherit it from the Template. Whether the client
+ *   implements the body on the Template, overrides it in a Strategy, or
+ *   delegates to a protected abstract method is entirely their choice.
  *
  * - **Hook instantiation**: Whether a hook is abstract on the Template
  *   (Strategy must instantiate) or concrete (shared across Strategies).
@@ -138,7 +135,7 @@
  *     returnType: AccessResult
  *     subjectUnion: [Student, Professor]
  *     dispatch:
- *       Student: AccessTemplate.DepartmentMatch
+ *       Student: DepartmentMatch
  *       Professor: GrantAccess
  *     templates:
  *       AccessTemplate:
@@ -171,10 +168,10 @@ export type SubjectRef = string;
 /** Key in `commands`. */
 export type CommandRef = string;
 
-/** Unqualified reference to a concrete Template: `"TemplateName"`. */
+/** Unqualified reference to a Template: `"TemplateName"`. */
 export type TemplateRef = string;
 
-/** Qualified reference to a Strategy: `"TemplateName.StrategyName"`. */
+/** Unqualified reference to a Strategy: `"StrategyName"`. */
 export type StrategyRef = string;
 
 // ─── Domain Types ────────────────────────────────────────────────
@@ -235,10 +232,9 @@ export type DomainType = {
  *
  * @property dispatch       — Maps each Subject to its resolution target.
  *                            Keys are Subject type references (must match
- *                            entries in `subjectUnion`). Values are either:
- *                            - `"TemplateName"` for concrete Templates
- *                              (those with `strategies: {}`)
- *                            - `"TemplateName.StrategyName"` for Strategies
+ *                            entries in `subjectUnion`). Values must be
+ *                            plain Strategy names, looked up across the
+ *                            Templates of the same Command.
  *                            The resolverName for each Subject key is derived
  *                            from the Subject's `resolverName` in `domainTypes`.
  *
@@ -249,17 +245,12 @@ export type DomainType = {
  *                            is implicit from this nesting — no explicit
  *                            `commandRef` is needed.
  *
- *                            Dispatch targets reference these by name:
- *                            `"TemplateName"` for concrete Templates (those
- *                            with `strategies: {}`), or
- *                            `"TemplateName.StrategyName"` for a specific
- *                            Strategy within a Template.
+ *                            Dispatch targets are plain Strategy names,
+ *                            looked up across these Templates.
  *
- *                            A Template with a non-empty `strategies` map
- *                            should be generated as an abstract class and
- *                            must not appear directly in `dispatch`. A
- *                            Template with `strategies: {}` is concrete
- *                            and may be referenced directly.
+ *                            All Templates generate as abstract classes.
+ *                            Only Strategy names (from this map) are valid
+ *                            as dispatch targets.
  */
 /** A Command entry in the YAML config — declares generic params, dispatch map, and templates. */
 export type Command = {
@@ -282,10 +273,10 @@ export type Command = {
 /*
  * The strategy interface / abstract class.
  *
- * Maps to a class implementing `Template<C, H, SU>` in the framework.
- * A Template with a non-empty `strategies` map is abstract — it should
- * not be dispatched to directly. A Template with `strategies: {}` is
- * concrete and can serve as both the Template and the Strategy.
+ * Maps to an abstract class implementing `Template<C, H, SU>` in the framework.
+ * All Templates generate as abstract classes, regardless of whether `strategies`
+ * is empty or non-empty. Dispatch must reference Strategy names only — Templates
+ * themselves are never valid dispatch targets.
  *
  * The parent Command is implicit from nesting — Templates are defined
  * within the `templates` map of their owning Command. The `C` generic
@@ -338,13 +329,11 @@ export type Command = {
  *                            This becomes the `SU` parameter (or its
  *                            constraint, when `isParameterized` is true).
  *
- * @property strategies     — Concrete extensions of this Template. An empty
- *                            object (`{}`) means the Template is itself
- *                            concrete — it can be dispatched to directly.
- *                            A non-empty map means the Template is abstract
- *                            and only its Strategies should appear in
- *                            dispatch targets. Required — explicit emptiness
- *                            signals intent.
+ * @property strategies     — Concrete extensions of this Template. Required
+ *                            — explicit emptiness signals intent. All Templates
+ *                            generate as abstract classes regardless of whether
+ *                            this map is empty or non-empty. Only Strategy names
+ *                            (from this map) may appear as dispatch targets.
  */
 /** A Template entry — declares `isParameterized`, hook dependencies, subject narrowing, and strategies. */
 export type Template = {
@@ -367,8 +356,7 @@ export type Template = {
  * Templates, the Strategy instantiates the type parameter with its
  * chosen subject subset.
  *
- * In dispatch references, Strategies use the dotted format:
- * `"TemplateName.StrategyName"`.
+ * In dispatch references, Strategies are referenced by their plain name.
  *
  * @property subjectSubset  — The SU narrowing this Strategy applies.
  *                            Must be a subset of the parent Template's

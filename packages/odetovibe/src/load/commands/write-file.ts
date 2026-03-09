@@ -16,7 +16,9 @@
  *   user's existing code (preserved by the merge logic) is never touched.
  *
  * Merge ownership contract:
- *   - Class structure (extends, typeParameters, isAbstract) → odetovibe owns; updated.
+ *   - Class structure (extends, typeParameters) → odetovibe owns; always updated.
+ *   - Class isAbstract → odetovibe enforces when generated as true (templates always abstract);
+ *     when generated as false (strategies, commands, subjects), client's choice is preserved.
  *   - Class implements → union-merge by base name: codegen entries win per
  *     base name; user-added entries (not in generated) are preserved.
  *   - Class properties → odetovibe owns; always updated.
@@ -305,7 +307,9 @@ function implBaseName(text: string): string {
 /**
  * Deep-merge a class declaration.
  *
- * - `extends`, `typeParameters`, `isAbstract` → codegen owns; always updated.
+ * - `extends`, `typeParameters` → codegen owns; always updated.
+ * - `isAbstract` → codegen enforces when generated as `true` (templates must stay abstract);
+ *   when generated as `false` (strategies, commands, subjects), client's value is preserved.
  * - `implements` → union-merge by base name: codegen entries replace any
  *   existing entry with the same base name; user-added entries (base names
  *   absent from generated) are preserved.
@@ -361,7 +365,10 @@ function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): vo
     mergedImpl.some((t, i) => normalizeWs(t) !== normalizeWs(existingImplTexts[i]));
 
   existing.set({
-    isAbstract: genStruct.isAbstract,
+    // Codegen enforces abstract when it generates true (templates must stay abstract).
+    // When codegen generates false (strategies, commands, subjects), the client's
+    // choice is preserved — strategies in particular may be abstract or concrete.
+    isAbstract: genStruct.isAbstract || existing.isAbstract(),
     typeParameters: genStruct.typeParameters,
     ...(extendsChanged ? { extends: genStruct.extends } : {}),
     ...(implChanged ? { implements: mergedImpl } : {}),
@@ -511,8 +518,10 @@ function hasConflict(generatedText: string, existingContent: string): boolean {
     )
       return true;
 
-    // isAbstract
-    if (genCls.isAbstract() !== existingCls.isAbstract()) return true;
+    // isAbstract — conflict only when codegen enforces abstract (generated true)
+    // but existing disagrees (false). Client-added abstract when codegen says false
+    // (strategies) is intentional and never a conflict.
+    if (genCls.isAbstract() && !existingCls.isAbstract()) return true;
 
     // typeParameters — normalize each
     const genTPs = genCls.getTypeParameters().map((tp) => normalizeWs(tp.getText()));
@@ -612,7 +621,7 @@ function conflictPath(outputPath: string): string {
 // directories, and writes the SourceFile's full text to disk.
 // ═══════════════════════════════════════════════════════════════════
 
-class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
+abstract class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   async execute(subject: SourceFileEntry, object: Readonly<WriteContext>): Promise<WriteResult> {
     const outputPath = resolveOutputPath(subject.sourceFile.getFilePath(), object.targetDir);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -626,6 +635,8 @@ class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry>
   }
 }
 
+class OverwriteWriterDefault extends OverwriteWriter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: MergeWriter
 //
@@ -635,7 +646,7 @@ class OverwriteWriter implements Template<WriteFileCommand, [], SourceFileEntry>
 // module.
 // ═══════════════════════════════════════════════════════════════════
 
-class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
+abstract class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   async execute(subject: SourceFileEntry, object: Readonly<WriteContext>): Promise<WriteResult> {
     const outputPath = resolveOutputPath(subject.sourceFile.getFilePath(), object.targetDir);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -660,6 +671,8 @@ class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   }
 }
 
+class MergeWriterDefault extends MergeWriter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: StrictMergeWriter
 //
@@ -670,7 +683,7 @@ class MergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
 // If no conflict, performs a normal merge in-place.
 // ═══════════════════════════════════════════════════════════════════
 
-class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
+abstract class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntry> {
   async execute(subject: SourceFileEntry, object: Readonly<WriteContext>): Promise<WriteResult> {
     const outputPath = resolveOutputPath(subject.sourceFile.getFilePath(), object.targetDir);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -705,13 +718,15 @@ class StrictMergeWriter implements Template<WriteFileCommand, [], SourceFileEntr
   }
 }
 
+class StrictMergeWriterDefault extends StrictMergeWriter {}
+
 // ═══════════════════════════════════════════════════════════════════
 // COMMAND: WriteFileCommand
 // ═══════════════════════════════════════════════════════════════════
 
-const overwriteWriter = new OverwriteWriter();
-const mergeWriter = new MergeWriter();
-const strictMergeWriter = new StrictMergeWriter();
+const overwriteWriter = new OverwriteWriterDefault();
+const mergeWriter = new MergeWriterDefault();
+const strictMergeWriter = new StrictMergeWriterDefault();
 
 const WRITER_BY_MODE: Record<WriteMode, Template<WriteFileCommand, [], SourceFileEntry>> = {
   overwrite: overwriteWriter,

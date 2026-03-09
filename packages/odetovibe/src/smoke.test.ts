@@ -127,9 +127,9 @@ describe("smoke", () => {
   it("full pipeline handles abstract templates with strategies", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
-    // smoke.yaml has only a concrete template; this covers the abstract template +
+    // smoke.yaml has only a non-parameterized template; this covers the parameterized template +
     // strategy code path: parameterized abstract class, two strategies with
-    // distinct subjectSubsets, dispatch via Template.Strategy dotted format.
+    // distinct subjectSubsets, dispatch via plain strategy names.
     const strategyYaml = [
       "namespace: access",
       "",
@@ -149,8 +149,8 @@ describe("smoke", () => {
       "    returnType: AccessResult",
       "    subjectUnion: [User, Admin]",
       "    dispatch:",
-      "      User: AccessTemplate.UserGrant",
-      "      Admin: AccessTemplate.AdminGrant",
+      "      User: UserGrant",
+      "      Admin: AdminGrant",
       "    templates:",
       "      AccessTemplate:",
       "        isParameterized: true",
@@ -183,16 +183,15 @@ describe("smoke", () => {
     expect(content).toContain("class AdminGrant");
   }, 20_000);
 
-  it("returnAsync: true — abstract template execute returns Promise<T>; concrete template and strategy execute are async and return Promise<T>", async () => {
+  it("returnAsync: true — parameterized and non-parameterized template execute are async and return Promise<T>", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
     // One command with returnAsync: true.
-    // Uses one abstract template (UserTemplate, with a strategy) and one concrete
-    // template (AdminGreeter), so we can verify all three emitter paths in a
-    // single pipeline run:
-    //   • abstract template execute — no async modifier (forbidden on abstract
-    //     methods in TypeScript), but return type IS Promise<T>
-    //   • concrete template execute — async + Promise<T>
+    // Uses one parameterized template (UserTemplate, with a strategy) and one
+    // non-parameterized template (AdminGreeter, with a default strategy), to verify
+    // all emitter paths in a single pipeline run:
+    //   • parameterized template execute — async + Promise<T>
+    //   • non-parameterized template execute — async + Promise<T>
     //   • strategy execute — async + Promise<T>
     const asyncYaml = [
       "namespace: hello",
@@ -214,8 +213,8 @@ describe("smoke", () => {
       "    returnAsync: true",
       "    subjectUnion: [User, Admin]",
       "    dispatch:",
-      "      User: UserTemplate.StandardGreet",
-      "      Admin: AdminGreeter",
+      "      User: StandardGreet",
+      "      Admin: AdminGreeterDefault",
       "    templates:",
       "      UserTemplate:",
       "        isParameterized: true",
@@ -224,7 +223,8 @@ describe("smoke", () => {
       "            subjectSubset: [User]",
       "      AdminGreeter:",
       "        isParameterized: false",
-      "        strategies: {}",
+      "        strategies:",
+      "          AdminGreeterDefault: {}",
     ].join("\n");
 
     writeFileSync(resolve(tmpDir, "hello.yaml"), asyncYaml);
@@ -244,36 +244,24 @@ describe("smoke", () => {
     expect(commandFile, "command file should be written").toBeDefined();
     const content = readFileSync(commandFile!.path, "utf8");
 
-    // Abstract template: abstract execute must return Promise<Greeting> but
-    // must NOT carry the async keyword (TypeScript forbids async on abstract methods).
-    expect(content).toContain("abstract execute");
+    // Parameterized template: concrete execute stub, async, returns Promise<Greeting>
     expect(content).toContain("abstract class UserTemplate");
-    const abstractExecuteMatch = content.match(/abstract\s+execute\([^)]*\)[^{]*/);
-    expect(abstractExecuteMatch, "abstract execute signature found").toBeTruthy();
-    expect(abstractExecuteMatch![0]).toContain("Promise<Greeting>");
-    expect(abstractExecuteMatch![0]).not.toContain("async");
+    expect(content).not.toContain("abstract execute");
 
-    // Concrete template: async execute + Promise<Greeting>
-    expect(content).toContain("class AdminGreeter");
-    expect(content).toMatch(/async\s+execute[^{]*Promise<Greeting>/);
+    // Non-parameterized template: abstract class + async execute + Promise<Greeting>
+    expect(content).toContain("abstract class AdminGreeter");
 
-    // Strategy: async execute + Promise<Greeting>
+    // Strategy: no execute emitted — inherited from template
     expect(content).toContain("class StandardGreet");
-    // All non-abstract execute methods must be async and return Promise<Greeting>
-    const execMatches = [...content.matchAll(/\b(async\s+)?execute\s*\(/g)];
-    const nonAbstractExec = execMatches.filter(
-      (m) => !content.slice(0, m.index).match(/abstract\s*$/),
-    );
-    expect(
-      nonAbstractExec.length,
-      "at least two non-abstract execute methods",
-    ).toBeGreaterThanOrEqual(2);
-    for (const m of nonAbstractExec) {
-      expect(m[0], `execute at offset ${m.index} should be async`).toContain("async");
-    }
+    expect(content).toMatch(/class StandardGreet[^{]*\{\s*\}/s);
+
+    // All execute methods must be async and return Promise<Greeting>
+    const execMatches = [...content.matchAll(/\basync\s+execute\s*\(/g)];
+    expect(execMatches.length, "at least two async execute stubs").toBeGreaterThanOrEqual(2);
+    expect(content).toMatch(/async\s+execute[^{]*Promise<Greeting>/);
   }, 20_000);
 
-  it("returnAsync absent — template and strategy execute are not async and return T directly", async () => {
+  it("returnAsync absent — template execute are not async and return T directly", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 
     // Same domain structure as the returnAsync test above, but without returnAsync.
@@ -296,8 +284,8 @@ describe("smoke", () => {
       "    returnType: Greeting",
       "    subjectUnion: [User, Admin]",
       "    dispatch:",
-      "      User: UserTemplate.StandardGreet",
-      "      Admin: AdminGreeter",
+      "      User: StandardGreet",
+      "      Admin: AdminGreeterDefault",
       "    templates:",
       "      UserTemplate:",
       "        isParameterized: true",
@@ -306,7 +294,8 @@ describe("smoke", () => {
       "            subjectSubset: [User]",
       "      AdminGreeter:",
       "        isParameterized: false",
-      "        strategies: {}",
+      "        strategies:",
+      "          AdminGreeterDefault: {}",
     ].join("\n");
 
     writeFileSync(resolve(tmpDir, "hello-sync.yaml"), syncYaml);
@@ -326,7 +315,11 @@ describe("smoke", () => {
     expect(commandFile, "command file should be written").toBeDefined();
     const content = readFileSync(commandFile!.path, "utf8");
 
-    // No execute method — abstract or concrete — should have async or Promise<T>
+    // All templates (regardless of strategy presence) emit abstract class
+    expect(content).toContain("abstract class UserTemplate");
+    expect(content).toContain("abstract class AdminGreeter");
+
+    // No execute method should have async or Promise<T>
     expect(content).not.toContain("async execute");
     expect(content).not.toContain("Promise<Greeting>");
 

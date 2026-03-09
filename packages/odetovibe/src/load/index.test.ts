@@ -1047,7 +1047,6 @@ function makeConfigIndexWithExternalType(imports: Record<string, string[]>): Con
     plainTypes: new Map(),
     commands: new Map(),
     abstractTemplates: new Map(),
-    concreteTemplates: new Map(),
     strategies: new Map(),
   };
 }
@@ -1102,7 +1101,6 @@ describe("TypeScript diagnostics", () => {
       ]),
       commands: new Map([["AccessBuildingCommand", cmd]]),
       abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
-      concreteTemplates: new Map(),
       strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", strat]]),
     };
     const project = new Project({ useInMemoryFileSystem: true });

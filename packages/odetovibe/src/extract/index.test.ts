@@ -2,8 +2,8 @@
  * @codascon/odetovibe — Extract Domain Tests
  *
  * Covers:
- *   - parseYaml: entry splitting at parse time (SubjectTypeEntry vs PlainTypeEntry,
- *     AbstractTemplateEntry vs ConcreteTemplateEntry, qualified keys, namespace)
+ *   - parseYaml: entry parsing at parse time (SubjectTypeEntry vs PlainTypeEntry,
+ *     AbstractTemplateEntry, qualified keys, namespace)
  *   - ValidateEntryCommand: all validation rules across all six validators
  *   - validateYaml: end-to-end orchestration
  */
@@ -17,7 +17,6 @@ import {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
   ValidateEntryCommand,
   parseYaml,
@@ -39,7 +38,6 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     plainTypes: new Map(),
     commands: new Map(),
     abstractTemplates: new Map(),
-    concreteTemplates: new Map(),
     strategies: new Map(),
     ...overrides,
   };
@@ -91,9 +89,9 @@ const validCmdConfig = {
   objectType: "Building",
   returnType: "AccessResult",
   subjectUnion: ["Student"],
-  dispatch: { Student: "GrantAccess" },
+  dispatch: { Student: "GrantAccessDefault" },
   templates: {
-    GrantAccess: { isParameterized: false, strategies: {} },
+    GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
   },
 };
 
@@ -223,46 +221,55 @@ describe("CommandValidator", () => {
     expect(rules(result)).toContain("dispatch-extra");
   });
 
-  it("[dispatch-target-ref] fails when a bare Template name is not in templates", () => {
-    const entry = makeCmd({ dispatch: { Student: "NoSuchTemplate" }, templates: {} });
+  it("[dispatch-target-ref] fails when a bare name is not a strategy in any template", () => {
+    const entry = makeCmd({ dispatch: { Student: "NoSuchStrategy" }, templates: {} });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
   });
 
-  it("[dispatch-target-abstract] fails when a bare dispatch target has strategies (abstract)", () => {
+  it("[dispatch-target-ref] fails when a bare template name is used (templates are abstract, only strategy names are valid)", () => {
     const entry = makeCmd({
-      dispatch: { Student: "AccessTemplate" }, // bare reference to abstract template
+      dispatch: { Student: "AccessTemplate" }, // template name, not a strategy name
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
-      "dispatch-target-abstract",
-    );
-  });
-
-  it("[dispatch-target-ref] fails when the Template part of Template.Strategy is not in templates", () => {
-    const entry = makeCmd({
-      dispatch: { Student: "NoSuchTemplate.SomeStrategy" },
-      templates: {},
-    });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
   });
 
-  it("[dispatch-target-strategy] fails when the Strategy part of Template.Strategy is not in the template", () => {
+  it("accepts a plain strategy name as a bare dispatch target", () => {
     const entry = makeCmd({
-      dispatch: { Student: "AccessTemplate.NoSuchStrategy" },
+      dispatch: { Student: "DepartmentMatch" }, // plain strategy name, no dot notation
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
-      "dispatch-target-strategy",
-    );
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("[dispatch-target-format] fails when dispatch value contains a dot (dot notation is not supported)", () => {
+    const entry = makeCmd({
+      dispatch: { Student: "AccessTemplate.DepartmentMatch" },
+      templates: {
+        AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
   });
 
   it("[dispatch-target-format] fails when dispatch value has more than two dot-separated parts", () => {
     const entry = makeCmd({ dispatch: { Student: "A.B.C" }, templates: {} });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
+  });
+
+  it("[strategy-name-unique] fails when two templates declare the same strategy name", () => {
+    const entry = makeCmd({
+      dispatch: { Student: "Shared" },
+      templates: {
+        TemplateA: { isParameterized: false, strategies: { Shared: {} } },
+        TemplateB: { isParameterized: false, strategies: { Shared: {} } },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("strategy-name-unique");
   });
 
   it("[commandName-file-unique] fails when two command keys normalize to the same file name", () => {
@@ -323,14 +330,13 @@ describe("CommandValidator", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("AbstractTemplateValidator", () => {
-  // Command that correctly uses Template.Strategy format in dispatch
   const cmdEntry = new CommandEntry("Cmd", {
     commandName: "cmd",
     baseType: "Person",
     objectType: "Building",
     returnType: "AccessResult",
     subjectUnion: ["Student"],
-    dispatch: { Student: "AccessTemplate.DepartmentMatch" },
+    dispatch: { Student: "DepartmentMatch" },
     templates: {
       AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
     },
@@ -423,98 +429,6 @@ describe("AbstractTemplateValidator", () => {
       abstractTemplates: new Map([["Cmd.AccessTemplate", tplEntry]]),
     };
     expect(rules(validateCmd.run(tplEntry, index))).toContain("abstract-in-dispatch");
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════
-// ConcreteTemplateValidator
-// ═══════════════════════════════════════════════════════════════════
-
-describe("ConcreteTemplateValidator", () => {
-  // Command whose dispatch uses a bare Template name (valid for concrete templates)
-  const cmdEntry = new CommandEntry("Cmd", {
-    commandName: "cmd",
-    baseType: "Person",
-    objectType: "Building",
-    returnType: "AccessResult",
-    subjectUnion: ["Student"],
-    dispatch: { Student: "GrantAccess" },
-    templates: { GrantAccess: { isParameterized: false, strategies: {} } },
-  });
-
-  const tplEntry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-    isParameterized: false,
-    strategies: {},
-  });
-
-  function indexWithTemplate(tpl: ConcreteTemplateEntry): ConfigIndex {
-    return {
-      ...withTypes,
-      commands: new Map([["Cmd", cmdEntry]]),
-      concreteTemplates: new Map([["Cmd.GrantAccess", tpl]]),
-    };
-  }
-
-  it("passes for a valid concrete template", () => {
-    expect(validateCmd.run(tplEntry, indexWithTemplate(tplEntry)).valid).toBe(true);
-  });
-
-  it("may appear bare in parent Command's dispatch — no abstract-in-dispatch check", () => {
-    // dispatch: { Student: "GrantAccess" } is a bare reference and should not produce an error
-    expect(validateCmd.run(tplEntry, indexWithTemplate(tplEntry)).valid).toBe(true);
-  });
-
-  it("[parent-command] fails when parent command is not in ConfigIndex", () => {
-    const entry = new ConcreteTemplateEntry("GrantAccess", "MissingCmd", {
-      isParameterized: false,
-      strategies: {},
-    });
-    expect(rules(validateCmd.run(entry, idx()))).toContain("parent-command");
-  });
-
-  it("[subjectSubset] fails when a subjectSubset entry is outside the parent Command's subjectUnion", () => {
-    const entry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-      isParameterized: false,
-      subjectSubset: ["Professor"], // Professor not in Cmd's subjectUnion ["Student"]
-      strategies: {},
-    });
-    expect(rules(validateCmd.run(entry, indexWithTemplate(entry)))).toContain("subjectSubset");
-  });
-
-  it("[commandHook-ref] fails when a commandHooks value is not a known Command", () => {
-    const entry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-      isParameterized: false,
-      commandHooks: { audit: "UnknownAuditCommand" },
-      strategies: {},
-    });
-    expect(rules(validateCmd.run(entry, indexWithTemplate(entry)))).toContain("commandHook-ref");
-  });
-
-  it("[commandHook-ref] passes when commandHooks value references a known Command (line 367 false branch)", () => {
-    // Covers the false branch of `if (!object.commands.has(cmdRef))` at line 367:
-    // the command IS found → no error pushed → result is valid.
-    const auditCmd = new CommandEntry("AuditCmd", {
-      commandName: "audit",
-      baseType: "Person",
-      objectType: "Building",
-      returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
-      templates: { GrantAccess: { isParameterized: false, strategies: {} } },
-    });
-    const entry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-      isParameterized: false,
-      commandHooks: { audit: "AuditCmd" },
-      strategies: {},
-    });
-    const index: ConfigIndex = {
-      ...indexWithTemplate(entry),
-      commands: new Map([
-        ["Cmd", cmdEntry],
-        ["AuditCmd", auditCmd],
-      ]),
-    };
-    expect(validateCmd.run(entry, index).valid).toBe(true);
   });
 });
 
@@ -733,10 +647,9 @@ commands:
           StratA: {}
 `);
     expect(index.abstractTemplates.has("MyCmd.MyTemplate")).toBe(true);
-    expect(index.concreteTemplates.has("MyCmd.MyTemplate")).toBe(false);
   });
 
-  it("places templates with empty strategies into concreteTemplates", () => {
+  it("places templates with empty strategies into abstractTemplates", () => {
     const index = parseYamlString(`
 domainTypes:
   Base: {}
@@ -758,8 +671,7 @@ commands:
         isParameterized: false
         strategies: {}
 `);
-    expect(index.concreteTemplates.has("MyCmd.GrantAccess")).toBe(true);
-    expect(index.abstractTemplates.has("MyCmd.GrantAccess")).toBe(false);
+    expect(index.abstractTemplates.has("MyCmd.GrantAccess")).toBe(true);
   });
 
   it("keys strategies as CommandName.TemplateName.StrategyName", () => {
@@ -906,7 +818,6 @@ commands:
       Student: GrantAccess
 `);
     expect(index.commands.has("Cmd")).toBe(true);
-    expect(index.concreteTemplates.size).toBe(0);
     expect(index.abstractTemplates.size).toBe(0);
   });
 });
@@ -945,14 +856,14 @@ describe("externalTypeKeys — validation compatibility", () => {
 describe("validateYaml", () => {
   it("returns valid:true for a fully valid ConfigIndex", () => {
     const cmdEntry = new CommandEntry("Cmd", validCmdConfig);
-    const tplEntry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
+    const tplEntry = new AbstractTemplateEntry("GrantAccess", "Cmd", {
       isParameterized: false,
-      strategies: {},
+      strategies: { GrantAccessDefault: {} },
     });
     const index: ConfigIndex = {
       ...withTypes,
       commands: new Map([["Cmd", cmdEntry]]),
-      concreteTemplates: new Map([["Cmd.GrantAccess", tplEntry]]),
+      abstractTemplates: new Map([["Cmd.GrantAccess", tplEntry]]),
     };
     const result = validateYaml(index);
     expect(result.valid).toBe(true);
@@ -1002,7 +913,7 @@ describe("validateYaml", () => {
       objectType: "Building",
       returnType: "AccessResult",
       subjectUnion: ["Student"],
-      dispatch: { Student: "AccessTemplate.DepartmentMatch" },
+      dispatch: { Student: "DepartmentMatch" },
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },

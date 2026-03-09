@@ -96,40 +96,38 @@ class AccessBuildingCommand extends Command<
   readonly commandName = "accessBuilding" as const;
 
   resolveStudent(_student: Student, _building: Building) {
-    return new DenyAccess(); // Strategy — defined below
+    return new BasicAccess(); // Strategy — defined below
   }
 
   resolveProfessor(_professor: Professor, _building: Building) {
-    return new GrantAccess(); // Strategy — defined below
+    return new FullAccess(); // Strategy — defined below
   }
 }
 ```
 
 ### Define a Template and Strategies
 
-A `Template` typically implements how a `Command` is executed. It may be configured to handle only a subset of the `Command`'s `Subject` union and may declare **hooks** — references to other `Command`s it invokes during execution (see Advanced Patterns below). `Strategy` classes may extend those implementations.
+A `Template` abstract class implements how a `Command` is executed. It may be configured to handle only a subset of the `Command`'s `Subject` union and may declare **hooks** — references to other `Command`s it invokes during execution (see Advanced Patterns below). `Strategy` classes extend those implementations.
 
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";
 
-// CommandSubjectUnion<C> extracts the subject union from a Command —
-// no need to repeat Student | Professor manually
 abstract class AccessTemplate implements Template<AccessBuildingCommand> {
-  abstract execute(
-    subject: CommandSubjectUnion<AccessBuildingCommand>,
-    building: Building,
-  ): AccessResult;
+  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+    return this.tryAccess(subject.clearance, building.name);
+  }
+  protected abstract tryAccess(clearance: string, buildingName: string): AccessResult;
 }
 
-class GrantAccess extends AccessTemplate {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
-    return { granted: true, reason: `Access granted to ${building.name}` };
+class BasicAccess extends AccessTemplate {
+  protected tryAccess(_clearance: string, _buildingName: string): AccessResult {
+    return { granted: true, reason: "open house" };
   }
 }
 
-class DenyAccess extends AccessTemplate {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
-    return { granted: false, reason: `Access denied to ${building.name}` };
+class FullAccess extends AccessTemplate {
+  protected tryAccess(_clearance: string, _buildingName: string): AccessResult {
+    return { granted: true, reason: "open house" };
   }
 }
 ```
@@ -139,7 +137,7 @@ class DenyAccess extends AccessTemplate {
 ```typescript
 const cmd = new AccessBuildingCommand();
 const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
-// { granted: true, reason: "Access granted to Science Hall" }
+// { granted: true, reason: "open house" }
 ```
 
 ```
@@ -303,7 +301,7 @@ npx odetovibe domain.yaml --out src/
 #### Step 3 — Implement your strategies
 
 ```markdown
-Here are the generated TypeScript files from the codascon scaffolding. Each strategy has a stub `execute` method marked `// @odetovibe-generated`.
+Here are the generated TypeScript files from the codascon scaffolding. Each template has a concrete `execute` stub marked `// @odetovibe-generated` — implement the business logic there. Strategies inherit from their template and can override `execute` if needed.
 
 Here are the YAML code configurations:
 [LINK YOUR YAML CONFIG(S)]

@@ -17,7 +17,6 @@ import type {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
 } from "../domain-types.js";
 
@@ -64,7 +63,11 @@ function normalizeCommandKey(key: string): string {
 //   - resolverName must be unique across all subjectTypes
 // ═══════════════════════════════════════════════════════════════════
 
-class SubjectTypeValidator implements Template<ValidateEntryCommand, [], SubjectTypeEntry> {
+abstract class SubjectTypeValidator implements Template<
+  ValidateEntryCommand,
+  [],
+  SubjectTypeEntry
+> {
   execute(subject: SubjectTypeEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, config } = subject;
@@ -95,17 +98,21 @@ class SubjectTypeValidator implements Template<ValidateEntryCommand, [], Subject
   }
 }
 
+class SubjectTypeValidatorDefault extends SubjectTypeValidator {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: PlainTypeValidator
 //
 // Plain types have no resolverName — no structural constraints to check.
 // ═══════════════════════════════════════════════════════════════════
 
-class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainTypeEntry> {
+abstract class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainTypeEntry> {
   execute(subject: PlainTypeEntry, object: Readonly<ConfigIndex>): ValidationResult {
     return ok();
   }
 }
+
+class PlainTypeValidatorDefault extends PlainTypeValidator {}
 
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: CommandValidator
@@ -114,11 +121,12 @@ class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainType
 //   - baseType, objectType, returnType must reference known domainTypes
 //   - subjectUnion entries must reference subjectTypes (types with resolverName)
 //   - dispatch must have exactly one entry per subjectUnion member
-//   - dispatch values must resolve to concrete Templates or Template.Strategy
-//     within this Command's own templates map
+//   - dispatch values must be plain strategy names (no dot notation)
+//   - dispatch values must resolve to a known strategy within this Command's templates
+//   - strategy names must be unique across all templates within a Command
 // ═══════════════════════════════════════════════════════════════════
 
-class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntry> {
+abstract class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntry> {
   execute(subject: CommandEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, config } = subject;
@@ -175,48 +183,38 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
       }
     }
 
-    // dispatch values must resolve within this Command's templates
+    // dispatch values must be plain strategy names unique across this Command's templates
     const ownTemplates = config.templates ?? {};
 
-    for (const [subjectRef, target] of Object.entries(config.dispatch)) {
-      const parts = target.split(".");
-
-      if (parts.length === 1) {
-        const tpl = ownTemplates[target];
-        if (!tpl) {
+    // strategy names must be unique across all templates within this command
+    const stratNameToTpl = new Map<string, string>(); // stratName → first template that declared it
+    for (const [tplName, tplConfig] of Object.entries(ownTemplates)) {
+      for (const stratName of Object.keys(tplConfig.strategies)) {
+        const existing = stratNameToTpl.get(stratName);
+        if (existing !== undefined) {
           errors.push(
             err(
               key,
-              "dispatch-target-ref",
-              `dispatch target "${target}" for "${subjectRef}" not found in this Command's templates`,
+              "strategy-name-unique",
+              `strategy name "${stratName}" is declared in both "${existing}" and "${tplName}" — strategy names must be unique across all templates within a command`,
             ),
           );
-        } else if (Object.keys(tpl.strategies).length > 0) {
-          errors.push(
-            err(
-              key,
-              "dispatch-target-abstract",
-              `dispatch target "${target}" for "${subjectRef}" has strategies — use ${target}.StrategyName`,
-            ),
-          );
+        } else {
+          stratNameToTpl.set(stratName, tplName);
         }
-      } else if (parts.length === 2) {
-        const [tplName, stratName] = parts;
-        const tpl = ownTemplates[tplName];
-        if (!tpl) {
+      }
+    }
+
+    for (const [subjectRef, target] of Object.entries(config.dispatch)) {
+      if (!target.includes(".")) {
+        // Only plain strategy names are valid dispatch targets — all templates are abstract
+        const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
+        if (!isStrategy) {
           errors.push(
             err(
               key,
               "dispatch-target-ref",
-              `dispatch target template "${tplName}" for "${subjectRef}" not found in this Command's templates`,
-            ),
-          );
-        } else if (!(stratName in tpl.strategies)) {
-          errors.push(
-            err(
-              key,
-              "dispatch-target-strategy",
-              `dispatch target strategy "${stratName}" not found in template "${tplName}"`,
+              `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
             ),
           );
         }
@@ -225,7 +223,7 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
           err(
             key,
             "dispatch-target-format",
-            `dispatch target "${target}" for "${subjectRef}" is malformed — use "Template" or "Template.Strategy"`,
+            `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
           ),
         );
       }
@@ -249,6 +247,8 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
   }
 }
 
+class CommandValidatorDefault extends CommandValidator {}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: AbstractTemplateValidator
 //
@@ -258,7 +258,7 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
 //   - must not appear directly in parent Command's dispatch (abstract — use Strategy.*)
 // ═══════════════════════════════════════════════════════════════════
 
-class AbstractTemplateValidator implements Template<
+abstract class AbstractTemplateValidator implements Template<
   ValidateEntryCommand,
   [],
   AbstractTemplateEntry
@@ -311,7 +311,7 @@ class AbstractTemplateValidator implements Template<
           err(
             key,
             "abstract-in-dispatch",
-            `abstract template "${key}" is referenced directly in "${commandKey}" dispatch — use ${key}.StrategyName`,
+            `abstract template "${key}" is referenced directly in "${commandKey}" dispatch — use a plain strategy name instead`,
           ),
         );
       }
@@ -321,64 +321,7 @@ class AbstractTemplateValidator implements Template<
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// TEMPLATE: ConcreteTemplateValidator
-//
-// Rules:
-//   - subjectSubset (if present) must be subset of parent Command's subjectUnion
-//   - commandHooks values must reference known Commands
-//   (no abstract-in-dispatch check — concrete Templates may appear directly)
-// ═══════════════════════════════════════════════════════════════════
-
-class ConcreteTemplateValidator implements Template<
-  ValidateEntryCommand,
-  [],
-  ConcreteTemplateEntry
-> {
-  execute(subject: ConcreteTemplateEntry, object: Readonly<ConfigIndex>): ValidationResult {
-    const errors: ValidationError[] = [];
-    const { key, commandKey, config } = subject;
-
-    const cmdEntry = object.commands.get(commandKey);
-    if (!cmdEntry) {
-      errors.push(
-        err(key, "parent-command", `parent command "${commandKey}" not found in ConfigIndex`),
-      );
-      return fail(...errors);
-    }
-
-    if (config.subjectSubset) {
-      const union = new Set(cmdEntry.config.subjectUnion);
-      for (const ref of config.subjectSubset) {
-        if (!union.has(ref)) {
-          errors.push(
-            err(
-              key,
-              "subjectSubset",
-              `subjectSubset entry "${ref}" is not in "${commandKey}"'s subjectUnion`,
-            ),
-          );
-        }
-      }
-    }
-
-    if (config.commandHooks) {
-      for (const [propName, cmdRef] of Object.entries(config.commandHooks)) {
-        if (!object.commands.has(cmdRef)) {
-          errors.push(
-            err(
-              key,
-              "commandHook-ref",
-              `commandHook "${propName}" references unknown command "${cmdRef}"`,
-            ),
-          );
-        }
-      }
-    }
-
-    return errors.length > 0 ? fail(...errors) : ok();
-  }
-}
+class AbstractTemplateValidatorDefault extends AbstractTemplateValidator {}
 
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: StrategyValidator
@@ -391,7 +334,7 @@ class ConcreteTemplateValidator implements Template<
 //   - commandHooks values must reference known Commands
 // ═══════════════════════════════════════════════════════════════════
 
-class StrategyValidator implements Template<ValidateEntryCommand, [], StrategyEntry> {
+abstract class StrategyValidator implements Template<ValidateEntryCommand, [], StrategyEntry> {
   execute(subject: StrategyEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, templateKey, commandKey, config } = subject;
@@ -465,30 +408,24 @@ class StrategyValidator implements Template<ValidateEntryCommand, [], StrategyEn
   }
 }
 
+class StrategyValidatorDefault extends StrategyValidator {}
+
 // ═══════════════════════════════════════════════════════════════════
 // COMMAND: ValidateEntryCommand
 // ═══════════════════════════════════════════════════════════════════
 
-const subjectTypeValidator = new SubjectTypeValidator();
-const plainTypeValidator = new PlainTypeValidator();
-const commandValidator = new CommandValidator();
-const abstractTemplateValidator = new AbstractTemplateValidator();
-const concreteTemplateValidator = new ConcreteTemplateValidator();
-const strategyValidator = new StrategyValidator();
+const subjectTypeValidator = new SubjectTypeValidatorDefault();
+const plainTypeValidator = new PlainTypeValidatorDefault();
+const commandValidator = new CommandValidatorDefault();
+const abstractTemplateValidator = new AbstractTemplateValidatorDefault();
+const strategyValidator = new StrategyValidatorDefault();
 
 /** Dispatches each config entry to its schema validator via double dispatch. */
 export class ValidateEntryCommand extends Command<
   ConfigEntry,
   ConfigIndex,
   ValidationResult,
-  [
-    SubjectTypeEntry,
-    PlainTypeEntry,
-    CommandEntry,
-    AbstractTemplateEntry,
-    ConcreteTemplateEntry,
-    StrategyEntry,
-  ]
+  [SubjectTypeEntry, PlainTypeEntry, CommandEntry, AbstractTemplateEntry, StrategyEntry]
 > {
   readonly commandName = "validateEntry" as const;
 
@@ -515,12 +452,6 @@ export class ValidateEntryCommand extends Command<
     object: Readonly<ConfigIndex>,
   ): Template<ValidateEntryCommand, [], AbstractTemplateEntry> {
     return abstractTemplateValidator;
-  }
-  resolveConcreteTemplate(
-    subject: ConcreteTemplateEntry,
-    object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], ConcreteTemplateEntry> {
-    return concreteTemplateValidator;
   }
   resolveStrategy(
     subject: StrategyEntry,
