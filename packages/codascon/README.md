@@ -72,7 +72,7 @@ class Professor extends Subject {
 
 ### Define a Command
 
-A **`Command`** is an operation (`AccessBuildingCommand`). Each `Command` declares one resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute. Codascon enforces, at the call site, that a `Command` implements the resolver method of each `Subject` in its subject union.
+A **`Command`** is an operation (`AccessBuildingCommand`). Codascon enforces (at the call site) that a `Command` implements the resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute.
 
 ```typescript
 import { Command } from "codascon";
