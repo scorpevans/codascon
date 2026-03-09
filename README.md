@@ -422,6 +422,8 @@ Implement the business logic for each stub based on the following rules:
 Do not modify any class declarations, constructor signatures, or method signatures — only fill in the method bodies and define any new Base Types as needed.
 ```
 
+> **Note:** You can return to steps 1 and 2 at any time to iterate on your YAML config. Rerun the odetovibe command and all updates will be merged into your existing files, preserving any business logic you have already implemented.
+
 ## Project Structure
 
 ```
