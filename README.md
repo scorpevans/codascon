@@ -270,7 +270,7 @@ commands:
             subjectSubset: [Professor]
 ```
 
-### Translate YAML config to Code
+### Translate YAML architecture to Code
 
 #### CLI
 
