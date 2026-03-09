@@ -116,18 +116,29 @@ import { type Template, type CommandSubjectUnion } from "codascon";
 // no need to repeat Student | Professor manually
 abstract class AccessTemplate implements Template<AccessBuildingCommand> {
   execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
-    throw new Error("Not implemented");
+    console.log(`${subject.clearance} attempting access to ${building.name}`);
+    return this.check(subject, building);
   }
+  protected abstract check(
+    subject: CommandSubjectUnion<AccessBuildingCommand>,
+    building: Building,
+  ): AccessResult;
 }
 
 class GrantAccess extends AccessTemplate {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+  protected check(
+    _subject: CommandSubjectUnion<AccessBuildingCommand>,
+    building: Building,
+  ): AccessResult {
     return { granted: true, reason: `Access granted to ${building.name}` };
   }
 }
 
 class DenyAccess extends AccessTemplate {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+  protected check(
+    _subject: CommandSubjectUnion<AccessBuildingCommand>,
+    building: Building,
+  ): AccessResult {
     return { granted: false, reason: `Access denied to ${building.name}` };
   }
 }

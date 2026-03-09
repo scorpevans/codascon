@@ -76,13 +76,10 @@ commands:
       Professor: GrantAccess
     templates:
       AccessTemplate:
-        isParameterized: true
-        subjectSubset: [Student, Professor]
+        isParameterized: false
         strategies:
-          DenyAccess:
-            subjectSubset: [Student]
-          GrantAccess:
-            subjectSubset: [Professor]
+          DenyAccess: {}
+          GrantAccess: {}
 ```
 
 **Key rules:**
