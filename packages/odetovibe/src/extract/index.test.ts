@@ -2,8 +2,8 @@
  * @codascon/odetovibe — Extract Domain Tests
  *
  * Covers:
- *   - parseYaml: entry splitting at parse time (SubjectTypeEntry vs PlainTypeEntry,
- *     AbstractTemplateEntry vs ConcreteTemplateEntry, qualified keys, namespace)
+ *   - parseYaml: entry parsing at parse time (SubjectTypeEntry vs PlainTypeEntry,
+ *     AbstractTemplateEntry, qualified keys, namespace)
  *   - ValidateEntryCommand: all validation rules across all six validators
  *   - validateYaml: end-to-end orchestration
  */
@@ -17,7 +17,6 @@ import {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
   ValidateEntryCommand,
   parseYaml,
@@ -39,7 +38,6 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     plainTypes: new Map(),
     commands: new Map(),
     abstractTemplates: new Map(),
-    concreteTemplates: new Map(),
     strategies: new Map(),
     ...overrides,
   };
@@ -91,9 +89,9 @@ const validCmdConfig = {
   objectType: "Building",
   returnType: "AccessResult",
   subjectUnion: ["Student"],
-  dispatch: { Student: "GrantAccess" },
+  dispatch: { Student: "GrantAccessDefault" },
   templates: {
-    GrantAccess: { isParameterized: false, strategies: {} },
+    GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
   },
 };
 
@@ -435,98 +433,6 @@ describe("AbstractTemplateValidator", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// ConcreteTemplateValidator
-// ═══════════════════════════════════════════════════════════════════
-
-describe("ConcreteTemplateValidator", () => {
-  // Command whose dispatch uses a bare Template name (valid for concrete templates)
-  const cmdEntry = new CommandEntry("Cmd", {
-    commandName: "cmd",
-    baseType: "Person",
-    objectType: "Building",
-    returnType: "AccessResult",
-    subjectUnion: ["Student"],
-    dispatch: { Student: "GrantAccess" },
-    templates: { GrantAccess: { isParameterized: false, strategies: {} } },
-  });
-
-  const tplEntry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-    isParameterized: false,
-    strategies: {},
-  });
-
-  function indexWithTemplate(tpl: ConcreteTemplateEntry): ConfigIndex {
-    return {
-      ...withTypes,
-      commands: new Map([["Cmd", cmdEntry]]),
-      concreteTemplates: new Map([["Cmd.GrantAccess", tpl]]),
-    };
-  }
-
-  it("passes for a valid concrete template", () => {
-    expect(validateCmd.run(tplEntry, indexWithTemplate(tplEntry)).valid).toBe(true);
-  });
-
-  it("may appear bare in parent Command's dispatch — no abstract-in-dispatch check", () => {
-    // dispatch: { Student: "GrantAccess" } is a bare reference and should not produce an error
-    expect(validateCmd.run(tplEntry, indexWithTemplate(tplEntry)).valid).toBe(true);
-  });
-
-  it("[parent-command] fails when parent command is not in ConfigIndex", () => {
-    const entry = new ConcreteTemplateEntry("GrantAccess", "MissingCmd", {
-      isParameterized: false,
-      strategies: {},
-    });
-    expect(rules(validateCmd.run(entry, idx()))).toContain("parent-command");
-  });
-
-  it("[subjectSubset] fails when a subjectSubset entry is outside the parent Command's subjectUnion", () => {
-    const entry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-      isParameterized: false,
-      subjectSubset: ["Professor"], // Professor not in Cmd's subjectUnion ["Student"]
-      strategies: {},
-    });
-    expect(rules(validateCmd.run(entry, indexWithTemplate(entry)))).toContain("subjectSubset");
-  });
-
-  it("[commandHook-ref] fails when a commandHooks value is not a known Command", () => {
-    const entry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-      isParameterized: false,
-      commandHooks: { audit: "UnknownAuditCommand" },
-      strategies: {},
-    });
-    expect(rules(validateCmd.run(entry, indexWithTemplate(entry)))).toContain("commandHook-ref");
-  });
-
-  it("[commandHook-ref] passes when commandHooks value references a known Command (line 367 false branch)", () => {
-    // Covers the false branch of `if (!object.commands.has(cmdRef))` at line 367:
-    // the command IS found → no error pushed → result is valid.
-    const auditCmd = new CommandEntry("AuditCmd", {
-      commandName: "audit",
-      baseType: "Person",
-      objectType: "Building",
-      returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
-      templates: { GrantAccess: { isParameterized: false, strategies: {} } },
-    });
-    const entry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
-      isParameterized: false,
-      commandHooks: { audit: "AuditCmd" },
-      strategies: {},
-    });
-    const index: ConfigIndex = {
-      ...indexWithTemplate(entry),
-      commands: new Map([
-        ["Cmd", cmdEntry],
-        ["AuditCmd", auditCmd],
-      ]),
-    };
-    expect(validateCmd.run(entry, index).valid).toBe(true);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════
 // StrategyValidator
 // ═══════════════════════════════════════════════════════════════════
 
@@ -741,10 +647,9 @@ commands:
           StratA: {}
 `);
     expect(index.abstractTemplates.has("MyCmd.MyTemplate")).toBe(true);
-    expect(index.concreteTemplates.has("MyCmd.MyTemplate")).toBe(false);
   });
 
-  it("places templates with empty strategies into concreteTemplates", () => {
+  it("places templates with empty strategies into abstractTemplates", () => {
     const index = parseYamlString(`
 domainTypes:
   Base: {}
@@ -766,8 +671,7 @@ commands:
         isParameterized: false
         strategies: {}
 `);
-    expect(index.concreteTemplates.has("MyCmd.GrantAccess")).toBe(true);
-    expect(index.abstractTemplates.has("MyCmd.GrantAccess")).toBe(false);
+    expect(index.abstractTemplates.has("MyCmd.GrantAccess")).toBe(true);
   });
 
   it("keys strategies as CommandName.TemplateName.StrategyName", () => {
@@ -914,7 +818,6 @@ commands:
       Student: GrantAccess
 `);
     expect(index.commands.has("Cmd")).toBe(true);
-    expect(index.concreteTemplates.size).toBe(0);
     expect(index.abstractTemplates.size).toBe(0);
   });
 });
@@ -953,14 +856,14 @@ describe("externalTypeKeys — validation compatibility", () => {
 describe("validateYaml", () => {
   it("returns valid:true for a fully valid ConfigIndex", () => {
     const cmdEntry = new CommandEntry("Cmd", validCmdConfig);
-    const tplEntry = new ConcreteTemplateEntry("GrantAccess", "Cmd", {
+    const tplEntry = new AbstractTemplateEntry("GrantAccess", "Cmd", {
       isParameterized: false,
-      strategies: {},
+      strategies: { GrantAccessDefault: {} },
     });
     const index: ConfigIndex = {
       ...withTypes,
       commands: new Map([["Cmd", cmdEntry]]),
-      concreteTemplates: new Map([["Cmd.GrantAccess", tplEntry]]),
+      abstractTemplates: new Map([["Cmd.GrantAccess", tplEntry]]),
     };
     const result = validateYaml(index);
     expect(result.valid).toBe(true);

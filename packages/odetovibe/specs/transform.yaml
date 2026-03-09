@@ -66,9 +66,6 @@ externalTypes:
   AbstractTemplateEntry:
     resolverName: resolveAbstractTemplate
 
-  ConcreteTemplateEntry:
-    resolverName: resolveConcreteTemplate
-
   StrategyEntry:
     resolverName: resolveStrategy
 
@@ -90,14 +87,12 @@ commands:
       - PlainTypeEntry
       - CommandEntry
       - AbstractTemplateEntry
-      - ConcreteTemplateEntry
       - StrategyEntry
     dispatch:
       SubjectTypeEntry: SubjectClassEmitterDefault
       PlainTypeEntry: InterfaceEmitterDefault
       CommandEntry: CommandClassEmitterDefault
       AbstractTemplateEntry: AbstractTemplateEmitterDefault
-      ConcreteTemplateEntry: ConcreteTemplateEmitterDefault
       StrategyEntry: StrategyClassEmitterDefault
     templates:
       # Emits: class Foo extends Subject { readonly resolverName = "resolveFoo" as const; ... }
@@ -139,17 +134,6 @@ commands:
         subjectSubset: [AbstractTemplateEntry]
         strategies:
           AbstractTemplateEmitterDefault: {}
-
-      # Emits: abstract class FooTemplate implements Template<FooCommand, [HookCmd], S1 | S2> {
-      #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
-      #          execute(subject: S1 | S2, object: Readonly<O>): R { ... }
-      #        }
-      # Target: commands/<parent-cmd-name>.ts
-      ConcreteTemplateEmitter:
-        isParameterized: false
-        subjectSubset: [ConcreteTemplateEntry]
-        strategies:
-          ConcreteTemplateEmitterDefault: {}
 
       # Emits: class FooStrategy extends FooTemplate<S1> {
       #          // hook override if declared in strategy commandHooks

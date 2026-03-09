@@ -42,9 +42,6 @@ domainTypes:
   AbstractTemplateEntry:
     resolverName: resolveAbstractTemplate
 
-  ConcreteTemplateEntry:
-    resolverName: resolveConcreteTemplate
-
   StrategyEntry:
     resolverName: resolveStrategy
 
@@ -69,14 +66,12 @@ commands:
       - PlainTypeEntry
       - CommandEntry
       - AbstractTemplateEntry
-      - ConcreteTemplateEntry
       - StrategyEntry
     dispatch:
       SubjectTypeEntry: SubjectTypeValidatorDefault
       PlainTypeEntry: PlainTypeValidatorDefault
       CommandEntry: CommandValidatorDefault
       AbstractTemplateEntry: AbstractTemplateValidatorDefault
-      ConcreteTemplateEntry: ConcreteTemplateValidatorDefault
       StrategyEntry: StrategyValidatorDefault
     templates:
       # Checks resolverName prefix ("resolve") and uniqueness across subjectTypes
@@ -106,13 +101,6 @@ commands:
         subjectSubset: [AbstractTemplateEntry]
         strategies:
           AbstractTemplateValidatorDefault: {}
-
-      # Checks subjectSubset and commandHooks (may appear directly in dispatch)
-      ConcreteTemplateValidator:
-        isParameterized: false
-        subjectSubset: [ConcreteTemplateEntry]
-        strategies:
-          ConcreteTemplateValidatorDefault: {}
 
       # Checks parent AbstractTemplateEntry, subjectSubset, commandHooks subset
       StrategyValidator:

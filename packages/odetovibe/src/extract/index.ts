@@ -27,7 +27,6 @@ import {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
 } from "./domain-types.js";
 import type { ConfigIndex, ExtractResult, ValidationResult } from "./domain-types.js";
@@ -39,7 +38,6 @@ export {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
 } from "./domain-types.js";
 // Re-export interfaces as types only
@@ -64,9 +62,7 @@ export { ValidateEntryCommand } from "./commands/validate-entry.js";
  *   - Types with `resolverName` → `SubjectTypeEntry` (will generate a Subject class)
  *   - Types without `resolverName` → `PlainTypeEntry` (will generate an interface)
  *
- * Templates are similarly split:
- *   - Templates with non-empty `strategies` → `AbstractTemplateEntry`
- *   - Templates with empty `strategies`     → `ConcreteTemplateEntry`
+ * All templates become `AbstractTemplateEntry` regardless of strategy count.
  *
  * Template keys are qualified as `"CommandName.TemplateName"`.
  * Strategy keys are qualified as `"CommandName.TemplateName.StrategyName"`.
@@ -85,7 +81,6 @@ export function parseYaml(yamlPath: string): ConfigIndex {
   const plainTypes = new Map<string, PlainTypeEntry>();
   const commands = new Map<string, CommandEntry>();
   const abstractTemplates = new Map<string, AbstractTemplateEntry>();
-  const concreteTemplates = new Map<string, ConcreteTemplateEntry>();
   const strategies = new Map<string, StrategyEntry>();
 
   // ── External types (not emitted; included only for validation) ───
@@ -126,17 +121,7 @@ export function parseYaml(yamlPath: string): ConfigIndex {
     for (const [tplKey, tplConfig] of Object.entries(cmdConfig.templates ?? {})) {
       const qualifiedTplKey = `${cmdKey}.${tplKey}`;
 
-      if (Object.keys(tplConfig.strategies).length > 0) {
-        abstractTemplates.set(
-          qualifiedTplKey,
-          new AbstractTemplateEntry(tplKey, cmdKey, tplConfig),
-        );
-      } else {
-        concreteTemplates.set(
-          qualifiedTplKey,
-          new ConcreteTemplateEntry(tplKey, cmdKey, tplConfig),
-        );
-      }
+      abstractTemplates.set(qualifiedTplKey, new AbstractTemplateEntry(tplKey, cmdKey, tplConfig));
 
       for (const [stratKey, stratConfig] of Object.entries(tplConfig.strategies)) {
         const qualifiedStratKey = `${cmdKey}.${tplKey}.${stratKey}`;
@@ -153,7 +138,6 @@ export function parseYaml(yamlPath: string): ConfigIndex {
     plainTypes,
     commands,
     abstractTemplates,
-    concreteTemplates,
     strategies,
   };
 }
@@ -187,9 +171,6 @@ export function validateYaml(configIndex: ConfigIndex): ExtractResult {
     results.push(validateCmd.run(entry, configIndex));
   }
   for (const entry of configIndex.abstractTemplates.values()) {
-    results.push(validateCmd.run(entry, configIndex));
-  }
-  for (const entry of configIndex.concreteTemplates.values()) {
     results.push(validateCmd.run(entry, configIndex));
   }
   for (const entry of configIndex.strategies.values()) {

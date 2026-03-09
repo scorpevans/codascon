@@ -34,3 +34,5 @@ export abstract class UserGreeter implements Template<GreetCommand, [], User> {
     return "bar";
   }
 }
+
+export class UserGreeterDefault extends UserGreeter {}

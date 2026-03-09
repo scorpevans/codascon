@@ -17,7 +17,6 @@ import type {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
 } from "../domain-types.js";
 
@@ -314,65 +313,6 @@ class AbstractTemplateValidator implements Template<
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// TEMPLATE: ConcreteTemplateValidator
-//
-// Rules:
-//   - subjectSubset (if present) must be subset of parent Command's subjectUnion
-//   - commandHooks values must reference known Commands
-//   (no abstract-in-dispatch check — concrete Templates may appear directly)
-// ═══════════════════════════════════════════════════════════════════
-
-class ConcreteTemplateValidator implements Template<
-  ValidateEntryCommand,
-  [],
-  ConcreteTemplateEntry
-> {
-  execute(subject: ConcreteTemplateEntry, object: Readonly<ConfigIndex>): ValidationResult {
-    const errors: ValidationError[] = [];
-    const { key, commandKey, config } = subject;
-
-    const cmdEntry = object.commands.get(commandKey);
-    if (!cmdEntry) {
-      errors.push(
-        err(key, "parent-command", `parent command "${commandKey}" not found in ConfigIndex`),
-      );
-      return fail(...errors);
-    }
-
-    if (config.subjectSubset) {
-      const union = new Set(cmdEntry.config.subjectUnion);
-      for (const ref of config.subjectSubset) {
-        if (!union.has(ref)) {
-          errors.push(
-            err(
-              key,
-              "subjectSubset",
-              `subjectSubset entry "${ref}" is not in "${commandKey}"'s subjectUnion`,
-            ),
-          );
-        }
-      }
-    }
-
-    if (config.commandHooks) {
-      for (const [propName, cmdRef] of Object.entries(config.commandHooks)) {
-        if (!object.commands.has(cmdRef)) {
-          errors.push(
-            err(
-              key,
-              "commandHook-ref",
-              `commandHook "${propName}" references unknown command "${cmdRef}"`,
-            ),
-          );
-        }
-      }
-    }
-
-    return errors.length > 0 ? fail(...errors) : ok();
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: StrategyValidator
 //
 // Rules:
@@ -465,7 +405,6 @@ const subjectTypeValidator = new SubjectTypeValidator();
 const plainTypeValidator = new PlainTypeValidator();
 const commandValidator = new CommandValidator();
 const abstractTemplateValidator = new AbstractTemplateValidator();
-const concreteTemplateValidator = new ConcreteTemplateValidator();
 const strategyValidator = new StrategyValidator();
 
 /** Dispatches each config entry to its schema validator via double dispatch. */
@@ -473,14 +412,7 @@ export class ValidateEntryCommand extends Command<
   ConfigEntry,
   ConfigIndex,
   ValidationResult,
-  [
-    SubjectTypeEntry,
-    PlainTypeEntry,
-    CommandEntry,
-    AbstractTemplateEntry,
-    ConcreteTemplateEntry,
-    StrategyEntry,
-  ]
+  [SubjectTypeEntry, PlainTypeEntry, CommandEntry, AbstractTemplateEntry, StrategyEntry]
 > {
   readonly commandName = "validateEntry" as const;
 
@@ -507,12 +439,6 @@ export class ValidateEntryCommand extends Command<
     object: Readonly<ConfigIndex>,
   ): Template<ValidateEntryCommand, [], AbstractTemplateEntry> {
     return abstractTemplateValidator;
-  }
-  resolveConcreteTemplate(
-    subject: ConcreteTemplateEntry,
-    object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], ConcreteTemplateEntry> {
-    return concreteTemplateValidator;
   }
   resolveStrategy(
     subject: StrategyEntry,

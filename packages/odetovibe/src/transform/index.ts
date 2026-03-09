@@ -34,7 +34,7 @@ const emitCmd = new EmitAstCommand();
 /*
  * Emits TypeScript AST for all entries in a `ConfigIndex`.
  *
- * Iterates all 6 entry maps in dependency order (types → commands →
+ * Iterates all 5 entry maps in dependency order (types → commands →
  * templates → strategies) and dispatches each entry through
  * `EmitAstCommand`. Emitters add declarations to SourceFiles in
  * `ctx.project` — no files are written to disk by this function.
@@ -58,9 +58,6 @@ export function emitAst(configIndex: ConfigIndex, ctx: EmitContext): EmitResult[
     results.push(emitCmd.run(entry, ctx));
   }
   for (const entry of configIndex.abstractTemplates.values()) {
-    results.push(emitCmd.run(entry, ctx));
-  }
-  for (const entry of configIndex.concreteTemplates.values()) {
     results.push(emitCmd.run(entry, ctx));
   }
   for (const entry of configIndex.strategies.values()) {

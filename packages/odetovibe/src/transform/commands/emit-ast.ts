@@ -8,8 +8,7 @@
  * File placement:
  *   SubjectTypeEntry / PlainTypeEntry  →  <ns>/domain-types.ts  (or domain-types.ts if no namespace)
  *   CommandEntry                       →  <ns>/commands/<cmd-name>.ts
- *   AbstractTemplateEntry              →  same file as parent Command   ─┐ both handled
- *   ConcreteTemplateEntry              →  same file as parent Command   ─┘ by TemplateEmitter
+ *   AbstractTemplateEntry              →  same file as parent Command
  *   StrategyEntry                      →  same file as grandparent Command
  */
 
@@ -22,7 +21,6 @@ import type {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
 } from "../../extract/domain-types.js";
 import type { EmitContext, EmitResult } from "../domain-types.js";
@@ -246,11 +244,9 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: TemplateEmitter
 //
-// Handles both AbstractTemplateEntry (has strategies) and
-// ConcreteTemplateEntry (no strategies). All templates generate an
-// abstract class with a concrete execute stub.
+// All templates generate an abstract class with a concrete execute stub.
 //
-// AbstractTemplateEntry (isParameterized: true):
+// isParameterized: true — class is generic over SU:
 //   export abstract class FooTemplate<SU extends S1 | S2>
 //     implements Template<FooCommand, [HookCmd], SU> {
 //     readonly hookCmd = new HookCmd(); // @odetovibe-generated
@@ -259,7 +255,7 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
 //     }
 //   }
 //
-// ConcreteTemplateEntry (isParameterized: false):
+// isParameterized: false — SU is fixed:
 //   export abstract class FooTemplate
 //     implements Template<FooCommand, [], S1 | S2> {
 //     execute(subject: S1 | S2, object: Readonly<O>): R {
@@ -270,15 +266,8 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
 // Target: <namespace>/commands/<parent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
-class TemplateEmitter
-  implements
-    Template<EmitAstCommand, [], AbstractTemplateEntry>,
-    Template<EmitAstCommand, [], ConcreteTemplateEntry>
-{
-  execute(
-    subject: AbstractTemplateEntry | ConcreteTemplateEntry,
-    object: Readonly<EmitContext>,
-  ): EmitResult {
+class TemplateEmitter implements Template<EmitAstCommand, [], AbstractTemplateEntry> {
+  execute(subject: AbstractTemplateEntry, object: Readonly<EmitContext>): EmitResult {
     const { configIndex } = object;
     const { key, commandKey, config } = subject;
     const namespace = configIndex.namespace;
@@ -438,14 +427,7 @@ export class EmitAstCommand extends Command<
   ConfigEntry,
   EmitContext,
   EmitResult,
-  [
-    SubjectTypeEntry,
-    PlainTypeEntry,
-    CommandEntry,
-    AbstractTemplateEntry,
-    ConcreteTemplateEntry,
-    StrategyEntry,
-  ]
+  [SubjectTypeEntry, PlainTypeEntry, CommandEntry, AbstractTemplateEntry, StrategyEntry]
 > {
   readonly commandName = "emitAst" as const;
 
@@ -471,12 +453,6 @@ export class EmitAstCommand extends Command<
     subject: AbstractTemplateEntry,
     object: Readonly<EmitContext>,
   ): Template<EmitAstCommand, [], AbstractTemplateEntry> {
-    return templateEmitter;
-  }
-  resolveConcreteTemplate(
-    subject: ConcreteTemplateEntry,
-    object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], ConcreteTemplateEntry> {
     return templateEmitter;
   }
   resolveStrategy(

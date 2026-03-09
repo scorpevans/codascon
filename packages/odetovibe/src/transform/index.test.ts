@@ -5,8 +5,7 @@
  *   - SubjectClassEmitter: minimal stub — extends Subject + resolverName only
  *   - InterfaceEmitter: empty stub — name only, content is user-owned
  *   - CommandClassEmitter: class generics, commandName, resolver methods, file path, imports
- *   - TemplateEmitter (AbstractTemplateEntry): abstract class, type parameter, implements, hooks, execute
- *   - TemplateEmitter (ConcreteTemplateEntry): abstract class, implements, hooks, execute stub
+ *   - TemplateEmitter: abstract class, type parameter / fixed SU, implements, hooks, execute
  *   - StrategyClassEmitter: extends clause, hook overrides, execute stub (sync + async), file path
  *   - emitAst: orchestration, file accumulation, namespace routing
  */
@@ -18,7 +17,6 @@ import {
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
-  ConcreteTemplateEntry,
   StrategyEntry,
 } from "../extract/domain-types.js";
 import type { ConfigIndex } from "../extract/domain-types.js";
@@ -42,7 +40,6 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     plainTypes: new Map(),
     commands: new Map(),
     abstractTemplates: new Map(),
-    concreteTemplates: new Map(),
     strategies: new Map(),
     ...overrides,
   };
@@ -719,11 +716,11 @@ describe("TemplateEmitter — AbstractTemplateEntry", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// TemplateEmitter — ConcreteTemplateEntry path
+// TemplateEmitter — isParameterized: false path
 // ═══════════════════════════════════════════════════════════════════
 
-describe("TemplateEmitter — ConcreteTemplateEntry", () => {
-  const tplEntry = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+describe("TemplateEmitter — isParameterized: false", () => {
+  const tplEntry = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
     isParameterized: false,
     strategies: {},
   });
@@ -753,7 +750,7 @@ describe("TemplateEmitter — ConcreteTemplateEntry", () => {
   });
 
   it("implements Template with narrowed subjectSubset when subjectSubset is declared", () => {
-    const narrowed = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const narrowed = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       subjectSubset: ["Student"],
       strategies: {},
@@ -784,7 +781,7 @@ describe("TemplateEmitter — ConcreteTemplateEntry", () => {
       dispatch: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
-    const tplWithHook = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const tplWithHook = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       commandHooks: { audit: "AuditCommand" },
       strategies: {},
@@ -830,9 +827,7 @@ describe("TemplateEmitter — ConcreteTemplateEntry", () => {
     expect(t).toContain("Promise<AccessResult>");
   });
 
-  it("imports subject, returnType and objectType from external sources in configIndex.imports (lines 365/369/371 true branches)", () => {
-    // Parallel to the AbstractTemplateEntry path test: same importSrc.has() ternaries
-    // exercised via the ConcreteTemplateEntry dispatch path of TemplateEmitter.
+  it("imports subject, returnType and objectType from external sources in configIndex.imports", () => {
     const index = idx({
       imports: { "external-pkg": ["Student", "AccessResult", "Building"] },
       subjectTypes: new Map([
@@ -845,7 +840,7 @@ describe("TemplateEmitter — ConcreteTemplateEntry", () => {
       ]),
       commands: new Map([["AccessBuildingCommand", cmdEntry]]),
     });
-    const tpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const tpl = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       subjectSubset: ["Student"],
       strategies: {},
@@ -1008,7 +1003,6 @@ describe("StrategyClassEmitter", () => {
       ]),
       commands: new Map([["AccessBuildingCommand", cmdEntry]]),
       abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTplEntry]]),
-      concreteTemplates: new Map(),
       strategies: new Map(),
     };
     const project = makeProject();
@@ -1031,16 +1025,16 @@ describe("StrategyClassEmitter", () => {
 
 describe("emitAst", () => {
   it("returns one EmitResult per entry across all maps", () => {
-    const tplEntry = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const tplEntry = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       strategies: {},
     });
     const index: ConfigIndex = {
       ...withCmd,
-      concreteTemplates: new Map([["AccessBuildingCommand.GrantAccess", tplEntry]]),
+      abstractTemplates: new Map([["AccessBuildingCommand.GrantAccess", tplEntry]]),
     };
     const project = makeProject();
-    // subjectTypes(2) + plainTypes(3) + commands(1) + concreteTemplates(1)
+    // subjectTypes(2) + plainTypes(3) + commands(1) + abstractTemplates(1)
     const results = emitAst(index, { configIndex: index, project });
     expect(results).toHaveLength(7);
   });
@@ -1062,7 +1056,7 @@ describe("emitAst", () => {
       subjectSubset: ["Student"],
       strategies: { DepartmentMatch: {} },
     });
-    const concreteTpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const nonParameterizedTpl = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       strategies: {},
     });
@@ -1074,8 +1068,10 @@ describe("emitAst", () => {
     );
     const index: ConfigIndex = {
       ...withCmd,
-      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
-      concreteTemplates: new Map([["AccessBuildingCommand.GrantAccess", concreteTpl]]),
+      abstractTemplates: new Map([
+        ["AccessBuildingCommand.AccessTemplate", abstractTpl],
+        ["AccessBuildingCommand.GrantAccess", nonParameterizedTpl],
+      ]),
       strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", stratEntry]]),
     };
     const project = makeProject();
@@ -1205,7 +1201,7 @@ describe("TypeScript diagnostics (pre-Load AST gate)", () => {
       subjectSubset: ["Student"],
       strategies: { DepartmentMatch: {} },
     });
-    const concreteTpl = new ConcreteTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+    const nonParameterizedTpl = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
       isParameterized: false,
       strategies: {},
     });
@@ -1217,8 +1213,10 @@ describe("TypeScript diagnostics (pre-Load AST gate)", () => {
     );
     const fullIndex: ConfigIndex = {
       ...withCmd,
-      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTpl]]),
-      concreteTemplates: new Map([["AccessBuildingCommand.GrantAccess", concreteTpl]]),
+      abstractTemplates: new Map([
+        ["AccessBuildingCommand.AccessTemplate", abstractTpl],
+        ["AccessBuildingCommand.GrantAccess", nonParameterizedTpl],
+      ]),
       strategies: new Map([["AccessBuildingCommand.AccessTemplate.DepartmentMatch", stratEntry]]),
     };
     const project = makeProject();
