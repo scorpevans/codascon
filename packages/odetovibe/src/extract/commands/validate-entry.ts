@@ -113,7 +113,9 @@ class PlainTypeValidator implements Template<ValidateEntryCommand, [], PlainType
 //   - baseType, objectType, returnType must reference known domainTypes
 //   - subjectUnion entries must reference subjectTypes (types with resolverName)
 //   - dispatch must have exactly one entry per subjectUnion member
-//   - dispatch values must be strategy names within this Command's own templates map
+//   - dispatch values must be plain strategy names (no dot notation)
+//   - dispatch values must resolve to a known strategy within this Command's templates
+//   - strategy names must be unique across all templates within a Command
 // ═══════════════════════════════════════════════════════════════════
 
 class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntry> {
@@ -173,14 +175,31 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
       }
     }
 
-    // dispatch values must resolve within this Command's templates
+    // dispatch values must be plain strategy names unique across this Command's templates
     const ownTemplates = config.templates ?? {};
 
-    for (const [subjectRef, target] of Object.entries(config.dispatch)) {
-      const parts = target.split(".");
+    // strategy names must be unique across all templates within this command
+    const stratNameToTpl = new Map<string, string>(); // stratName → first template that declared it
+    for (const [tplName, tplConfig] of Object.entries(ownTemplates)) {
+      for (const stratName of Object.keys(tplConfig.strategies)) {
+        const existing = stratNameToTpl.get(stratName);
+        if (existing !== undefined) {
+          errors.push(
+            err(
+              key,
+              "strategy-name-unique",
+              `strategy name "${stratName}" is declared in both "${existing}" and "${tplName}" — strategy names must be unique across all templates within a command`,
+            ),
+          );
+        } else {
+          stratNameToTpl.set(stratName, tplName);
+        }
+      }
+    }
 
-      if (parts.length === 1) {
-        // Only strategy names are valid as bare dispatch targets — all templates are abstract
+    for (const [subjectRef, target] of Object.entries(config.dispatch)) {
+      if (!target.includes(".")) {
+        // Only plain strategy names are valid dispatch targets — all templates are abstract
         const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
         if (!isStrategy) {
           errors.push(
@@ -188,26 +207,6 @@ class CommandValidator implements Template<ValidateEntryCommand, [], CommandEntr
               key,
               "dispatch-target-ref",
               `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
-            ),
-          );
-        }
-      } else if (parts.length === 2) {
-        const [tplName, stratName] = parts;
-        const tpl = ownTemplates[tplName];
-        if (!tpl) {
-          errors.push(
-            err(
-              key,
-              "dispatch-target-ref",
-              `dispatch target template "${tplName}" for "${subjectRef}" not found in this Command's templates`,
-            ),
-          );
-        } else if (!(stratName in tpl.strategies)) {
-          errors.push(
-            err(
-              key,
-              "dispatch-target-strategy",
-              `dispatch target strategy "${stratName}" not found in template "${tplName}"`,
             ),
           );
         }

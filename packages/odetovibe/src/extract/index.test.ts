@@ -246,29 +246,30 @@ describe("CommandValidator", () => {
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
-  it("[dispatch-target-ref] fails when the Template part of a dot-notation value is not in templates", () => {
+  it("[dispatch-target-format] fails when dispatch value contains a dot (dot notation is not supported)", () => {
     const entry = makeCmd({
-      dispatch: { Student: "NoSuchTemplate.SomeStrategy" },
-      templates: {},
-    });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
-  });
-
-  it("[dispatch-target-strategy] fails when the Strategy part of a dot-notation value is not in the template", () => {
-    const entry = makeCmd({
-      dispatch: { Student: "AccessTemplate.NoSuchStrategy" },
+      dispatch: { Student: "AccessTemplate.DepartmentMatch" },
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
-      "dispatch-target-strategy",
-    );
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
   });
 
   it("[dispatch-target-format] fails when dispatch value has more than two dot-separated parts", () => {
     const entry = makeCmd({ dispatch: { Student: "A.B.C" }, templates: {} });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
+  });
+
+  it("[strategy-name-unique] fails when two templates declare the same strategy name", () => {
+    const entry = makeCmd({
+      dispatch: { Student: "Shared" },
+      templates: {
+        TemplateA: { isParameterized: false, strategies: { Shared: {} } },
+        TemplateB: { isParameterized: false, strategies: { Shared: {} } },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("strategy-name-unique");
   });
 
   it("[commandName-file-unique] fails when two command keys normalize to the same file name", () => {
@@ -329,14 +330,13 @@ describe("CommandValidator", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("AbstractTemplateValidator", () => {
-  // Command that correctly uses a plain strategy name in dispatch
   const cmdEntry = new CommandEntry("Cmd", {
     commandName: "cmd",
     baseType: "Person",
     objectType: "Building",
     returnType: "AccessResult",
     subjectUnion: ["Student"],
-    dispatch: { Student: "AccessTemplate.DepartmentMatch" },
+    dispatch: { Student: "DepartmentMatch" },
     templates: {
       AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
     },
@@ -913,7 +913,7 @@ describe("validateYaml", () => {
       objectType: "Building",
       returnType: "AccessResult",
       subjectUnion: ["Student"],
-      dispatch: { Student: "AccessTemplate.DepartmentMatch" },
+      dispatch: { Student: "DepartmentMatch" },
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
