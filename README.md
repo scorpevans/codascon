@@ -128,20 +128,20 @@ import { type Template, type CommandSubjectUnion } from "codascon";
 
 abstract class AccessTemplate implements Template<AccessBuildingCommand> {
   execute(_subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
-    return { granted: true, reason: this.doAccess(building) };
+    return this.tryAccess(building);
   }
-  protected abstract doAccess(building: Building): string;
+  protected abstract tryAccess(building: Building): AccessResult;
 }
 
 class StudentAccess extends AccessTemplate {
-  protected doAccess(building: Building): string {
-    return `student can access ${building.name} through the front door`;
+  protected tryAccess(building: Building): AccessResult {
+    return { granted: true, reason: `student can access ${building.name} through the front door` };
   }
 }
 
 class ProfessorAccess extends AccessTemplate {
-  protected doAccess(building: Building): string {
-    return `professor can access ${building.name} through the back door`;
+  protected tryAccess(building: Building): AccessResult {
+    return { granted: true, reason: `professor can access ${building.name} through the back door` };
   }
 }
 ```
