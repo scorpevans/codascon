@@ -58,8 +58,6 @@ With a formal protocol in place, an LLM can generate structurally correct code b
 
 ## Quick Start
 
-Codascon currently exposes four primitives: Subject, Command, Template and Strategy.
-
 ### Install
 
 ```bash
@@ -123,7 +121,7 @@ class AccessBuildingCommand extends Command<
 
 ### Define a Template and Strategies
 
-A `Template` typically implements how a `Command` is executed. Strategies may extend those implementations, narrowing the subject union. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+A `Template` typically implements how a `Command` is executed. `Strategy` classes may extend those implementations. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
 
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";

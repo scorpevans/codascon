@@ -52,8 +52,6 @@ pnpm add codascon
 
 ## Quick Start
 
-Codascon currently exposes four primitives: Subject, Command, Template and Strategy.
-
 ### Define Subjects
 
 A **`Subject`** is an entity (`Student`, `Professor`). Codascon enforces that each `Subject` declares a `visitName` — the name of the resolver method it expects its `Command`s to implement.
@@ -109,7 +107,7 @@ class AccessBuildingCommand extends Command<
 
 ### Define a Template and Strategies
 
-A `Template` typically implements how a `Command` is executed. Strategies may extend those implementations, narrowing the subject union. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+A `Template` typically implements how a `Command` is executed. `Strategy` classes may extend those implementations. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
 
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";
