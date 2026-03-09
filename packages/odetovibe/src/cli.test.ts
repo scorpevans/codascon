@@ -192,4 +192,51 @@ describe("main", () => {
     expect(logLines.join("\n")).toContain("created /out/domain-types.ts");
     expect(logLines.join("\n")).toContain("updated /out/commands/greet.ts");
   });
+
+  it("passes --overwrite mode to writeFiles", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml", "--overwrite"];
+    await main();
+    expect(vi.mocked(writeFiles)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ mode: "overwrite" }),
+    );
+  });
+
+  it("passes --no-overwrite (strict) mode to writeFiles", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml", "--no-overwrite"];
+    await main();
+    expect(vi.mocked(writeFiles)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ mode: "strict" }),
+    );
+  });
+
+  it("passes custom --out dir to writeFiles", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml", "--out", "/custom/out"];
+    await main();
+    expect(vi.mocked(writeFiles)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ targetDir: "/custom/out" }),
+    );
+  });
+
+  it("exits 1 and logs compile errors when writeFiles reports them", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    vi.mocked(writeFiles).mockResolvedValue([
+      { path: "/out/f.ts", compileErrors: ["TS2304: Cannot find name 'X'"] },
+    ]);
+    const err = await main().catch((e) => e);
+    expect(err).toBeInstanceOf(ExitError);
+    expect((err as ExitError).code).toBe(1);
+    expect(errorLines.join("\n")).toContain("compile errors in /out/f.ts");
+    expect(errorLines.join("\n")).toContain("TS2304");
+  });
+
+  it("logs a conflict warning when writeFiles reports a conflicted file", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    vi.mocked(writeFiles).mockResolvedValue([{ path: "/out/f.ode.ts", conflicted: true }]);
+    await main(); // must not throw
+    expect(exitCodes).toEqual([]);
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining("conflict"));
+  });
 });
