@@ -131,16 +131,16 @@ for (const fileResult of results) {
 
 For each YAML entry, odetovibe emits:
 
-| YAML entry                                 | Generated output                                                       |
-| ------------------------------------------ | ---------------------------------------------------------------------- |
-| `domainType` with `resolverName`           | `class SubjectName extends Subject`                                    |
-| `domainType` without `resolverName`        | `interface TypeName`                                                   |
-| `command`                                  | `class CommandName extends Command<...>` with typed visit method stubs |
-| Abstract template (non-empty `strategies`) | `abstract class TemplateName implements Template<...>`                 |
-| Concrete template (`strategies: {}`)       | `class TemplateName implements Template<...>`                          |
-| `strategy`                                 | `class StrategyName extends TemplateName`                              |
+| YAML entry                                 | Generated output                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------- |
+| `domainType` with `resolverName`           | `class SubjectName extends Subject`                                       |
+| `domainType` without `resolverName`        | `interface TypeName`                                                      |
+| `command`                                  | `class CommandName extends Command<...>` with typed resolver method stubs |
+| Abstract template (non-empty `strategies`) | `abstract class TemplateName implements Template<...>`                    |
+| Concrete template (`strategies: {}`)       | `class TemplateName implements Template<...>`                             |
+| `strategy`                                 | `class StrategyName extends TemplateName`                                 |
 
-All classes are fully typed — generic parameters, visit method signatures, hook properties — so the compiler enforces the codascon protocol from the first run.
+All classes are fully typed — generic parameters, resolver method signatures, hook properties — so the compiler enforces the codascon protocol from the first run.
 
 ## License
 

@@ -231,7 +231,7 @@ class AssignParkingCommand extends Command<
 const result = await parkingCmd.run(student, lotA);
 ```
 
-Visit methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
+Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
 
 ## Odetovibe — YAML Configuration & Code Generation
 

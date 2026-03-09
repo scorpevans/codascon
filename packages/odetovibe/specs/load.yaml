@@ -15,7 +15,7 @@
 #   Reads existing files and reconciles with newly generated code.
 #   Ownership contract:
 #     - Structural elements (/* @odetovibe-generated */) → odetovibe owns
-#     - Implementation bodies (visit method bodies, execute body) → user owns
+#     - Implementation bodies (resolver method bodies, execute body) → user owns
 #     - Imports → union (add missing, keep user's extras)
 #     - Unrecognized declarations → preserve untouched
 #     - User comments → preserved

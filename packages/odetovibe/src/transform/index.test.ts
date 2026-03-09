@@ -4,7 +4,7 @@
  * Covers:
  *   - SubjectClassEmitter: minimal stub — extends Subject + resolverName only
  *   - InterfaceEmitter: empty stub — name only, content is user-owned
- *   - CommandClassEmitter: class generics, commandName, visit methods, file path, imports
+ *   - CommandClassEmitter: class generics, commandName, resolver methods, file path, imports
  *   - AbstractTemplateEmitter: abstract class, type parameter, implements, hooks, execute
  *   - ConcreteTemplateEmitter: concrete class, implements, hooks, execute stub
  *   - StrategyClassEmitter: extends clause, hook overrides, execute stub (sync + async), file path
@@ -272,7 +272,7 @@ describe("CommandClassEmitter", () => {
     expect(t).toContain('readonly commandName = "accessBuilding" as const');
   });
 
-  it("emits one visit method per subject with correct signature", () => {
+  it("emits one resolver method per subject with correct signature", () => {
     const project = makeProject();
     emitCmd.run(cmdEntry, ctx(withTypes, project));
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
@@ -283,7 +283,7 @@ describe("CommandClassEmitter", () => {
     expect(methodNames).toContain("resolveProfessor");
   });
 
-  it("visit methods have the correct return type and @odetovibe-generated stub", () => {
+  it("resolver methods have the correct return type and @odetovibe-generated stub", () => {
     const project = makeProject();
     emitCmd.run(cmdEntry, ctx(withTypes, project));
     const t = text(project, "commands/access-building.ts");
@@ -482,9 +482,9 @@ describe("CommandClassEmitter", () => {
     expect(extImp!.getNamedImports().map((n) => n.getName())).toContain("Student");
   });
 
-  it("skips visit-method generation for a subjectUnion member absent from subjectTypes (line 230 continue)", () => {
+  it("skips resolver-method generation for a subjectUnion member absent from subjectTypes (line 230 continue)", () => {
     // configIndex.subjectTypes.get("Ghost") = undefined → !subjectEntry = true → continue at line 230.
-    // No visit method is emitted for "Ghost"; the method for the known subject is still emitted.
+    // No resolver method is emitted for "Ghost"; the method for the known subject is still emitted.
     const ghostCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
       subjectUnion: ["Student", "Ghost"],
@@ -503,7 +503,7 @@ describe("CommandClassEmitter", () => {
       .getSourceFileOrThrow("commands/access-building.ts")
       .getClassOrThrow("AccessBuildingCommand");
     const methodNames = cls.getMethods().map((m) => m.getName());
-    expect(methodNames).toContain("resolveStudent"); // known subject → visit method emitted
+    expect(methodNames).toContain("resolveStudent"); // known subject → resolver method emitted
     expect(methodNames).not.toContain("resolveGhost"); // "Ghost" absent → skipped
   });
 });

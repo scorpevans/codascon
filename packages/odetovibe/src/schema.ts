@@ -88,7 +88,7 @@
  *
  * - **Instantiation strategy**: Whether strategies are singletons, shared
  *   instances, or newly constructed per dispatch. This is determined by the
- *   Command's visit method implementation.
+ *   Command's resolver method implementation.
  *
  * - **Constructor wiring / DI**: How Commands, Templates, and Strategies
  *   receive their dependencies. Hooks may be injected via constructor,
@@ -203,10 +203,10 @@ export type DomainType = {
  * An operation that can be performed on Subjects.
  *
  * Maps directly to a class extending `Command<B, O, R, CSU>` in the
- * framework. The Command's visit methods (one per Subject in the union)
+ * framework. The Command's resolver methods (one per Subject in the union)
  * are not declared here — they are derived from `subjectUnion` entries
  * and their `resolverName` values. The `dispatch` map specifies which
- * Template or Strategy each visit method resolves to.
+ * Template or Strategy each resolver method resolves to.
  *
  * @property commandName    — The string literal used as the Command's
  *                            `commandName` property. Also used as the key
@@ -229,7 +229,7 @@ export type DomainType = {
  *
  * @property subjectUnion   — The `CSU` tuple. References to domain types
  *                            that have `resolverName` (i.e. Subjects). Each
- *                            entry requires a corresponding visit method
+ *                            entry requires a corresponding resolver method
  *                            on the Command class, enforced at compile time
  *                            by `CommandSubjectStrategies<C>`.
  *

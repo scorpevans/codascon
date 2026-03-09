@@ -1579,7 +1579,7 @@ describe("formatCode — Prettier error fallback", () => {
 // mergeClass adds generated methods that are absent from the existing
 // class (line 401: existing.addMethod).  This is the path taken when
 // a new Subject is added to a Command: re-generation produces a new
-// visit method that the user's file does not yet have.
+// resolver method that the user's file does not yet have.
 // ═══════════════════════════════════════════════════════════════════
 
 describe("MergeWriter — new member added to existing class", () => {

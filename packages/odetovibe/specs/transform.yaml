@@ -3,7 +3,7 @@
 #
 # Responsible for converting a validated ConfigIndex into TypeScript
 # code using ts-morph. Each Subject type dispatches to a distinct
-# emitter — no runtime branching in visit methods.
+# emitter — no runtime branching in resolver methods.
 #
 # The split made in the Extract domain (SubjectTypeEntry vs PlainTypeEntry,
 # AbstractTemplateEntry vs ConcreteTemplateEntry) ensures that
