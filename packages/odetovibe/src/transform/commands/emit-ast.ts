@@ -248,7 +248,7 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
 class CommandClassEmitterDefault extends CommandClassEmitter {}
 
 // ═══════════════════════════════════════════════════════════════════
-// TEMPLATE: TemplateEmitter
+// TEMPLATE: AbstractTemplateEmitter
 //
 // All templates generate an abstract class with a concrete execute stub.
 //
@@ -272,7 +272,11 @@ class CommandClassEmitterDefault extends CommandClassEmitter {}
 // Target: <namespace>/commands/<parent-cmd-name>.ts
 // ═══════════════════════════════════════════════════════════════════
 
-abstract class TemplateEmitter implements Template<EmitAstCommand, [], AbstractTemplateEntry> {
+abstract class AbstractTemplateEmitter implements Template<
+  EmitAstCommand,
+  [],
+  AbstractTemplateEntry
+> {
   execute(subject: AbstractTemplateEntry, object: Readonly<EmitContext>): EmitResult {
     const { configIndex } = object;
     const { key, commandKey, config } = subject;
@@ -350,7 +354,7 @@ abstract class TemplateEmitter implements Template<EmitAstCommand, [], AbstractT
   }
 }
 
-class TemplateEmitterDefault extends TemplateEmitter {}
+class AbstractTemplateEmitterDefault extends AbstractTemplateEmitter {}
 
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: StrategyClassEmitter
@@ -429,7 +433,7 @@ class StrategyClassEmitterDefault extends StrategyClassEmitter {}
 const subjectClassEmitter = new SubjectClassEmitterDefault();
 const interfaceEmitter = new InterfaceEmitterDefault();
 const commandClassEmitter = new CommandClassEmitterDefault();
-const templateEmitter = new TemplateEmitterDefault();
+const abstractTemplateEmitter = new AbstractTemplateEmitterDefault();
 const strategyClassEmitter = new StrategyClassEmitterDefault();
 
 /** Dispatches each config entry to its TypeScript AST emitter via double dispatch. */
@@ -463,7 +467,7 @@ export class EmitAstCommand extends Command<
     subject: AbstractTemplateEntry,
     object: Readonly<EmitContext>,
   ): Template<EmitAstCommand, [], AbstractTemplateEntry> {
-    return templateEmitter;
+    return abstractTemplateEmitter;
   }
   resolveStrategy(
     subject: StrategyEntry,

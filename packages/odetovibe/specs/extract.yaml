@@ -6,10 +6,10 @@
 #   2. Validating all entries against schema rules (validateYaml)
 #
 # Domain types with `resolverName` are split into SubjectTypeEntry at
-# parse time; types without become PlainTypeEntry. Templates are
-# similarly split: non-empty strategies → AbstractTemplateEntry,
-# empty strategies → ConcreteTemplateEntry. This ensures the
-# ValidateEntryCommand dispatches structurally with no runtime branching.
+# parse time; types without become PlainTypeEntry. Templates always
+# become AbstractTemplateEntry entries (all templates are abstract).
+# This ensures the ValidateEntryCommand dispatches structurally with
+# no runtime branching.
 #
 # Public API exposed to clients:
 #   - parseYaml(yamlPath: string): ConfigIndex

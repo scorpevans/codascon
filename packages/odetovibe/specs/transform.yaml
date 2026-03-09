@@ -5,9 +5,9 @@
 # code using ts-morph. Each Subject type dispatches to a distinct
 # emitter — no runtime branching in resolver methods.
 #
-# The split made in the Extract domain (SubjectTypeEntry vs PlainTypeEntry,
-# AbstractTemplateEntry vs ConcreteTemplateEntry) ensures that
-# EmitAstCommand's dispatch is fully structural.
+# The split made in the Extract domain (SubjectTypeEntry vs PlainTypeEntry)
+# and the invariant that all templates become AbstractTemplateEntry entries
+# ensure that EmitAstCommand's dispatch is fully structural.
 #
 # Subjects are the ConfigEntry types produced by Extract.
 # They are imported from the extract domain — codegen should import,
@@ -17,7 +17,6 @@
 #   SubjectTypeEntry / PlainTypeEntry  →  domain-types.ts  (root output dir)
 #   CommandEntry                       →  <namespace>/commands/<cmd-name>.ts
 #   AbstractTemplateEntry              →  <namespace>/commands/<parent-cmd-name>.ts
-#   ConcreteTemplateEntry              →  <namespace>/commands/<parent-cmd-name>.ts
 #   StrategyEntry                      →  <namespace>/commands/<grandparent-cmd-name>.ts
 #
 # Command file names are kebab-case of the command key with the
@@ -45,7 +44,6 @@ imports:
     - PlainTypeEntry
     - CommandEntry
     - AbstractTemplateEntry
-    - ConcreteTemplateEntry
     - StrategyEntry
 
 externalTypes:

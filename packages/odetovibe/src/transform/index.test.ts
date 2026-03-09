@@ -5,7 +5,7 @@
  *   - SubjectClassEmitter: minimal stub — extends Subject + resolverName only
  *   - InterfaceEmitter: empty stub — name only, content is user-owned
  *   - CommandClassEmitter: class generics, commandName, resolver methods, file path, imports
- *   - TemplateEmitter: abstract class, type parameter / fixed SU, implements, hooks, execute
+ *   - AbstractTemplateEmitter: abstract class, type parameter / fixed SU, implements, hooks, execute
  *   - StrategyClassEmitter: extends clause, hook overrides, execute stub (sync + async), file path
  *   - emitAst: orchestration, file accumulation, namespace routing
  */
@@ -506,10 +506,10 @@ describe("CommandClassEmitter", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// TemplateEmitter — AbstractTemplateEntry path
+// AbstractTemplateEmitter — AbstractTemplateEntry path
 // ═══════════════════════════════════════════════════════════════════
 
-describe("TemplateEmitter — AbstractTemplateEntry", () => {
+describe("AbstractTemplateEmitter — AbstractTemplateEntry", () => {
   const tplEntry = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
     isParameterized: true,
     subjectSubset: ["Student"],
@@ -716,10 +716,10 @@ describe("TemplateEmitter — AbstractTemplateEntry", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// TemplateEmitter — isParameterized: false path
+// AbstractTemplateEmitter — isParameterized: false path
 // ═══════════════════════════════════════════════════════════════════
 
-describe("TemplateEmitter — isParameterized: false", () => {
+describe("AbstractTemplateEmitter — isParameterized: false", () => {
   const tplEntry = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
     isParameterized: false,
     strategies: {},
