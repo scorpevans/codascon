@@ -72,14 +72,14 @@ commands:
     returnType: AccessResult
     subjectUnion: [Student, Professor]
     dispatch:
-      Student: StudentAccess
-      Professor: ProfessorAccess
+      Student: BasicAccess
+      Professor: FullAccess
     templates:
       AccessTemplate:
         isParameterized: false
         strategies:
-          StudentAccess: {}
-          ProfessorAccess: {}
+          BasicAccess: {}
+          FullAccess: {}
 ```
 
 **Key rules:**

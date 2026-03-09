@@ -96,11 +96,11 @@ class AccessBuildingCommand extends Command<
   readonly commandName = "accessBuilding" as const;
 
   resolveStudent(_student: Student, _building: Building) {
-    return new StudentAccess(); // Strategy — defined below
+    return new BasicAccess(); // Strategy — defined below
   }
 
   resolveProfessor(_professor: Professor, _building: Building) {
-    return new ProfessorAccess(); // Strategy — defined below
+    return new FullAccess(); // Strategy — defined below
   }
 }
 ```
@@ -113,21 +113,21 @@ A `Template` abstract class implements how a `Command` is executed. It may be co
 import { type Template, type CommandSubjectUnion } from "codascon";
 
 abstract class AccessTemplate implements Template<AccessBuildingCommand> {
-  execute(_subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
-    return this.tryAccess(building);
+  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+    return this.tryAccess(subject.clearance, building.name);
   }
-  protected abstract tryAccess(building: Building): AccessResult;
+  protected abstract tryAccess(clearance: string, buildingName: string): AccessResult;
 }
 
-class StudentAccess extends AccessTemplate {
-  protected tryAccess(building: Building): AccessResult {
-    return { granted: true, reason: `student can access ${building.name} through the front door` };
+class BasicAccess extends AccessTemplate {
+  protected tryAccess(_clearance: string, _buildingName: string): AccessResult {
+    return { granted: true, reason: "open house" };
   }
 }
 
-class ProfessorAccess extends AccessTemplate {
-  protected tryAccess(building: Building): AccessResult {
-    return { granted: true, reason: `professor can access ${building.name} through the back door` };
+class FullAccess extends AccessTemplate {
+  protected tryAccess(_clearance: string, _buildingName: string): AccessResult {
+    return { granted: true, reason: "open house" };
   }
 }
 ```
@@ -137,7 +137,7 @@ class ProfessorAccess extends AccessTemplate {
 ```typescript
 const cmd = new AccessBuildingCommand();
 const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
-// { granted: true, reason: "professor can access Science Hall through the back door" }
+// { granted: true, reason: "open house" }
 ```
 
 ```
