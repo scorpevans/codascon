@@ -26,7 +26,7 @@ With the rise of AI-assisted development, these problems compound further. An LL
 
 ## What Codascon Provides
 
-Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic. It gives business logic a home.
+Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic; it embeds it in a formal structure.
 
 **1. Compiler safety**
 
