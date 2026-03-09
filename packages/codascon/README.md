@@ -24,7 +24,7 @@ The absence of a formal coding protocol compounds in several directions:
 
 With the rise of AI-assisted development, these problems compound further. An LLM generating code without structural rails produces output that is internally inconsistent, architecturally divergent across iterations, and difficult to audit. The more code the AI writes, the more the absence of a formal protocol matters.
 
-## The Solution — Codascon
+## What Codascon Provides
 
 Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic. It gives business logic a home.
 
@@ -212,7 +212,7 @@ Visit methods (strategy selection) remain synchronous. Only `execute` returns th
 
 Codascon currently exposes four interfaces: Subject, Command, Template and Strategy.
 
-A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one visit method per `Subject` — the visit method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
+A **`Subject`** is an entity (`Student`, `Professor`, `Visitor`). A **`Command`** is an operation (`AccessBuilding`, `CheckoutEquipment`). Each `Command` declares one resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute. A **`Strategy`** is a concrete `Template` subclass that narrows the subject union and provides the implementation. The `Template` may declare **hooks** — references to other `Command`s it invokes during execution.
 
 ```
 command.run(subject, object)
