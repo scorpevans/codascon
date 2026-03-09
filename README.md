@@ -129,10 +129,9 @@ import { type Template, type CommandSubjectUnion } from "codascon";
 // CommandSubjectUnion<C> extracts the subject union from a Command —
 // no need to repeat Student | Professor manually
 abstract class AccessTemplate implements Template<AccessBuildingCommand> {
-  abstract execute(
-    subject: CommandSubjectUnion<AccessBuildingCommand>,
-    building: Building,
-  ): AccessResult;
+  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
+    throw new Error("Not implemented");
+  }
 }
 
 class GrantAccess extends AccessTemplate {
@@ -257,8 +256,8 @@ commands:
     returnType: AccessResult
     subjectUnion: [Student, Professor]
     dispatch:
-      Student: AccessTemplate.DenyAccess
-      Professor: AccessTemplate.GrantAccess
+      Student: DenyAccess
+      Professor: GrantAccess
     templates:
       AccessTemplate:
         isParameterized: true
@@ -403,7 +402,7 @@ npx odetovibe domain.yaml --out src/
 #### Step 3 — Implement your strategies
 
 ```markdown
-Here are the generated TypeScript files from the codascon scaffolding. Each strategy has a stub `execute` method marked `// @odetovibe-generated`.
+Here are the generated TypeScript files from the codascon scaffolding. Each template has a concrete `execute` stub marked `// @odetovibe-generated` — implement the business logic there. Strategies inherit from their template and can override `execute` if needed.
 
 Here are the YAML code configurations:
 [LINK YOUR YAML CONFIG(S)]

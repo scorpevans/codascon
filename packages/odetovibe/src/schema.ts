@@ -135,7 +135,7 @@
  *     returnType: AccessResult
  *     subjectUnion: [Student, Professor]
  *     dispatch:
- *       Student: AccessTemplate.DepartmentMatch
+ *       Student: DepartmentMatch
  *       Professor: GrantAccess
  *     templates:
  *       AccessTemplate:
@@ -273,10 +273,10 @@ export type Command = {
 /*
  * The strategy interface / abstract class.
  *
- * Maps to a class implementing `Template<C, H, SU>` in the framework.
- * A Template with a non-empty `strategies` map is abstract — it should
- * not be dispatched to directly. A Template with `strategies: {}` is
- * concrete and can serve as both the Template and the Strategy.
+ * Maps to an abstract class implementing `Template<C, H, SU>` in the framework.
+ * All Templates generate as abstract classes, regardless of whether `strategies`
+ * is empty or non-empty. Dispatch must reference Strategy names only — Templates
+ * themselves are never valid dispatch targets.
  *
  * The parent Command is implicit from nesting — Templates are defined
  * within the `templates` map of their owning Command. The `C` generic
