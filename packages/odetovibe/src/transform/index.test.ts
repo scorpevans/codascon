@@ -555,6 +555,20 @@ describe("AbstractTemplateEmitter — AbstractTemplateEntry", () => {
     expect(typeParams[0].getConstraint()?.getText()).toBe("Student | Professor");
   });
 
+  it("constrains SU to CommandSubjectUnion when subjectSubset is absent", () => {
+    const noSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      strategies: { StratA: {} },
+    });
+    const project = makeProject();
+    emitCmd.run(noSubsetTpl, ctx(withCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    const typeParams = sf.getClassOrThrow("AccessTemplate").getTypeParameters();
+    expect(typeParams[0].getConstraint()?.getText()).toBe(
+      "CommandSubjectUnion<AccessBuildingCommand>",
+    );
+  });
+
   it("constrains SU to CommandSubjectUnion when subjectSubset is empty array", () => {
     const emptySubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
       isParameterized: true,
