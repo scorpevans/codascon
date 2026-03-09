@@ -7,6 +7,7 @@
  *     file not found, invalid YAML, and the happy path
  */
 
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./extract/index.js");
@@ -239,5 +240,45 @@ describe("main", () => {
     await main(); // must not throw
     expect(exitCodes).toEqual([]);
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining("conflict"));
+  });
+
+  it("defaults to merge mode when neither --overwrite nor --no-overwrite is passed", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    await main();
+    expect(vi.mocked(writeFiles)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ mode: "merge" }),
+    );
+  });
+
+  it("logs the parsed command count and namespace", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    await main();
+    expect(logLines.join("\n")).toContain("Parsed 1 command(s), namespace: test");
+  });
+
+  it("logs (none) as namespace when namespace is absent", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    vi.mocked(parseYaml).mockReturnValue({
+      ...fakeConfigIndex,
+      namespace: undefined as unknown as string,
+    });
+    await main();
+    expect(logLines.join("\n")).toContain("namespace: (none)");
+  });
+
+  it("defaults --out to ./odetovibe when not specified", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    await main();
+    expect(vi.mocked(writeFiles)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ targetDir: resolve("./odetovibe") }),
+    );
+  });
+
+  it("propagates unexpected errors as rejections", async () => {
+    process.argv = ["node", "cli.js", "/fake/config.yaml"];
+    vi.mocked(writeFiles).mockRejectedValue(new Error("disk full"));
+    await expect(main()).rejects.toThrow("disk full");
   });
 });
