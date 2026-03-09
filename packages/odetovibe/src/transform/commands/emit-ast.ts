@@ -379,16 +379,23 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
     const tplEntry = configIndex.abstractTemplates.get(`${commandKey}.${templateKey}`)!;
     const cmdEntry = configIndex.commands.get(commandKey)!;
 
-    const subjectSubset = config.subjectSubset?.length
-      ? config.subjectSubset
-      : tplEntry.config.subjectSubset?.length
-        ? tplEntry.config.subjectSubset
-        : cmdEntry.config.subjectUnion;
-    const subsetUnion = subjectSubset.join(" | ");
+    const strategyHasSubset = !!config.subjectSubset?.length;
+    const templateHasSubset = !!tplEntry.config.subjectSubset?.length;
+    const isFullUnion = !strategyHasSubset && !templateHasSubset;
 
-    for (const ref of subjectSubset) {
-      const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
-      ensureTypeImport(sf, src, ref);
+    const subjectSubset = strategyHasSubset
+      ? config.subjectSubset!
+      : templateHasSubset
+        ? tplEntry.config.subjectSubset!
+        : cmdEntry.config.subjectUnion;
+
+    if (isFullUnion && tplEntry.config.isParameterized) {
+      ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
+    } else {
+      for (const ref of subjectSubset) {
+        const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+        ensureTypeImport(sf, src, ref);
+      }
     }
 
     const retSrc = importSrc.has(cmdEntry.config.returnType)
@@ -405,8 +412,9 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
       ensureValueImport(sf, hookImportPath(cmdRef, namespace), cmdRef);
     }
 
+    const suArg = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subjectSubset.join(" | ");
     const extendsClause = tplEntry.config.isParameterized
-      ? `${templateKey}<${subsetUnion}>`
+      ? `${templateKey}<${suArg}>`
       : templateKey;
 
     const cls = sf.addClass({

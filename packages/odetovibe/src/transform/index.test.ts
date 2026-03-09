@@ -962,13 +962,37 @@ describe("StrategyClassEmitter", () => {
     expect(cls.getMethods()).toHaveLength(0);
   });
 
-  it("extends with full command union when template's subjectSubset is empty array", () => {
+  it("extends with CommandSubjectUnion when neither strategy nor template has a subjectSubset", () => {
+    const noSubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
+      isParameterized: true,
+      strategies: { StratA: {} },
+    });
+    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {});
+    const index: ConfigIndex = {
+      ...withCmd,
+      abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", noSubsetTpl]]),
+    };
+    const project = makeProject();
+    emitCmd.run(strat, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/access-building.ts");
+    expect(sf.getClassOrThrow("StratA").getExtends()?.getText()).toBe(
+      "AccessTemplate<CommandSubjectUnion<AccessBuildingCommand>>",
+    );
+    const codasconImp = sf
+      .getImportDeclarations()
+      .find((d) => d.isTypeOnly() && d.getModuleSpecifierValue() === "codascon");
+    expect(codasconImp?.getNamedImports().map((n) => n.getName())).toContain("CommandSubjectUnion");
+  });
+
+  it("extends with CommandSubjectUnion when strategy and template both have empty subjectSubset array", () => {
     const emptySubsetTpl = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
       isParameterized: true,
       subjectSubset: [],
       strategies: { StratA: {} },
     });
-    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {});
+    const strat = new StrategyEntry("StratA", "AccessTemplate", "AccessBuildingCommand", {
+      subjectSubset: [],
+    });
     const index: ConfigIndex = {
       ...withCmd,
       abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", emptySubsetTpl]]),
@@ -978,7 +1002,9 @@ describe("StrategyClassEmitter", () => {
     const cls = project
       .getSourceFileOrThrow("commands/access-building.ts")
       .getClassOrThrow("StratA");
-    expect(cls.getExtends()?.getText()).toBe("AccessTemplate<Student | Professor>");
+    expect(cls.getExtends()?.getText()).toBe(
+      "AccessTemplate<CommandSubjectUnion<AccessBuildingCommand>>",
+    );
   });
 
   it("extends with template's subjectSubset when strategy's subjectSubset is empty array", () => {
