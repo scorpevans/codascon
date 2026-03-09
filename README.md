@@ -121,7 +121,7 @@ class AccessBuildingCommand extends Command<
 
 ### Define a Template and Strategies
 
-A `Template` typically implements how a `Command` is executed. It may declare **hooks** — references to other `Command`s it invokes during execution. `Strategy` classes may extend those implementations.
+A `Template` typically implements how a `Command` is executed. It may be configured to handle only a subset of the `Command`'s `Subject` union and may declare **hooks** — references to other `Command`s it invokes during execution (see Advanced Patterns below). `Strategy` classes may extend those implementations.
 
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";
