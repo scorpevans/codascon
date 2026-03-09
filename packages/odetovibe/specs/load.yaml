@@ -36,7 +36,7 @@ imports:
 domainTypes:
   # ── Subject ─────────────────────────────────────────────────────
   SourceFileEntry:
-    visitName: resolveSourceFile
+    resolverName: resolveSourceFile
 
   # ── Object type ─────────────────────────────────────────────────
   WriteContext:

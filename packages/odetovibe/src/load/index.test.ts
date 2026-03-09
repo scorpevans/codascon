@@ -320,14 +320,14 @@ describe("MergeWriter", () => {
 
   it("adds missing import declaration from generated file", async () => {
     const project = makeProject({
-      "domain-types.ts": `import { Subject } from "codascon";\nexport class Foo extends Subject { readonly visitName = "resolveFoo" as const; }`,
+      "domain-types.ts": `import { Subject } from "codascon";\nexport class Foo extends Subject { readonly resolverName = "resolveFoo" as const; }`,
     });
     const sf = project.getSourceFileOrThrow("domain-types.ts");
     const tmpDir = makeTmpDir();
     // Existing file has no imports at all
     fs.writeFileSync(
       path.join(tmpDir, "domain-types.ts"),
-      '/* @odetovibe-generated */\nexport class Foo extends Subject { readonly visitName = "resolveFoo" as const; }',
+      '/* @odetovibe-generated */\nexport class Foo extends Subject { readonly resolverName = "resolveFoo" as const; }',
     );
 
     await writeCmd.run(new SourceFileEntry(sf), ctx(tmpDir, "merge"));
@@ -1043,7 +1043,7 @@ function makeConfigIndexWithExternalType(imports: Record<string, string[]>): Con
     namespace: "test",
     imports,
     externalTypeKeys: new Set(),
-    subjectTypes: new Map([["Foo", new SubjectTypeEntry("Foo", { visitName: "resolveFoo" })]]),
+    subjectTypes: new Map([["Foo", new SubjectTypeEntry("Foo", { resolverName: "resolveFoo" })]]),
     plainTypes: new Map(),
     commands: new Map(),
     abstractTemplates: new Map(),
@@ -1093,7 +1093,7 @@ describe("TypeScript diagnostics", () => {
       imports: {},
       externalTypeKeys: new Set(),
       subjectTypes: new Map([
-        ["Student", new SubjectTypeEntry("Student", { visitName: "resolveStudent" })],
+        ["Student", new SubjectTypeEntry("Student", { resolverName: "resolveStudent" })],
       ]),
       plainTypes: new Map([
         ["Person", new PlainTypeEntry("Person", {})],
@@ -1132,7 +1132,7 @@ describe("detectIndentation — indentation style of existing file", () => {
   it("handles tab-indented existing file without error", async () => {
     // First indented line starts with \t → tab branch of detectIndentation
     const existingContent =
-      '/* @odetovibe-generated */\nexport class Foo {\n\treadonly visitName = "foo" as const;\n}';
+      '/* @odetovibe-generated */\nexport class Foo {\n\treadonly resolverName = "foo" as const;\n}';
     const project = makeProject({ "f.ts": "export class Foo {}" });
     const sf = project.getSourceFileOrThrow("f.ts");
     const tmpDir = makeTmpDir();
@@ -1148,7 +1148,7 @@ describe("detectIndentation — indentation style of existing file", () => {
   it("handles four-space-indented existing file without error", async () => {
     // First indented line starts with four spaces → four-space branch of detectIndentation
     const existingContent =
-      '/* @odetovibe-generated */\nexport class Foo {\n    readonly visitName = "foo" as const;\n}';
+      '/* @odetovibe-generated */\nexport class Foo {\n    readonly resolverName = "foo" as const;\n}';
     const project = makeProject({ "f.ts": "export class Foo {}" });
     const sf = project.getSourceFileOrThrow("f.ts");
     const tmpDir = makeTmpDir();
@@ -1166,7 +1166,7 @@ describe("detectIndentation — indentation style of existing file", () => {
     // via the match path, not the no-match default (the no-match default is exercised by
     // the majority of other merge tests whose existing content has no leading whitespace).
     const existingContent =
-      '/* @odetovibe-generated */\nexport class Foo {\n  readonly visitName = "foo" as const;\n}';
+      '/* @odetovibe-generated */\nexport class Foo {\n  readonly resolverName = "foo" as const;\n}';
     const project = makeProject({ "f.ts": "export class Foo {}" });
     const sf = project.getSourceFileOrThrow("f.ts");
     const tmpDir = makeTmpDir();

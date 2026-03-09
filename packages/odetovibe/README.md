@@ -58,9 +58,9 @@ namespace: campus
 domainTypes:
   CampusMember: {}
   Student:
-    visitName: resolveStudent
+    resolverName: resolveStudent
   Professor:
-    visitName: resolveProfessor
+    resolverName: resolveProfessor
   Building: {}
   AccessResult: {}
 
@@ -87,7 +87,7 @@ commands:
 
 **Key rules:**
 
-- `domainTypes` with `visitName` become Subject classes; without become interfaces
+- `domainTypes` with `resolverName` become Subject classes; without become interfaces
 - Every entry in `subjectUnion` must appear in `dispatch`
 - `dispatch` values are `TemplateName` (concrete) or `TemplateName.StrategyName` (abstract)
 - Templates with non-empty `strategies` are abstract; those with `strategies: {}` are concrete
@@ -133,8 +133,8 @@ For each YAML entry, odetovibe emits:
 
 | YAML entry                                 | Generated output                                                       |
 | ------------------------------------------ | ---------------------------------------------------------------------- |
-| `domainType` with `visitName`              | `class SubjectName extends Subject`                                    |
-| `domainType` without `visitName`           | `interface TypeName`                                                   |
+| `domainType` with `resolverName`           | `class SubjectName extends Subject`                                    |
+| `domainType` without `resolverName`        | `interface TypeName`                                                   |
 | `command`                                  | `class CommandName extends Command<...>` with typed visit method stubs |
 | Abstract template (non-empty `strategies`) | `abstract class TemplateName implements Template<...>`                 |
 | Concrete template (`strategies: {}`)       | `class TemplateName implements Template<...>`                          |

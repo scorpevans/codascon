@@ -54,18 +54,18 @@ pnpm add codascon
 
 ### Define Subjects
 
-A **`Subject`** is an entity (`Student`, `Professor`). Codascon enforces that each `Subject` declares a `visitName` — the name of the resolver method it expects its `Command`s to implement.
+A **`Subject`** is an entity (`Student`, `Professor`). Codascon enforces that each `Subject` declares a `resolverName` — the name of the resolver method it expects its `Command`s to implement.
 
 ```typescript
 import { Subject } from "codascon";
 
 class Student extends Subject {
-  readonly visitName = "resolveStudent" as const;
+  readonly resolverName = "resolveStudent" as const;
   clearance = "basic";
 }
 
 class Professor extends Subject {
-  readonly visitName = "resolveProfessor" as const;
+  readonly resolverName = "resolveProfessor" as const;
   clearance = "full";
 }
 ```
@@ -145,7 +145,7 @@ const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS"
 ```
 command.run(subject, object)
   → subject.getCommandStrategy(command, object)     // double dispatch
-    → command[subject.visitName](subject, object)   // resolver method selects strategy
+    → command[subject.resolverName](subject, object)   // resolver method selects strategy
       → returns a Template                          // the chosen strategy
   → template.execute(subject, object)               // strategy executes
   → returns result

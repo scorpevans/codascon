@@ -6,13 +6,13 @@
  * ## Core Concepts
  *
  * **Subject** — An entity that participates in double dispatch. Each Subject
- * declares a unique `visitName` string literal (e.g. `"resolveStudent"`) which
+ * declares a unique `resolverName` string literal (e.g. `"resolveStudent"`) which
  * the framework uses to route dispatch to the correct resolver method on a Command.
  * Subjects extend the abstract `Subject` base class.
  *
  * **Command** — An operation that can be performed on Subjects. A Command
  * declares resolver methods — one per Subject in its subject union — each named
- * after that Subject's `visitName`. The resolver method receives the Subject and
+ * after that Subject's `resolverName`. The resolver method receives the Subject and
  * the operation's object (context/payload), inspects both, and returns a
  * Template (strategy) to execute. Commands extend the abstract `Command` base
  * class, which provides the `run` method that orchestrates dispatch.
@@ -28,7 +28,7 @@
  * ```
  * command.run(subject, object)
  *   → subject.getCommandStrategy(command, object)     // Subject initiates double dispatch
- *     → command[subject.visitName](subject, object)   // Command's resolver method selects strategy
+ *     → command[subject.resolverName](subject, object)   // Command's resolver method selects strategy
  *       → returns a Template instance                 // The chosen strategy
  *   → template.execute(subject, object)               // Strategy executes
  *   → returns R                                       // Result
@@ -38,21 +38,21 @@
  *
  * - **Exhaustive resolver methods**: A Command's `run` method has a `this` parameter
  *   constrained by `CommandSubjectStrategies<C>`, which maps each Subject's
- *   `visitName` to its required resolver method signature. If any resolver method is
+ *   `resolverName` to its required resolver method signature. If any resolver method is
  *   missing, `run` becomes uncallable at the call site.
  *
  * - **Subject union enforcement**: `run` only accepts Subjects that are in the
  *   Command's declared subject union (`BSL`). Passing an unsupported Subject is
  *   a compile error.
  *
- * - **Literal visitName**: `SubjectVisitName<S>` returns `never` for non-literal
- *   `string` visitNames. When `never` is a mapped type key the entry is dropped,
- *   so resolver method requirements for Subjects with non-literal visitNames are
- *   omitted from `CommandSubjectStrategies` — and `RequireLiteralVisitNames`
+ * - **Literal resolverName**: `SubjectResolverName<S>` returns `never` for non-literal
+ *   `string` resolverNames. When `never` is a mapped type key the entry is dropped,
+ *   so resolver method requirements for Subjects with non-literal resolverNames are
+ *   omitted from `CommandSubjectStrategies` — and `RequireLiteralResolverNames`
  *   makes `run` uncallable with a descriptive error property name.
  *
- * - **Duplicate visitName detection**: If two Subjects in the same Command's
- *   union share a `visitName`, `CommandSubjectStrategies` produces two entries
+ * - **Duplicate resolverName detection**: If two Subjects in the same Command's
+ *   union share a `resolverName`, `CommandSubjectStrategies` produces two entries
  *   with the same key; TypeScript intersects them into an impossible method
  *   signature (e.g. `(s: Dog) => ... & (s: Cat) => ...`), making the visit
  *   method unimplementable.
@@ -107,31 +107,31 @@
 // ─── Type Utilities (exported) ───────────────────────────────────
 
 /*
- * Extracts the `visitName` string literal type from a Subject.
+ * Extracts the `resolverName` string literal type from a Subject.
  *
  * Returns `never` for `any` (IsAny guard) and for non-literal `string`
- * visitNames. When `never` is used as a mapped type key it produces `{}`,
+ * resolverNames. When `never` is used as a mapped type key it produces `{}`,
  * so `Visit<C, S>` and `CommandSubjectStrategies<C>` collapse to `{}`
- * for Subjects with non-literal visitNames — the resolver method requirement
+ * for Subjects with non-literal resolverNames — the resolver method requirement
  * for that Subject is silently dropped at the type level.
  *
  * @example
- * class Dog extends Subject { readonly visitName = "resolveDog" as const; }
- * type T = SubjectVisitName<Dog>;  // "resolveDog"
+ * class Dog extends Subject { readonly resolverName = "resolveDog" as const; }
+ * type T = SubjectResolverName<Dog>;  // "resolveDog"
  *
- * class Bad extends Subject { readonly visitName: string = "oops"; }
- * type T = SubjectVisitName<Bad>;  // never
+ * class Bad extends Subject { readonly resolverName: string = "oops"; }
+ * type T = SubjectResolverName<Bad>;  // never
  */
-type WidenedVisitNameError =
-  "visitName must be a literal. Fix: readonly visitName = 'resolveFoo' as const";
+type WidenedResolverNameError =
+  "resolverName must be a literal. Fix: readonly resolverName = 'resolveFoo' as const";
 
-/** Extracts the `visitName` string literal type from a Subject. Returns `never` for non-literal `visitName` or `any`. */
-export type SubjectVisitName<S> =
-  // IsAny guard: when S is `any`, return `never` so mapped types keyed by SubjectVisitName<S>
+/** Extracts the `resolverName` string literal type from a Subject. Returns `never` for non-literal `resolverName` or `any`. */
+export type SubjectResolverName<S> =
+  // IsAny guard: when S is `any`, return `never` so mapped types keyed by SubjectResolverName<S>
   // produce {} rather than a spurious error-keyed method requirement.
   0 extends 1 & S
     ? never
-    : S extends { visitName: infer K extends string }
+    : S extends { resolverName: infer K extends string }
       ? string extends K
         ? never
         : K
@@ -202,7 +202,7 @@ export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : n
  * Given `Command<B, O, R, [Student, Professor]>`, produces `Student | Professor`.
  * This is the set of Subjects the Command can dispatch to.
  *
- * Returns `never` for `any` (IsAny guard), mirroring `CommandName` and `SubjectVisitName`.
+ * Returns `never` for `any` (IsAny guard), mirroring `CommandName` and `SubjectResolverName`.
  * Returns `never` if `C` does not extend `Command`.
  *
  * **Why `_bsl` and not `C extends Command<any, any, any, infer BSL>`:** The heritage-clause
@@ -216,7 +216,7 @@ export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : n
  */
 /** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. Returns `never` for `any` or non-Command types. */
 export type CommandSubjectUnion<C> =
-  // IsAny guard: mirrors the guards on CommandName and SubjectVisitName.
+  // IsAny guard: mirrors the guards on CommandName and SubjectResolverName.
   0 extends 1 & C
     ? never
     : // Reads the phantom `_bsl` property rather than pattern-matching on `Command<...infer BSL>`.
@@ -231,7 +231,7 @@ export type CommandSubjectUnion<C> =
  * Defines the signature of a single resolver method on a Command.
  *
  * For a given Command `C` and Subject `BS`, produces an object type with a
- * single method keyed by `SubjectVisitName<BS>`. The method receives the
+ * single method keyed by `SubjectResolverName<BS>`. The method receives the
  * Subject and a `Readonly` view of the object, and returns a Template.
  *
  * The object is `Readonly` in the resolver method signature to signal that
@@ -256,7 +256,7 @@ export type CommandSubjectUnion<C> =
  * // }
  */
 type Visit<C extends AnyCommand, BS extends CommandSubjectUnion<C>> = {
-  [K in SubjectVisitName<BS>]: (
+  [K in SubjectResolverName<BS>]: (
     subject: BS,
     object: Readonly<CommandObject<C>>,
   ) => Template<C, any[], BS>;
@@ -265,8 +265,8 @@ type Visit<C extends AnyCommand, BS extends CommandSubjectUnion<C>> = {
 /*
  * Converts a union type to an intersection type.
  *
- * Used by `RequireLiteralVisitNames` to merge per-element checks into a single
- * type. If any element produces `{ [WidenedVisitNameError]: never }`, the
+ * Used by `RequireLiteralResolverNames` to merge per-element checks into a single
+ * type. If any element produces `{ [WidenedResolverNameError]: never }`, the
  * intersection carries that property, making `run()` uncallable.
  */
 type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (k: infer I) => void
@@ -277,12 +277,12 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * Computes the full set of resolver methods a Command must implement.
  *
  * Iterates over `CommandSubjectUnion<C>` (the union of all Subjects in the
- * Command's BSL tuple), remaps each Subject `SU` to its `visitName` key via
- * `as SubjectVisitName<SU>`, and extracts the corresponding method signature
+ * Command's BSL tuple), remaps each Subject `SU` to its `resolverName` key via
+ * `as SubjectResolverName<SU>`, and extracts the corresponding method signature
  * from `Visit<C, SU>`. The result is an object type with one method per Subject,
  * each correctly typed to its specific Subject (not the full union).
  *
- * Duplicate `visitName` values cause TypeScript to intersect the conflicting
+ * Duplicate `resolverName` values cause TypeScript to intersect the conflicting
  * method signatures for the shared key, making the method unimplementable.
  *
  * This type is used as a `this` parameter constraint on `Command.run()`.
@@ -297,32 +297,32 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * // }
  */
 type CommandSubjectStrategies<C extends AnyCommand> = {
-  [SU in CommandSubjectUnion<C> as SubjectVisitName<SU>]: Visit<C, SU>[SubjectVisitName<SU>];
+  [SU in CommandSubjectUnion<C> as SubjectResolverName<SU>]: Visit<C, SU>[SubjectResolverName<SU>];
 };
 
 /*
- * Enforces that every Subject in `BSL` declares a literal `visitName`.
+ * Enforces that every Subject in `BSL` declares a literal `resolverName`.
  *
  * Intersected into `run()`'s `this` parameter. It takes `BSL` directly from the
  * Command class's own generic (not a free type variable inside `run`), so it is
  * evaluated at each concrete call site with the specific tuple bound at subclass
  * definition time.
  *
- * If any element of `BSL` has a non-literal `visitName` (i.e. typed as the wide
- * `string`), the result includes `{ [WidenedVisitNameError]: never }` — an
+ * If any element of `BSL` has a non-literal `resolverName` (i.e. typed as the wide
+ * `string`), the result includes `{ [WidenedResolverNameError]: never }` — an
  * unsatisfiable structural requirement that makes `run` uncallable with a
  * descriptive property name explaining the issue.
  *
  * The IsAny guard (`0 extends 1 & BSL[K]`) prevents false positives when `BSL`
  * contains `any`.
  */
-type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
+type RequireLiteralResolverNames<BSL extends unknown[]> = UnionToIntersection<
   {
     [K in keyof BSL]: 0 extends 1 & BSL[K]
       ? unknown
-      : BSL[K] extends { visitName: infer V extends string }
+      : BSL[K] extends { resolverName: infer V extends string }
         ? string extends V
-          ? { readonly [key in WidenedVisitNameError]: never }
+          ? { readonly [key in WidenedResolverNameError]: never }
           : unknown
         : unknown;
   }[number]
@@ -334,21 +334,21 @@ type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
  * Abstract base class for all Subjects.
  *
  * A Subject is an entity that participates in double dispatch. Each Subject
- * subclass must declare a `visitName` as a string literal, which serves as
+ * subclass must declare a `resolverName` as a string literal, which serves as
  * the key for the corresponding resolver method on Commands.
  *
- * ## The `visitName` Convention
+ * ## The `resolverName` Convention
  *
- * By convention, `visitName` should be prefixed with `"resolve"`:
+ * By convention, `resolverName` should be prefixed with `"resolve"`:
  * ```ts
- * readonly visitName = "resolveStudent" as const;
+ * readonly resolverName = "resolveStudent" as const;
  * ```
  *
- * The `visitName` must be:
+ * The `resolverName` must be:
  * - A string literal type (not the wide `string` type) — enforced by
- *   `SubjectVisitName<S>` which returns `never` for non-literals, silently
+ *   `SubjectResolverName<S>` which returns `never` for non-literals, silently
  *   dropping the resolver method requirement from `CommandSubjectStrategies`.
- *   `RequireLiteralVisitNames` separately makes `run` uncallable with a
+ *   `RequireLiteralResolverNames` separately makes `run` uncallable with a
  *   descriptive error.
  * - Unique across all Subjects used within the same Command's subject union —
  *   duplicates cause `CommandSubjectStrategies` to intersect the conflicting
@@ -359,7 +359,7 @@ type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
  * This method performs the Subject's half of double dispatch. When
  * `command.run(subject, object)` is called, it delegates to
  * `subject.getCommandStrategy(command, object)`, which looks up
- * `command[this.visitName]` and invokes it with `(this, object)`.
+ * `command[this.resolverName]` and invokes it with `(this, object)`.
  *
  * The method call `command[methodName](this, object)` preserves `this`
  * binding on the Command, allowing resolver methods to access Command
@@ -371,7 +371,7 @@ type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
  *
  * @example
  * class Student extends Subject {
- *   readonly visitName = "resolveStudent" as const;
+ *   readonly resolverName = "resolveStudent" as const;
  *   constructor(
  *     public readonly name: string,
  *     public readonly department: string
@@ -379,11 +379,11 @@ type RequireLiteralVisitNames<BSL extends unknown[]> = UnionToIntersection<
  * }
  */
 /**
- * Abstract base class for Subjects. Declare `readonly visitName` as a string literal
- * (e.g. `readonly visitName = "resolveStudent" as const`) to participate in dispatch.
+ * Abstract base class for Subjects. Declare `readonly resolverName` as a string literal
+ * (e.g. `readonly resolverName = "resolveStudent" as const`) to participate in dispatch.
  */
 export abstract class Subject {
-  abstract readonly visitName: string;
+  abstract readonly resolverName: string;
 
   /**
    * Performs the Subject's half of double dispatch. Called by `Command.run()` —
@@ -395,7 +395,7 @@ export abstract class Subject {
     command: Visit<C, this & BS>,
     object: CommandObject<C>,
   ): Template<C, any[], this & BS> {
-    const methodName = this.visitName as SubjectVisitName<this & BS>;
+    const methodName = this.resolverName as SubjectResolverName<this & BS>;
     return command[methodName](this, object);
   }
 }
@@ -408,7 +408,7 @@ export abstract class Subject {
  *
  * 1. Declare `readonly commandName` as a string literal (used for hook keying).
  * 2. Implement one resolver method per Subject in `BSL`, named after that Subject's
- *    `visitName`. Each resolver method receives the Subject and the object, and
+ *    `resolverName`. Each resolver method receives the Subject and the object, and
  *    returns a Template (strategy) to execute.
  *
  * ## Generic Parameters
@@ -428,17 +428,17 @@ export abstract class Subject {
  *
  * `run` orchestrates the full dispatch cycle:
  * 1. Calls `subject.getCommandStrategy(this, object)` — Subject initiates
- *    double dispatch by calling `this[subject.visitName](subject, object)`
+ *    double dispatch by calling `this[subject.resolverName](subject, object)`
  *    on the Command.
  * 2. The resolver method inspects the Subject and object, selects and returns
  *    a Template (strategy).
  * 3. `run` calls `template.execute(subject, object)` and returns the result.
  *
  * The `this` parameter constraint
- * (`this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralVisitNames<BSL>`)
- * ensures all resolver methods are present and all `visitName`s are literals.
+ * (`this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralResolverNames<BSL>`)
+ * ensures all resolver methods are present and all `resolverName`s are literals.
  * The error surfaces at the call site when any resolver method is missing or a
- * `visitName` is non-literal — `run` becomes uncallable.
+ * `resolverName` is non-literal — `run` becomes uncallable.
  *
  * `run` can be overridden by subclasses (e.g. for auditing, logging,
  * pre/post-processing) using `super.run(subject, object)`.
@@ -471,7 +471,7 @@ export abstract class Subject {
  */
 /**
  * Abstract base class for Commands. Declare `readonly commandName` as a string literal
- * and implement one resolver method per Subject (named after that Subject's `visitName`).
+ * and implement one resolver method per Subject (named after that Subject's `resolverName`).
  * Call `run(subject, object)` to dispatch.
  */
 export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
@@ -481,7 +481,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
   declare readonly _bsl: BSL;
 
   run<T extends CommandSubjectUnion<Command<B, O, R, BSL>>>(
-    this: this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralVisitNames<BSL>,
+    this: this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralResolverNames<BSL>,
     subject: T,
     object: O,
   ): R {
@@ -496,14 +496,14 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
  *
  * For each hook Command `Cmd` in `H`:
  * - If `Cmd` declares a resolver method for every Subject in `SU`
- *   (i.e. has a property matching each `SubjectVisitName<SU>` key),
+ *   (i.e. has a property matching each `SubjectResolverName<SU>` key),
  *   the property resolves to `Cmd` — the implementing class satisfies it normally.
  * - If the hook is missing any resolver method required by `SU`, the property
  *   resolves to an error string — no value of type `Cmd` can satisfy a string
  *   literal type, so the `implements` check fails at the declaration site.
  *
  * `H extends AnyCommand[]` is the constraint. The hook coverage check uses a
- * structural pattern (`Cmd extends { [K in SubjectVisitName<SU>]: any }`) rather
+ * structural pattern (`Cmd extends { [K in SubjectResolverName<SU>]: any }`) rather
  * than `CommandSubjectUnion<Cmd>`, so the constraint does not need to be `unknown[]`.
  *
  * @example
@@ -517,7 +517,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
  */
 type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
   [Cmd in H[number] as CommandName<Cmd>]: Cmd extends {
-    [K in SubjectVisitName<SU>]: any;
+    [K in SubjectResolverName<SU>]: any;
   }
     ? Cmd
     : "Error: hook Command does not declare resolver methods for all subjects in SU";
@@ -624,7 +624,7 @@ type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
  *    `commandName`. Missing a hook property is a compile error.
  *
  * 2. **Subject coverage** — each hook Command must declare resolver methods for
- *    every Subject in `SU` (checked via `SubjectVisitName<SU>` key presence).
+ *    every Subject in `SU` (checked via `SubjectResolverName<SU>` key presence).
  *    If a hook is missing any required resolver method, its property type resolves
  *    to an error string, making the `implements` check fail. For example, a
  *    `LogCommand` that only handles `Cat` (declaring only `resolveCat`) cannot

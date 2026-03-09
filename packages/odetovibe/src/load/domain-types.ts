@@ -17,7 +17,7 @@ import type { SourceFile } from "ts-morph";
  */
 /** Wraps a ts-morph `SourceFile` for dispatch through `WriteFileCommand`. */
 export class SourceFileEntry extends Subject {
-  readonly visitName = "resolveSourceFile" as const;
+  readonly resolverName = "resolveSourceFile" as const;
   constructor(public readonly sourceFile: SourceFile) {
     super();
   }

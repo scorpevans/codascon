@@ -2,7 +2,7 @@
  * @codascon/odetovibe — Transform Domain Tests
  *
  * Covers:
- *   - SubjectClassEmitter: minimal stub — extends Subject + visitName only
+ *   - SubjectClassEmitter: minimal stub — extends Subject + resolverName only
  *   - InterfaceEmitter: empty stub — name only, content is user-owned
  *   - CommandClassEmitter: class generics, commandName, visit methods, file path, imports
  *   - AbstractTemplateEmitter: abstract class, type parameter, implements, hooks, execute
@@ -61,8 +61,8 @@ const emitCmd = new EmitAstCommand();
 
 // ─── Shared domain entries ───────────────────────────────────────────────────
 
-const student = new SubjectTypeEntry("Student", { visitName: "resolveStudent" });
-const professor = new SubjectTypeEntry("Professor", { visitName: "resolveProfessor" });
+const student = new SubjectTypeEntry("Student", { resolverName: "resolveStudent" });
+const professor = new SubjectTypeEntry("Professor", { resolverName: "resolveProfessor" });
 const person = new PlainTypeEntry("Person", {});
 const building = new PlainTypeEntry("Building", {});
 const accessResult = new PlainTypeEntry("AccessResult", {});
@@ -131,11 +131,11 @@ describe("SubjectClassEmitter", () => {
     expect(cls.getExtends()?.getText()).toContain("Subject");
   });
 
-  it("emits readonly visitName property with the correct literal", () => {
+  it("emits readonly resolverName property with the correct literal", () => {
     const project = makeProject();
     emitCmd.run(student, ctx(idx(), project));
     const t = text(project, "domain-types.ts");
-    expect(t).toContain('readonly visitName = "resolveStudent" as const');
+    expect(t).toContain('readonly resolverName = "resolveStudent" as const');
   });
 
   it("emits no constructor (field content is user-owned)", () => {
@@ -1189,7 +1189,7 @@ describe("TypeScript diagnostics (pre-Load AST gate)", () => {
   it("no unresolved names when imports are declared", () => {
     const index = idx({
       imports: { "external-module": ["ExternalType"] },
-      subjectTypes: new Map([["Foo", new SubjectTypeEntry("Foo", { visitName: "resolveFoo" })]]),
+      subjectTypes: new Map([["Foo", new SubjectTypeEntry("Foo", { resolverName: "resolveFoo" })]]),
     });
     const project = makeProject();
     emitAst(index, { configIndex: index, project });

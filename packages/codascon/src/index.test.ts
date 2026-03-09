@@ -20,7 +20,7 @@ interface Person {
 }
 
 class Dog extends Subject implements Person {
-  readonly visitName = "resolveDog" as const;
+  readonly resolverName = "resolveDog" as const;
   constructor(
     public readonly name: string,
     public readonly breed: string,
@@ -30,7 +30,7 @@ class Dog extends Subject implements Person {
 }
 
 class Cat extends Subject implements Person {
-  readonly visitName = "resolveCat" as const;
+  readonly resolverName = "resolveCat" as const;
   constructor(
     public readonly name: string,
     public readonly indoor: boolean,
@@ -40,7 +40,7 @@ class Cat extends Subject implements Person {
 }
 
 class Bird extends Subject implements Person {
-  readonly visitName = "resolveBird" as const;
+  readonly resolverName = "resolveBird" as const;
   constructor(
     public readonly name: string,
     public readonly canFly: boolean,
@@ -570,7 +570,7 @@ class AuditedFeedCommand extends Command<Person, { time: string }, FeedResult, [
   }
 
   override run<T extends Dog | Cat>(subject: T, object: { time: string }): FeedResult {
-    this.auditLog.push(`${subject.visitName}:${subject.name}@${object.time}`);
+    this.auditLog.push(`${subject.resolverName}:${subject.name}@${object.time}`);
     return super.run(subject, object);
   }
 }
@@ -633,7 +633,7 @@ class VoidCommand extends Command<Person, string, void, [Dog]> {
 class SharedStrategyCommand extends Command<Person, string, string, [Dog, Cat]> {
   readonly commandName = "shared" as const;
   private readonly sharedStrategy = {
-    execute: (s: Dog | Cat, o: string): string => `${s.visitName}:${s.name}:${o}`,
+    execute: (s: Dog | Cat, o: string): string => `${s.resolverName}:${s.name}:${o}`,
   };
   resolveDog() {
     return this.sharedStrategy;
@@ -701,7 +701,7 @@ class ExportTemplate implements Template<ExportCommand, [FeedCommand], Dog | Cat
 
   execute(subject: Dog | Cat, object: { format: string }): string {
     const feedResult = this.feed.run(subject, { time: "export" });
-    return `[${object.format}] ${subject.visitName}:${subject.name} → ${feedResult.food}`;
+    return `[${object.format}] ${subject.resolverName}:${subject.name} → ${feedResult.food}`;
   }
 }
 
@@ -790,14 +790,14 @@ describe("§15 nested command hooks — end-to-end runtime", () => {
 // ── Subjects ─────────────────────────────────────────────────────
 
 class TextNode extends Subject {
-  readonly visitName = "resolveTextNode" as const;
+  readonly resolverName = "resolveTextNode" as const;
   constructor(public readonly text: string) {
     super();
   }
 }
 
 class ImageNode extends Subject {
-  readonly visitName = "resolveImageNode" as const;
+  readonly resolverName = "resolveImageNode" as const;
   constructor(public readonly url: string) {
     super();
   }
@@ -1107,13 +1107,13 @@ describe("§18 strategy statefulness — cached vs. fresh instance lifetime", ()
 describe("§19 Subject constructor contract — super() takes no required arguments", () => {
   it("a subclass calling super() with no arguments constructs successfully", () => {
     class MinimalSubject extends Subject {
-      readonly visitName = "resolveMinimal" as const;
+      readonly resolverName = "resolveMinimal" as const;
       constructor() {
         super();
       }
     }
 
     const subject = new MinimalSubject();
-    strictEqual(subject.visitName, "resolveMinimal");
+    strictEqual(subject.resolverName, "resolveMinimal");
   });
 });

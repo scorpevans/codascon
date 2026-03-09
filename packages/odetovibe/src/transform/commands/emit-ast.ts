@@ -105,7 +105,7 @@ function hookImportPath(hookCmdKey: string, namespace: string | undefined): stri
 // TEMPLATE: SubjectClassEmitter
 //
 // Emits: export class Foo extends Subject {
-//          readonly visitName = "resolveFoo" as const;
+//          readonly resolverName = "resolveFoo" as const;
 //        }
 // Target: <ns>/domain-types.ts  (or domain-types.ts if no namespace)
 // ═══════════════════════════════════════════════════════════════════
@@ -150,9 +150,9 @@ class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEnt
       extends: "Subject",
     });
     cls.addProperty({
-      name: "visitName",
+      name: "resolverName",
       isReadonly: true,
-      initializer: `"${subject.config.visitName}" as const`,
+      initializer: `"${subject.config.resolverName}" as const`,
     });
 
     return { targetFile: filePath };
@@ -228,8 +228,8 @@ class CommandClassEmitter implements Template<EmitAstCommand, [], CommandEntry> 
     for (const subjectRef of config.subjectUnion) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) continue;
-      const visitName = subjectEntry.config.visitName;
-      const method = cls.addMethod({ name: visitName });
+      const resolverName = subjectEntry.config.resolverName;
+      const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });
       method.addParameter({
         name: "object",

@@ -3,7 +3,7 @@ namespace: greet
 domainTypes:
   Person:
   User:
-    visitName: resolveUser
+    resolverName: resolveUser
   Greeting:
 
 commands:

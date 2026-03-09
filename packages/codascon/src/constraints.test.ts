@@ -6,7 +6,7 @@ import {
   type CommandObject,
   type CommandReturn,
   type CommandName,
-  type SubjectVisitName,
+  type SubjectResolverName,
   type CommandSubjectUnion,
 } from "./index.js";
 
@@ -24,7 +24,7 @@ interface Person {
 }
 
 class Dog extends Subject implements Person {
-  readonly visitName = "resolveDog" as const;
+  readonly resolverName = "resolveDog" as const;
   constructor(
     public readonly name: string,
     public readonly breed: string,
@@ -34,7 +34,7 @@ class Dog extends Subject implements Person {
 }
 
 class Cat extends Subject implements Person {
-  readonly visitName = "resolveCat" as const;
+  readonly resolverName = "resolveCat" as const;
   constructor(
     public readonly name: string,
     public readonly indoor: boolean,
@@ -44,7 +44,7 @@ class Cat extends Subject implements Person {
 }
 
 class Bird extends Subject implements Person {
-  readonly visitName = "resolveBird" as const;
+  readonly resolverName = "resolveBird" as const;
   constructor(
     public readonly name: string,
     public readonly canFly: boolean,
@@ -191,18 +191,18 @@ class DogOnlyCommand extends Command<Person, string, number, [Dog]> {
 type Expect<T extends true> = T;
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-// SubjectVisitName extracts literal
-type _T1 = Expect<Equal<SubjectVisitName<Dog>, "resolveDog">>;
-type _T2 = Expect<Equal<SubjectVisitName<Cat>, "resolveCat">>;
-type _T3 = Expect<Equal<SubjectVisitName<Bird>, "resolveBird">>;
+// SubjectResolverName extracts literal
+type _T1 = Expect<Equal<SubjectResolverName<Dog>, "resolveDog">>;
+type _T2 = Expect<Equal<SubjectResolverName<Cat>, "resolveCat">>;
+type _T3 = Expect<Equal<SubjectResolverName<Bird>, "resolveBird">>;
 
-// SubjectVisitName returns `never` for non-literal visitNames. Enforcement is via
-// RequireLiteralVisitNames<BSL> in Command.run's this constraint, which fires at
+// SubjectResolverName returns `never` for non-literal resolverNames. Enforcement is via
+// RequireLiteralResolverNames<BSL> in Command.run's this constraint, which fires at
 // the call site with concrete BSL rather than inside the method body.
 class BadSubject extends Subject {
-  readonly visitName: string = "oops";
+  readonly resolverName: string = "oops";
 }
-type _T4 = Expect<Equal<SubjectVisitName<BadSubject>, never>>;
+type _T4 = Expect<Equal<SubjectResolverName<BadSubject>, never>>;
 
 // CommandName extracts literal
 type _T5 = Expect<Equal<CommandName<FeedCommand>, "feed">>;
@@ -352,7 +352,7 @@ describe("§11 type-level assertions", () => {
 // ── 14d. Hook command that doesn't visit the subject union ───────
 //
 //   CommandHooks<H, SU> checks that each hook Command declares resolver methods
-//   for every Subject in SU (via `SubjectVisitName<SU>` key presence).
+//   for every Subject in SU (via `SubjectResolverName<SU>` key presence).
 //   This is a simple structural extends check — no `infer` involved —
 //   so TypeScript evaluates it concretely even inside mapped type bodies.
 //
@@ -378,29 +378,29 @@ describe("§11 type-level assertions", () => {
   };
 }
 
-// ── 14e. Non-literal visitName — compile error at run() call site ─
+// ── 14e. Non-literal resolverName — compile error at run() call site ─
 //
-//   When visitName is `string` (not a literal), WithLiteralVisitNames<CSU>
+//   When resolverName is `string` (not a literal), WithLiteralResolverNames<CSU>
 //   resolves to an impossible structural requirement on run()'s `this`
 //   parameter: { "Error: One or more Subjects...": never }.
 //   Since no Command class has this property, run() becomes uncallable
 //   at the call site — a compile-time error instead of a silent runtime failure.
 
 {
-  class DynamicVisitName extends Subject implements Person {
-    readonly visitName: string = "dynamic";
+  class DynamicResolverName extends Subject implements Person {
+    readonly resolverName: string = "dynamic";
     constructor(public readonly name: string) {
       super();
     }
   }
-  class DynamicCommand extends Command<Person, string, string, [DynamicVisitName]> {
+  class DynamicCommand extends Command<Person, string, string, [DynamicResolverName]> {
     readonly commandName = "dynamic" as const;
   }
   const _cmd = new DynamicCommand();
   const _14e = () => {
-    // @ts-expect-error — DynamicVisitName.visitName is 'string' not a literal;
-    // WithLiteralVisitNames<[DynamicVisitName]> resolves to { "Error: ...": never }
-    _cmd.run(new DynamicVisitName("x"), "test");
+    // @ts-expect-error — DynamicResolverName.resolverName is 'string' not a literal;
+    // WithLiteralResolverNames<[DynamicResolverName]> resolves to { "Error: ...": never }
+    _cmd.run(new DynamicResolverName("x"), "test");
   };
 }
 
@@ -446,7 +446,7 @@ describe("§11 type-level assertions", () => {
 
 {
   class NotASubject {
-    readonly visitName = "resolveNotASubject" as const;
+    readonly resolverName = "resolveNotASubject" as const;
   }
 
   // @ts-expect-error — NotASubject doesn't extend Subject, so [NotASubject]
@@ -459,11 +459,11 @@ describe("§11 type-level assertions", () => {
   }
 }
 
-// ── 14i. Duplicate visit names — two subjects with same visitName ─
+// ── 14i. Duplicate visit names — two subjects with same resolverName ─
 
 {
   class Impostor extends Subject {
-    readonly visitName = "resolveDog" as const; // same as Dog!
+    readonly resolverName = "resolveDog" as const; // same as Dog!
     constructor(public readonly name: string) {
       super();
     }
@@ -538,11 +538,11 @@ describe("§14 compile-time constraint tests", () => {
     strictEqual(cmd.run(new Dog("Rex", "Lab"), "test"), 3);
   });
 
-  it("14e: non-literal visitName — run() rejected at call site", () => void 0);
+  it("14e: non-literal resolverName — run() rejected at call site", () => void 0);
   it("14f: wrong return type from execute rejected at call site", () => void 0);
   it("14g: wrong object type in execute rejected at call site", () => void 0);
   it("14h: non-Subject in CSU tuple rejected", () => void 0);
-  it("14i: duplicate visitName — conflicting handlers rejected", () => void 0);
+  it("14i: duplicate resolverName — conflicting handlers rejected", () => void 0);
 
   it("14j: resolver method returning wrong-SU template rejected at call site", () => {
     // A resolver method declared to return Template<C, [], Dog> must return a Template
