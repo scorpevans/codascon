@@ -6,7 +6,7 @@
 
 _The Runtime:_ 10 lines of code.
 
-_The Power:_ Pure type-level enforcement via `Subject`, `Command`, `Template`, and `Strategy`.
+_The Power:_ Pure type-level enforcement via four primitives: `Subject`, `Command`, `Template`, and `Strategy`.
 
 ---
 
@@ -26,15 +26,11 @@ With the rise of AI-assisted development, these problems compound further. An LL
 
 ## What Codascon Provides
 
-Codascon is a structural protocol built around four primitives — `Subject`, `Command`, `Template`, `Strategy` — that formalizes double-dispatch into a verifiable, compiler-enforced structure. It does not replace business logic; it embeds it in a formal structure.
-
 **1. Compiler safety**
 
 If your codascon code compiles, the dispatch mechanism will not fail at runtime. Every entity-operation combination is accounted for by construction, not by discipline. In languages with sufficient type facilities, this guarantee is enforced at compile time; the protocol still provides structural clarity in dynamically typed languages, with the runtime safety guarantee scaling to what the language's type system can enforce.
 
 **2. Cognitive load — and code routing**
-
-You implement strategies. The compiler tells you what is missing and where.
 
 There is no N×M coverage matrix to keep in your head — the type system holds it. When a new `Subject` is added, every `Command` that must handle it shows a compile error at the exact call site. When a business rule changes for a specific entity-operation pair — say, extending how `Orders` are processed — you add a `Strategy` to the relevant `Command` and update its resolver logic. You do not have to consider the rest of the codebase.
 
