@@ -1,5 +1,11 @@
 # odetovibe
 
+## 2026.3.2-beta.7
+
+### Patch Changes
+
+- 0a73233: Support typeImports as subjectUnion members — validator accepts imported types without re-generating them; emitter skips resolver stubs for typeImport subjects and logs INFO.
+
 ## 2026.3.2-beta.6
 
 ### Patch Changes
