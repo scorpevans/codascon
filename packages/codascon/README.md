@@ -284,7 +284,7 @@ Additional implementation rules:
 
 [INSERT YOUR DOMAIN DESCRIPTION]
 
-Output complete, compile-safe TypeScript with stub strategy implementations — or equivalently, a YAML config in the odetovibe schema format.
+Output complete, compile-safe TypeScript with stub strategy implementations.
 ```
 
 ### 2. Step-wise Vibe coding
