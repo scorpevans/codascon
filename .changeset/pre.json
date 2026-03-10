@@ -11,6 +11,7 @@
     "exclude-sourcemaps",
     "readme-improvements",
     "rename-resolver-name",
-    "strategy-execute-and-cli-fixes"
+    "strategy-execute-and-cli-fixes",
+    "type-imports-schema-cleanup"
   ]
 }

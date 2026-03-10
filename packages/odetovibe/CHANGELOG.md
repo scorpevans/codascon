@@ -1,5 +1,11 @@
 # odetovibe
 
+## 2026.3.2-beta.6
+
+### Patch Changes
+
+- c2e16c3: Rename `imports` to `typeImports` in the YAML schema and remove `externalTypes`; all domain participants now declared under `domainTypes`.
+
 ## 2026.3.2-beta.5
 
 ### Patch Changes
