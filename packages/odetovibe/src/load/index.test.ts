@@ -1038,11 +1038,10 @@ describe("StrictMergeWriter", () => {
 // and is not a codegen error — filter it before asserting.
 const MODULE_NOT_FOUND = 2307;
 
-function makeConfigIndexWithExternalType(imports: Record<string, string[]>): ConfigIndex {
+function makeConfigIndexWithExternalType(typeImports: Record<string, string[]>): ConfigIndex {
   return {
     namespace: "test",
-    imports,
-    externalTypeKeys: new Set(),
+    typeImports,
     subjectTypes: new Map([["Foo", new SubjectTypeEntry("Foo", { resolverName: "resolveFoo" })]]),
     plainTypes: new Map(),
     commands: new Map(),
@@ -1089,8 +1088,7 @@ describe("TypeScript diagnostics", () => {
     });
     const configIndex: ConfigIndex = {
       namespace: undefined,
-      imports: {},
-      externalTypeKeys: new Set(),
+      typeImports: {},
       subjectTypes: new Map([
         ["Student", new SubjectTypeEntry("Student", { resolverName: "resolveStudent" })],
       ]),

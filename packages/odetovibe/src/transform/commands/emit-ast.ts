@@ -115,7 +115,7 @@ function hookImportPath(hookCmdKey: string, namespace: string | undefined): stri
  */
 function buildImportSourceMap(configIndex: EmitContext["configIndex"]): Map<string, string> {
   const map = new Map<string, string>();
-  for (const [specifier, names] of Object.entries(configIndex.imports)) {
+  for (const [specifier, names] of Object.entries(configIndex.typeImports)) {
     for (const name of names) map.set(name, specifier);
   }
   return map;
@@ -138,7 +138,6 @@ function maybeAsync(typeRef: string, returnAsync: boolean | undefined): string {
 abstract class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEntry> {
   execute(subject: SubjectTypeEntry, object: Readonly<EmitContext>): EmitResult {
     const filePath = domainTypesFilePath(object.configIndex.namespace);
-    if (object.configIndex.externalTypeKeys.has(subject.key)) return { targetFile: filePath };
     const sf = getOrCreate(object.project, filePath);
     ensureValueImport(sf, "codascon", "Subject");
 
@@ -169,7 +168,6 @@ class SubjectClassEmitterDefault extends SubjectClassEmitter {}
 abstract class InterfaceEmitter implements Template<EmitAstCommand, [], PlainTypeEntry> {
   execute(subject: PlainTypeEntry, object: Readonly<EmitContext>): EmitResult {
     const filePath = domainTypesFilePath(object.configIndex.namespace);
-    if (object.configIndex.externalTypeKeys.has(subject.key)) return { targetFile: filePath };
     const sf = getOrCreate(object.project, filePath);
     sf.addInterface({ name: subject.key, isExported: true });
     return { targetFile: filePath };

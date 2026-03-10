@@ -83,22 +83,6 @@ export function parseYaml(yamlPath: string): ConfigIndex {
   const abstractTemplates = new Map<string, AbstractTemplateEntry>();
   const strategies = new Map<string, StrategyEntry>();
 
-  // ── External types (not emitted; included only for validation) ───
-
-  const externalTypeKeys = new Set<string>();
-  for (const [key, rawConfig] of Object.entries(parsed.externalTypes ?? {})) {
-    const config = rawConfig ?? {};
-    externalTypeKeys.add(key);
-    if (config.resolverName !== undefined) {
-      subjectTypes.set(
-        key,
-        new SubjectTypeEntry(key, config as typeof config & { resolverName: string }),
-      );
-    } else {
-      plainTypes.set(key, new PlainTypeEntry(key, config));
-    }
-  }
-
   // ── Domain types — split on resolverName ────────────────────────────
 
   for (const [key, rawConfig] of Object.entries(parsed.domainTypes ?? {})) {
@@ -132,8 +116,7 @@ export function parseYaml(yamlPath: string): ConfigIndex {
 
   return {
     namespace: parsed.namespace,
-    imports: parsed.imports ?? {},
-    externalTypeKeys,
+    typeImports: parsed.typeImports ?? {},
     subjectTypes,
     plainTypes,
     commands,
