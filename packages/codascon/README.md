@@ -231,7 +231,7 @@ Resolver methods (strategy selection) remain synchronous. Only `execute` returns
 
 ## AI-Assisted Development
 
-Codascon is particularly well-suited for LLM-assisted ("vibe") coding. Note however that the domain engineering (e.g. `users` vs `student`+`professor` vs ...) and business logic (e.g. what `tryAccess` should return for a given clearance and building) can never be completely outsourced to an LLM or a 3rd party.
+Codascon is particularly well-suited for LLM-assisted ("vibe") coding. Note however that the domain engineering (e.g. `users` vs `student`+`professor` vs ...) and business logic (e.g. `tryAccess()` definition) can never be completely outsourced to an LLM or a 3rd party.
 
 ### 1. One-step Vibe coding
 
