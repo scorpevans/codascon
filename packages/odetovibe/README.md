@@ -56,7 +56,7 @@ Define your domain declaratively:
 namespace: campus
 
 domainTypes:
-  CampusMember: {}
+  Principal: {}
   Student:
     resolverName: resolveStudent
   Professor:
@@ -67,7 +67,7 @@ domainTypes:
 commands:
   AccessBuildingCommand:
     commandName: accessBuilding
-    baseType: CampusMember
+    baseType: Principal
     objectType: Building
     returnType: AccessResult
     subjectUnion: [Student, Professor]
@@ -86,10 +86,10 @@ commands:
 
 - `domainTypes` with `resolverName` become Subject classes; without become interfaces
 - Every entry in `subjectUnion` must appear in `dispatch`
-- `dispatch` values are `TemplateName` (concrete) or `TemplateName.StrategyName` (abstract)
+- `dispatch` values are plain Strategy names, looked up across the Command's `templates`
 - All Templates generate as abstract classes, regardless of whether `strategies` is empty or not
 - Template `subjectSubset` must be a subset of the parent Command's `subjectUnion`
-- Strategy `subjectSubset` must be a subset of the parent Template's `subjectSubset`
+- Strategy `subjectSubset` must be a subset of the parent Template's `subjectSubset`; invalid (error) when the parent Template is not parameterized
 
 See [`src/schema.ts`](./src/schema.ts) for the full schema type definitions and validation rules.
 
