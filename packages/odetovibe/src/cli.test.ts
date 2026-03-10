@@ -29,8 +29,7 @@ class ExitError extends Error {
 
 const fakeConfigIndex: ConfigIndex = {
   namespace: "test",
-  imports: {},
-  externalTypeKeys: new Set(),
+  domainTypeImports: {},
   subjectTypes: new Map(),
   plainTypes: new Map(),
   commands: new Map([["TestCommand", null as never]]),

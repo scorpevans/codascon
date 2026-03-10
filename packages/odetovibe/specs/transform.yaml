@@ -29,7 +29,7 @@
 
 namespace: transform
 
-imports:
+domainTypeImports:
   "../schema.js":
     - DomainType
     - Command
@@ -39,19 +39,12 @@ imports:
     - Project
   "../extract/domain-types.js":
     - ConfigIndex
-    - ConfigEntry
-    - SubjectTypeEntry
-    - PlainTypeEntry
-    - CommandEntry
-    - AbstractTemplateEntry
-    - StrategyEntry
 
-externalTypes:
-  # Types defined in the extract domain. Listed here so that validators
-  # and command emitters can reference them, but never re-emitted.
-
+domainTypes:
+  # ── Base type ────────────────────────────────────────────────────
   ConfigEntry:
 
+  # ── Subjects (re-declared from the extract domain) ───────────────
   SubjectTypeEntry:
     resolverName: resolveSubjectType
 
@@ -67,7 +60,6 @@ externalTypes:
   StrategyEntry:
     resolverName: resolveStrategy
 
-domainTypes:
   # ── Object type ─────────────────────────────────────────────────
   EmitContext:
 

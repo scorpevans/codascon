@@ -32,8 +32,7 @@ import type { ConfigIndex } from "./index.js";
 function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
   return {
     namespace: undefined,
-    imports: {},
-    externalTypeKeys: new Set(),
+    domainTypeImports: {},
     subjectTypes: new Map(),
     plainTypes: new Map(),
     commands: new Map(),
@@ -734,38 +733,29 @@ commands: {}
     expect(index.subjectTypes.has("SubjectType")).toBe(true);
   });
 
-  it("handles bare-key externalTypes (null value) without throwing", () => {
+  it("captures domainTypeImports when present", () => {
     const index = parseYamlString(`
-externalTypes:
-  BaseEntry:
-  SubjectExt:
-    resolverName: resolveSubjectExt
+domainTypeImports:
+  "ts-morph":
+    - Project
+    - SourceFile
+  "../schema.js":
+    - DomainType
 domainTypes: {}
 commands: {}
 `);
-    expect(index.plainTypes.has("BaseEntry")).toBe(true);
-    expect(index.subjectTypes.has("SubjectExt")).toBe(true);
-    expect(index.externalTypeKeys.has("BaseEntry")).toBe(true);
-    expect(index.externalTypeKeys.has("SubjectExt")).toBe(true);
+    expect(index.domainTypeImports).toEqual({
+      "ts-morph": ["Project", "SourceFile"],
+      "../schema.js": ["DomainType"],
+    });
   });
 
-  it("captures imports when present", () => {
-    const index = parseYamlString(`
-imports:
-  React: react
-  lodash: lodash-es
-domainTypes: {}
-commands: {}
-`);
-    expect(index.imports).toEqual({ React: "react", lodash: "lodash-es" });
-  });
-
-  it("defaults imports to empty object when absent", () => {
+  it("defaults domainTypeImports to empty object when absent", () => {
     const index = parseYamlString(`
 domainTypes: {}
 commands: {}
 `);
-    expect(index.imports).toEqual({});
+    expect(index.domainTypeImports).toEqual({});
   });
 
   it("throws for a non-existent file (ENOENT)", () => {
@@ -819,33 +809,6 @@ commands:
 `);
     expect(index.commands.has("Cmd")).toBe(true);
     expect(index.abstractTemplates.size).toBe(0);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════
-// externalTypeKeys — validation compatibility
-// ═══════════════════════════════════════════════════════════════════
-
-describe("externalTypeKeys — validation compatibility", () => {
-  it("[baseType-ref/objectType-ref/returnType-ref] passes when type references resolve to external types", () => {
-    // External types are added to subjectTypes/plainTypes at parse time.
-    // findDomainType() searches those same maps, so *-ref checks pass.
-    const extPerson = new PlainTypeEntry("Person", {});
-    const extBuilding = new PlainTypeEntry("Building", {});
-    const extResult = new PlainTypeEntry("AccessResult", {});
-    const extStudent = new SubjectTypeEntry("Student", { resolverName: "resolveStudent" });
-    const entry = new CommandEntry("Cmd", validCmdConfig);
-    const index = idx({
-      externalTypeKeys: new Set(["Person", "Building", "AccessResult", "Student"]),
-      subjectTypes: new Map([["Student", extStudent]]),
-      plainTypes: new Map([
-        ["Person", extPerson],
-        ["Building", extBuilding],
-        ["AccessResult", extResult],
-      ]),
-      commands: new Map([["Cmd", entry]]),
-    });
-    expect(validateCmd.run(entry, index).valid).toBe(true);
   });
 });
 

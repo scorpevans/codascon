@@ -107,10 +107,8 @@ export class StrategyEntry extends Subject implements ConfigEntry {
 /** Fully resolved config index — maps of all parsed config entries, ready for validation or transformation. */
 export interface ConfigIndex {
   readonly namespace: string | undefined;
-  /** External type-only imports for the generated domain-types.ts. From `YamlConfig.imports`. */
-  readonly imports: Record<string, string[]>;
-  /** Keys of types from `externalTypes` — present in ConfigIndex for validation but never emitted. */
-  readonly externalTypeKeys: ReadonlySet<string>;
+  /** Types imported from external packages, used to type the domain's implementations. From `YamlConfig.domainTypeImports`. */
+  readonly domainTypeImports: Record<string, string[]>;
   readonly subjectTypes: ReadonlyMap<string, SubjectTypeEntry>;
   readonly plainTypes: ReadonlyMap<string, PlainTypeEntry>;
   readonly commands: ReadonlyMap<string, CommandEntry>;

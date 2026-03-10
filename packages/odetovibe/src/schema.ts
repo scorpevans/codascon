@@ -400,34 +400,30 @@ export type Strategy = {
  * A single YAML file conforming to this schema describes one bounded
  * domain — its types, operations, and strategy topology.
  *
- * @property namespace      — Optional namespace for the generated code.
- *                            May be used by codegen to scope imports,
- *                            file paths, or module names.
+ * @property namespace           — Optional namespace for the generated code.
+ *                                 May be used by codegen to scope imports,
+ *                                 file paths, or module names.
  *
- * @property imports        — External type-only imports needed by the
- *                            generated `domain-types.ts`. Maps module
- *                            specifiers to lists of type names. All
- *                            imports are emitted as `import type`.
+ * @property domainTypeImports   — External types imported from libraries or
+ *                                 other packages that are used to type the
+ *                                 domain's own types, commands, templates, and
+ *                                 strategies in implementation code (e.g.
+ *                                 interface fields, constructor parameters).
+ *                                 Maps module specifiers to lists of type names.
  *
- *                            Use this when `domainTypes` field values
- *                            reference types that are not defined within
- *                            the same YAML (e.g. types from a schema
- *                            library or a third-party package):
+ *                                 These types complement primitive types
+ *                                 (string, number, boolean) when richer
+ *                                 typing is needed in the implementation.
+ *                                 They are not first-class domain participants
+ *                                 — only `domainTypes` entries are.
  *
- *                            ```yaml
- *                            imports:
- *                              "ts-morph": [Project, SourceFile]
- *                              "../schema.js": [DomainType, Command]
- *                            ```
+ *                                 ```yaml
+ *                                 domainTypeImports:
+ *                                   "ts-morph": [Project, SourceFile]
+ *                                   "../schema.js": [DomainType, Command]
+ *                                 ```
  *
- * @property externalTypes  — Types from other domains that are referenced
- *                            (e.g. in `subjectUnion`) but defined elsewhere.
- *                            Included in ConfigIndex for validation and
- *                            cross-reference checks; never emitted as code.
- *                            Use this for cross-domain Subject types that a
- *                            Command dispatches over but does not own.
- *
- * @property domainTypes    — All types in the domain, keyed by name.
+ * @property domainTypes         — All types in the domain, keyed by name.
  *                            Types with `resolverName` are Subjects; types
  *                            without are plain types (interfaces, result
  *                            types, context objects, base types).
@@ -437,14 +433,11 @@ export type Strategy = {
  *                            dispatch map, and its Templates (with nested
  *                            Strategies).
  */
-/** Root schema for a codascon domain YAML config — declares namespace, imports, domain types, and commands. */
+/** Root schema for a codascon domain YAML config — declares namespace, domain type imports, domain types, and commands. */
 export interface YamlConfig {
   namespace?: string;
-  imports?: {
+  domainTypeImports?: {
     [moduleSpecifier: string]: string[];
-  };
-  externalTypes?: {
-    [key: string]: DomainType;
   };
   domainTypes: {
     [key: string]: DomainType;
