@@ -227,7 +227,14 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
 
     for (const subjectRef of config.subjectUnion) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
-      if (!subjectEntry) continue;
+      if (!subjectEntry) {
+        if (importSrc.has(subjectRef)) {
+          console.info(
+            `[odetovibe] INFO: typeImport "${subjectRef}" in subjectUnion of "${key}" — no resolver stub generated; compiler will enforce implementation`,
+          );
+        }
+        continue;
+      }
       const resolverName = subjectEntry.config.resolverName;
       const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });

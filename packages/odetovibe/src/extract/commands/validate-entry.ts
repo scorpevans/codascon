@@ -42,6 +42,15 @@ function findDomainType(index: ConfigIndex, ref: string) {
   return index.subjectTypes.get(ref) ?? index.plainTypes.get(ref);
 }
 
+/** Returns a flat Set of all type names declared in the typeImports map. */
+function allTypeImportNames(index: ConfigIndex): Set<string> {
+  const result = new Set<string>();
+  for (const names of Object.values(index.typeImports)) {
+    for (const name of names) result.add(name);
+  }
+  return result;
+}
+
 /**
  * Normalize a command key to the base file name it produces:
  * strip a trailing "Command" suffix, then convert PascalCase to kebab-case.
@@ -131,20 +140,29 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
   execute(subject: CommandEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, config } = subject;
+    const importedNames = allTypeImportNames(object);
 
-    // baseType, objectType, returnType must reference known domainTypes
+    // baseType, objectType, returnType must reference known domainTypes or typeImports
     for (const refField of ["baseType", "objectType", "returnType"] as const) {
       const ref = config[refField];
-      if (!findDomainType(object, ref)) {
+      if (importedNames.has(ref)) {
+        console.info(
+          `[odetovibe] INFO: typeImport "${ref}" referenced as ${refField} of "${key}" — skipping domainType validation`,
+        );
+      } else if (!findDomainType(object, ref)) {
         errors.push(
           err(key, `${refField}-ref`, `${refField} "${ref}" does not reference a known domainType`),
         );
       }
     }
 
-    // subjectUnion entries must reference subjectTypes (types with resolverName)
+    // subjectUnion entries must reference subjectTypes (types with resolverName) or typeImports
     for (const subjectRef of config.subjectUnion) {
-      if (!findDomainType(object, subjectRef)) {
+      if (importedNames.has(subjectRef)) {
+        console.info(
+          `[odetovibe] INFO: typeImport "${subjectRef}" used as subjectUnion member of "${key}" — skipping Subject validation; compiler will enforce implementation`,
+        );
+      } else if (!findDomainType(object, subjectRef)) {
         errors.push(
           err(
             key,
