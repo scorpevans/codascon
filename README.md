@@ -315,8 +315,14 @@ emitAst(configIndex, { configIndex, project });
 // Load: write SourceFiles to disk (merge preserves existing method bodies)
 const results = await writeFiles(project, { targetDir: "./src", mode: "merge" });
 for (const fileResult of results) {
-  if (fileResult.conflicted) console.warn("conflict →", fileResult.path);
-  else console.log(fileResult.created ? "created" : "updated", fileResult.path);
+  if (fileResult.compileErrors) {
+    console.error("compile errors →", fileResult.path);
+    for (const e of fileResult.compileErrors) console.error(" ", e);
+  } else if (fileResult.conflicted) {
+    console.warn("conflict →", fileResult.path);
+  } else {
+    console.log(fileResult.created ? "created" : "updated", fileResult.path);
+  }
 }
 ```
 
@@ -376,6 +382,7 @@ Additional implementation rules:
 - All Templates are abstract classes; `execute` is always concrete on the Template — Strategies override `protected abstract` methods or fields, not `execute` directly
 - Apply the template method pattern in `execute`: extract variable behaviour into `protected abstract` methods or fields that Strategies implement
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
+- Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
 
 ### Step 4: Implement This Domain
 

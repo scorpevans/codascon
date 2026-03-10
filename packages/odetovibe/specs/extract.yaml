@@ -18,13 +18,6 @@
 
 namespace: extract
 
-typeImports:
-  "../schema.js":
-    - DomainType
-    - Command
-    - Template
-    - Strategy
-
 domainTypes:
   # ── Base type ───────────────────────────────────────────────────
   ConfigEntry:
