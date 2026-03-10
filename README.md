@@ -315,8 +315,14 @@ emitAst(configIndex, { configIndex, project });
 // Load: write SourceFiles to disk (merge preserves existing method bodies)
 const results = await writeFiles(project, { targetDir: "./src", mode: "merge" });
 for (const fileResult of results) {
-  if (fileResult.conflicted) console.warn("conflict →", fileResult.path);
-  else console.log(fileResult.created ? "created" : "updated", fileResult.path);
+  if (fileResult.compileErrors) {
+    console.error("compile errors →", fileResult.path);
+    for (const e of fileResult.compileErrors) console.error(" ", e);
+  } else if (fileResult.conflicted) {
+    console.warn("conflict →", fileResult.path);
+  } else {
+    console.log(fileResult.created ? "created" : "updated", fileResult.path);
+  }
 }
 ```
 
