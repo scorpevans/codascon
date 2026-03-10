@@ -8,13 +8,15 @@ import { emitAst } from "./transform/index.js";
 import { writeFiles } from "./load/index.js";
 
 export function printUsage(): void {
-  console.log("Usage: odetovibe <code_config.yaml> [--out <dir>] [--overwrite | --no-overwrite]");
+  console.log(
+    "Usage: odetovibe <code_config.yaml> [--outDir <dir>] [--overwrite | --no-overwrite]",
+  );
   console.log("");
   console.log("  Generate TypeScript code from a codascon YAML schema.");
   console.log("");
   console.log("Arguments:");
   console.log("  <code_config.yaml>    Path to the code's YAML-config file");
-  console.log("  --out <dir>      Output directory (default: ./odetovibe)");
+  console.log("  --outDir <dir>   Output directory (default: ./odetovibe)");
   console.log("  --overwrite      Unconditionally replace existing files");
   console.log("  --no-overwrite   Strict merge: abort to .ode.ts on conflict (default: merge)");
 }
@@ -28,7 +30,7 @@ export async function main(): Promise<void> {
   }
 
   const schemaPath = resolve(args[0]);
-  const outIndex = args.indexOf("--out");
+  const outIndex = args.indexOf("--outDir");
   const outDir = resolve(outIndex !== -1 ? args[outIndex + 1] : "./odetovibe");
   const mode = args.includes("--overwrite")
     ? ("overwrite" as const)

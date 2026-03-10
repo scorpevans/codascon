@@ -29,13 +29,13 @@ pnpm add odetovibe
 npx odetovibe --help
 
 # Generate TypeScript scaffolding (default: merge mode — preserves existing method bodies)
-npx odetovibe schema.yaml --out src/
+npx odetovibe schema.yaml --outDir src/
 
 # Unconditional overwrite — replaces all generated files
-npx odetovibe schema.yaml --out src/ --overwrite
+npx odetovibe schema.yaml --outDir src/ --overwrite
 
 # Strict mode — writes .ode.ts alongside the original on conflict instead of overwriting
-npx odetovibe schema.yaml --out src/ --no-overwrite
+npx odetovibe schema.yaml --outDir src/ --no-overwrite
 ```
 
 If installed globally, replace `npx odetovibe` with `odetovibe`.
