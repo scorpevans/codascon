@@ -29,7 +29,7 @@
 
 namespace: transform
 
-domainTypeImports:
+typeImports:
   "../schema.js":
     - DomainType
     - Command

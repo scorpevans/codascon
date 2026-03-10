@@ -116,7 +116,7 @@ export function parseYaml(yamlPath: string): ConfigIndex {
 
   return {
     namespace: parsed.namespace,
-    domainTypeImports: parsed.domainTypeImports ?? {},
+    typeImports: parsed.typeImports ?? {},
     subjectTypes,
     plainTypes,
     commands,

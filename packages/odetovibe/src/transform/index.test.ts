@@ -34,7 +34,7 @@ function makeProject(): Project {
 function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
   return {
     namespace: undefined,
-    domainTypeImports: {},
+    typeImports: {},
     subjectTypes: new Map(),
     plainTypes: new Map(),
     commands: new Map(),
@@ -341,12 +341,12 @@ describe("CommandClassEmitter", () => {
     expect(project.getSourceFile("commands/access-building.ts")).toBeDefined();
   });
 
-  it("imports a type from its declared import source when present in configIndex.domainTypeImports", () => {
-    // When configIndex.domainTypeImports maps a type name to a package specifier,
+  it("imports a type from its declared import source when present in configIndex.typeImports", () => {
+    // When configIndex.typeImports maps a type name to a package specifier,
     // buildImportSourceMap routes that type's import to the declared source
     // instead of domain-types.js (covers the buildImportSourceMap loop body).
     const index = idx({
-      domainTypeImports: { "person-module": ["Person"] },
+      typeImports: { "person-module": ["Person"] },
       subjectTypes: new Map([
         ["Student", student],
         ["Professor", professor],
@@ -411,7 +411,7 @@ describe("CommandClassEmitter", () => {
     // toCommandDepth: specifier starts with "./" → "../" prepended so import is correct
     // from inside commands/ (one level deeper than the namespace root).
     const index = idx({
-      domainTypeImports: { "./shared.js": ["Person"] },
+      typeImports: { "./shared.js": ["Person"] },
       subjectTypes: new Map([
         ["Student", student],
         ["Professor", professor],
@@ -433,11 +433,11 @@ describe("CommandClassEmitter", () => {
     expect(personImp!.getNamedImports().map((n) => n.getName())).toContain("Person");
   });
 
-  it("imports a subject type from declared source when its key is in configIndex.domainTypeImports", () => {
+  it("imports a subject type from declared source when its key is in configIndex.typeImports", () => {
     // The subjectUnion loop checks importSrc: when a subject key is declared in
-    // domainTypeImports, its import is routed to the declared source instead of domain-types.js.
+    // typeImports, its import is routed to the declared source instead of domain-types.js.
     const index = idx({
-      domainTypeImports: { "ext-pkg": ["Student"] },
+      typeImports: { "ext-pkg": ["Student"] },
       subjectTypes: new Map([
         ["Student", student],
         ["Professor", professor],
@@ -689,11 +689,11 @@ describe("AbstractTemplateEmitter — AbstractTemplateEntry", () => {
     expect(names).toContain("Foo");
   });
 
-  it("imports subject, returnType and objectType from declared sources in configIndex.domainTypeImports", () => {
+  it("imports subject, returnType and objectType from declared sources in configIndex.typeImports", () => {
     // buildImportSourceMap maps "Student", "AccessResult", "Building" → "external-pkg"
-    // via domainTypeImports; each is routed to the declared source instead of domain-types.js.
+    // via typeImports; each is routed to the declared source instead of domain-types.js.
     const index = idx({
-      domainTypeImports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      typeImports: { "external-pkg": ["Student", "AccessResult", "Building"] },
       subjectTypes: new Map([
         ["Student", student],
         ["Professor", professor],
@@ -849,9 +849,9 @@ describe("AbstractTemplateEmitter — isParameterized: false", () => {
     expect(t).toContain("Promise<AccessResult>");
   });
 
-  it("imports subject, returnType and objectType from declared sources in configIndex.domainTypeImports", () => {
+  it("imports subject, returnType and objectType from declared sources in configIndex.typeImports", () => {
     const index = idx({
-      domainTypeImports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      typeImports: { "external-pkg": ["Student", "AccessResult", "Building"] },
       subjectTypes: new Map([
         ["Student", student],
         ["Professor", professor],
@@ -1074,11 +1074,11 @@ describe("StrategyClassEmitter", () => {
     expect(cls.getMethods()).toHaveLength(0);
   });
 
-  it("imports subject, returnType and objectType from declared sources in configIndex.domainTypeImports", () => {
+  it("imports subject, returnType and objectType from declared sources in configIndex.typeImports", () => {
     // Parallel to the AbstractTemplateEmitter test: same importSrc.has() ternaries but in
     // StrategyClassEmitter — each type is routed to its declared source.
     const index: ConfigIndex = {
-      domainTypeImports: { "external-pkg": ["Student", "AccessResult", "Building"] },
+      typeImports: { "external-pkg": ["Student", "AccessResult", "Building"] },
       namespace: undefined,
       subjectTypes: new Map([
         ["Student", student],
@@ -1266,7 +1266,7 @@ const MODULE_NOT_FOUND = 2307;
 describe("TypeScript diagnostics (pre-Load AST gate)", () => {
   it("no unresolved names when imports are declared", () => {
     const index = idx({
-      domainTypeImports: { "external-module": ["ExternalType"] },
+      typeImports: { "external-module": ["ExternalType"] },
       subjectTypes: new Map([["Foo", new SubjectTypeEntry("Foo", { resolverName: "resolveFoo" })]]),
     });
     const project = makeProject();

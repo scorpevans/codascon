@@ -115,7 +115,7 @@ function hookImportPath(hookCmdKey: string, namespace: string | undefined): stri
  */
 function buildImportSourceMap(configIndex: EmitContext["configIndex"]): Map<string, string> {
   const map = new Map<string, string>();
-  for (const [specifier, names] of Object.entries(configIndex.domainTypeImports)) {
+  for (const [specifier, names] of Object.entries(configIndex.typeImports)) {
     for (const name of names) map.set(name, specifier);
   }
   return map;

@@ -404,21 +404,21 @@ export type Strategy = {
  *                                 May be used by codegen to scope imports,
  *                                 file paths, or module names.
  *
- * @property domainTypeImports   — External types imported from libraries or
- *                                 other packages that are used to type the
- *                                 domain's own types, commands, templates, and
- *                                 strategies in implementation code (e.g.
- *                                 interface fields, constructor parameters).
+ * @property typeImports         — External types imported from libraries or
+ *                                 other packages, available for use anywhere
+ *                                 in the spec: as field types on `domainTypes`,
+ *                                 as generic parameters on `commands`, or in
+ *                                 the signatures of `templates` and `strategies`.
  *                                 Maps module specifiers to lists of type names.
+ *                                 Codegen emits an `import type` for each entry.
  *
- *                                 These types complement primitive types
- *                                 (string, number, boolean) when richer
- *                                 typing is needed in the implementation.
- *                                 They are not first-class domain participants
- *                                 — only `domainTypes` entries are.
+ *                                 These types are not first-class domain
+ *                                 participants — they cannot appear in structural
+ *                                 positions such as `subjectUnion` or `dispatch`.
+ *                                 Only `domainTypes` entries are first-class.
  *
  *                                 ```yaml
- *                                 domainTypeImports:
+ *                                 typeImports:
  *                                   "ts-morph": [Project, SourceFile]
  *                                   "../schema.js": [DomainType, Command]
  *                                 ```
@@ -433,10 +433,10 @@ export type Strategy = {
  *                            dispatch map, and its Templates (with nested
  *                            Strategies).
  */
-/** Root schema for a codascon domain YAML config — declares namespace, domain type imports, domain types, and commands. */
+/** Root schema for a codascon domain YAML config — declares namespace, type imports, domain types, and commands. */
 export interface YamlConfig {
   namespace?: string;
-  domainTypeImports?: {
+  typeImports?: {
     [moduleSpecifier: string]: string[];
   };
   domainTypes: {

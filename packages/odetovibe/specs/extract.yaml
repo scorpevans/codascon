@@ -18,7 +18,7 @@
 
 namespace: extract
 
-domainTypeImports:
+typeImports:
   "../schema.js":
     - DomainType
     - Command

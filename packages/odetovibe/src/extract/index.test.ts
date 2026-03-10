@@ -32,7 +32,7 @@ import type { ConfigIndex } from "./index.js";
 function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
   return {
     namespace: undefined,
-    domainTypeImports: {},
+    typeImports: {},
     subjectTypes: new Map(),
     plainTypes: new Map(),
     commands: new Map(),
@@ -733,9 +733,9 @@ commands: {}
     expect(index.subjectTypes.has("SubjectType")).toBe(true);
   });
 
-  it("captures domainTypeImports when present", () => {
+  it("captures typeImports when present", () => {
     const index = parseYamlString(`
-domainTypeImports:
+typeImports:
   "ts-morph":
     - Project
     - SourceFile
@@ -744,18 +744,18 @@ domainTypeImports:
 domainTypes: {}
 commands: {}
 `);
-    expect(index.domainTypeImports).toEqual({
+    expect(index.typeImports).toEqual({
       "ts-morph": ["Project", "SourceFile"],
       "../schema.js": ["DomainType"],
     });
   });
 
-  it("defaults domainTypeImports to empty object when absent", () => {
+  it("defaults typeImports to empty object when absent", () => {
     const index = parseYamlString(`
 domainTypes: {}
 commands: {}
 `);
-    expect(index.domainTypeImports).toEqual({});
+    expect(index.typeImports).toEqual({});
   });
 
   it("throws for a non-existent file (ENOENT)", () => {

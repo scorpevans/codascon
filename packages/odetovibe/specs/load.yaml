@@ -29,7 +29,7 @@
 
 namespace: load
 
-domainTypeImports:
+typeImports:
   "ts-morph":
     - SourceFile
 
