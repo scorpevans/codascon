@@ -41,7 +41,7 @@
 
 - f5237c8: Rename Subject.visitName to resolverName and update resolver method terminology throughout.
 - Updated dependencies [f5237c8]
-  - codascon@1.0.0-beta.3
+  - codascon@2026.3.2-beta.3
 
 ## 2026.3.2-beta.4
 
@@ -49,7 +49,7 @@
 
 - f3a01d4: README improvements: Quick Start code example clarity, aligned YAML schema example, tightened Solution section.
 - Updated dependencies [f3a01d4]
-  - codascon@1.0.0-beta.2
+  - codascon@2026.3.2-beta.2
 
 ## 2026.3.2-beta.3
 
@@ -62,7 +62,7 @@
   odetovibe trims its package-boundary exports to the actual public API: `parseYaml`, `validateYaml`, `emitAst`, `writeFiles`, and the types needed to call them. Internal dispatch classes (`ValidateEntryCommand`, `EmitAstCommand`, `WriteFileCommand`, `SourceFileEntry`) and internal domain types are no longer exported.
 
 - Updated dependencies [52b149b]
-  - codascon@1.0.0-beta.1
+  - codascon@2026.3.2-beta.1
 
 ## 2026.3.2-beta.2
 
@@ -82,7 +82,7 @@
 
 - ee9191f: Exclude source maps from published packages, reducing unpacked size.
 - Updated dependencies [ee9191f]
-  - codascon@1.0.0-beta.0
+  - codascon@2026.3.2-beta.0
 
 ## 2026.3.1
 
