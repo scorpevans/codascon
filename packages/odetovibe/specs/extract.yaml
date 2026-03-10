@@ -56,6 +56,36 @@ domainTypes:
   ExtractResult:
 
 commands:
+  # Validates commandHooks entries in a template or strategy config.
+  # Used as a hook in AbstractTemplateValidator and StrategyValidator
+  # to centralise commandHooks validation without duplicating logic.
+  ValidateCommandHooksCommand:
+    commandName: validateCommandHooks
+    baseType: ConfigEntry
+    objectType: ConfigIndex
+    returnType: ValidationResult
+    subjectUnion:
+      - AbstractTemplateEntry
+      - StrategyEntry
+    dispatch:
+      AbstractTemplateEntry: AbstractTemplateHooksValidatorDefault
+      StrategyEntry: StrategyHooksValidatorDefault
+    templates:
+      # Checks that commandHooks values reference known Commands
+      AbstractTemplateHooksValidator:
+        isParameterized: false
+        subjectSubset: [AbstractTemplateEntry]
+        strategies:
+          AbstractTemplateHooksValidatorDefault: {}
+
+      # Checks that commandHooks keys are a subset of the parent Template's
+      # commandHooks keys, and that values reference known Commands
+      StrategyHooksValidator:
+        isParameterized: false
+        subjectSubset: [StrategyEntry]
+        strategies:
+          StrategyHooksValidatorDefault: {}
+
   ValidateEntryCommand:
     commandName: validateEntry
     baseType: ConfigEntry
@@ -95,16 +125,22 @@ commands:
         strategies:
           CommandValidatorDefault: {}
 
-      # Checks subjectSubset, commandHooks, and that it is not in dispatch directly
+      # Checks subjectSubset, delegates commandHooks to ValidateCommandHooksCommand hook,
+      # and that it is not in dispatch directly
       AbstractTemplateValidator:
         isParameterized: false
         subjectSubset: [AbstractTemplateEntry]
+        commandHooks:
+          validateCommandHooks: ValidateCommandHooksCommand
         strategies:
           AbstractTemplateValidatorDefault: {}
 
-      # Checks parent AbstractTemplateEntry, subjectSubset, commandHooks subset
+      # Checks parent AbstractTemplateEntry, subjectSubset, delegates commandHooks
+      # key-subset and value checks to ValidateCommandHooksCommand hook
       StrategyValidator:
         isParameterized: false
         subjectSubset: [StrategyEntry]
+        commandHooks:
+          validateCommandHooks: ValidateCommandHooksCommand
         strategies:
           StrategyValidatorDefault: {}

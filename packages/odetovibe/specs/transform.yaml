@@ -90,8 +90,8 @@ commands:
       SubjectTypeEntry: SubjectClassEmitterDefault
       PlainTypeEntry: InterfaceEmitterDefault
       CommandEntry: CommandClassEmitterDefault
-      AbstractTemplateEntry: AbstractTemplateEmitterDefault
-      StrategyEntry: StrategyClassEmitterDefault
+      AbstractTemplateEntry: FixedTemplateEmitter
+      StrategyEntry: FixedParentStrategyEmitter
     templates:
       # Emits: class Foo extends Subject { readonly resolverName = "resolveFoo" as const; ... }
       # Target: domain-types.ts
@@ -121,24 +121,40 @@ commands:
         strategies:
           CommandClassEmitterDefault: {}
 
-      # Emits: abstract class FooTemplate<SU extends CommandSubjectUnion<FooCommand>>
-      #          implements Template<FooCommand, [HookCmd], SU> {
-      #          readonly hookCmd = new HookCmd();  /* @odetovibe-generated */
-      #          execute(subject: SU, object: Readonly<O>): R { ... }
-      #        }
+      # Emits an abstract class for each template. Two strategies handle the
+      # isParameterized split; the resolver dispatches at runtime:
+      #
+      # ParameterizedTemplateEmitter (isParameterized: true):
+      #   abstract class FooTemplate<SU extends CommandSubjectUnion<FooCommand>>
+      #     implements Template<FooCommand, [HookCmd], SU> { ... }
+      #
+      # FixedTemplateEmitter (isParameterized: false):
+      #   abstract class FooTemplate
+      #     implements Template<FooCommand, [HookCmd], S1 | S2> { ... }
+      #
       # Target: commands/<parent-cmd-name>.ts (same file as CommandClassEmitter)
       AbstractTemplateEmitter:
         isParameterized: false
         subjectSubset: [AbstractTemplateEntry]
         strategies:
-          AbstractTemplateEmitterDefault: {}
+          ParameterizedTemplateEmitter: {}
+          FixedTemplateEmitter: {}
 
-      # Emits: class FooStrategy extends FooTemplate<S1> {
-      #          // hook override if declared in strategy commandHooks
-      #        }
+      # Emits a strategy class extending its parent Template. Two strategies
+      # handle the parent template's isParameterized split; the resolver
+      # dispatches at runtime:
+      #
+      # ParameterizedParentStrategyEmitter (parent isParameterized: true):
+      #   class FooStrategy extends FooTemplate<CommandSubjectUnion<FooCommand>> { ... }
+      #   class FooStrategy extends FooTemplate<S1> { ... }   // explicit subset
+      #
+      # FixedParentStrategyEmitter (parent isParameterized: false):
+      #   class FooStrategy extends FooTemplate { ... }        // no type argument
+      #
       # Target: commands/<grandparent-cmd-name>.ts
       StrategyClassEmitter:
         isParameterized: false
         subjectSubset: [StrategyEntry]
         strategies:
-          StrategyClassEmitterDefault: {}
+          ParameterizedParentStrategyEmitter: {}
+          FixedParentStrategyEmitter: {}
