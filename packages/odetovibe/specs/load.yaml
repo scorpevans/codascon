@@ -29,10 +29,6 @@
 
 namespace: load
 
-typeImports:
-  "ts-morph":
-    - SourceFile
-
 domainTypes:
   # ── Subject ─────────────────────────────────────────────────────
   SourceFileEntry:
