@@ -390,20 +390,9 @@ A more controlled workflow: iterate on your business logic as YAML before any co
 
 #### Step 1 — Describe your domain, generate a YAML configuration
 
-```markdown
-You are an expert in the codascon protocol. Given the following business domain description, generate a YAML configuration in the odetovibe schema format.
+Use the one-step prompt above, replacing the final instruction with:
 
-Study the schema and examples before writing the YAML:
-
-- SCHEMA: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/schema.ts
-- YAML (extract): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/extract.yaml
-- YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/transform.yaml
-
-Domain description:
-[INSERT YOUR DOMAIN DESCRIPTION]
-
-Output only the YAML. Do not generate TypeScript.
-```
+> Output a YAML config in the odetovibe schema format.
 
 Iterate on the YAML with the LLM until the domain structure reflects your intent, before generating any code.
 
