@@ -36,7 +36,7 @@ There is no N×M coverage matrix to keep in your head — the type system holds 
 
 **3. Code architecture in YAML**
 
-Codascon provides a consistent schema for expressing code architecture. Every domain built on it follows the same structural shape — `Subject`s, `Command`s, `Templates`, and `Strategies` — with no dialect variation across codebases or teams. Via [**Odetovibe**](https://www.npmjs.com/package/odetovibe), that architecture can be expressed in a declarative YAML schema and scaffolded directly into code, giving you a versioned, reviewable record of your domain structure, separate from implementation. Because the schema is structured and human-readable, non-coders can read it directly — or render it into flowcharts and diagrams — to visualize and reason about the system's architecture without touching the code.
+Codascon provides a consistent schema for expressing code architecture. Every domain built on it follows the same structural shape — `Subject`s, `Command`s, `Templates`, and `Strategies` — with no dialect variation across codebases or teams. Via [**Odetovibe**](https://www.npmjs.com/package/odetovibe), that architecture can be expressed in a declarative YAML schema and scaffolded directly into code, giving you a versioned, reviewable record of your domain structure, separate from implementation. Because the schema is structured and human-readable, non-coders can read it directly — or it could be rendered into flowcharts and diagrams — to visualize and reason about the system's architecture without touching the code.
 
 **4. Structural rails for AI-generated code (Vibe coding)**
 
@@ -127,14 +127,14 @@ abstract class AccessTemplate implements Template<AccessBuildingCommand> {
 }
 
 class BasicAccess extends AccessTemplate {
-  protected tryAccess(_clearance: string, _buildingName: string): AccessResult {
-    return { granted: true, reason: "open house" };
+  protected tryAccess(clearance: string, buildingName: string): AccessResult {
+    return { granted: true, reason: `${clearance} access to ${buildingName}` };
   }
 }
 
 class FullAccess extends AccessTemplate {
-  protected tryAccess(_clearance: string, _buildingName: string): AccessResult {
-    return { granted: true, reason: "open house" };
+  protected tryAccess(clearance: string, buildingName: string): AccessResult {
+    return { granted: true, reason: `${clearance} access to ${buildingName}; including labs` };
   }
 }
 ```
@@ -145,7 +145,7 @@ class FullAccess extends AccessTemplate {
 // index.ts
 const cmd = new AccessBuildingCommand();
 const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
-// { granted: true, reason: "open house" }
+// { granted: true, reason: "full access to Science Hall; including labs" }
 ```
 
 ```
@@ -231,7 +231,7 @@ Resolver methods (strategy selection) remain synchronous. Only `execute` returns
 
 ## AI-Assisted Development
 
-Codascon is particularly well-suited for LLM-assisted ("vibe") coding. Note however that the domain engineering (e.g. `users` vs `student`+`professor` vs ...) and business logic (definition of `average()`) can never be completely outsourced to an LLM or a 3rd party.
+Codascon is particularly well-suited for LLM-assisted ("vibe") coding. Note however that the domain engineering (e.g. `users` vs `student`+`professor` vs ...) and business logic (e.g. `tryAccess()` definition) can never be completely outsourced to an LLM or a 3rd party.
 
 ### 1. One-step Vibe coding
 
