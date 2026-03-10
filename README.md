@@ -248,12 +248,14 @@ namespace: campus
 
 domainTypes:
   Principal: {}
+  Building: {}
+  AccessResult: {}
+  BasicAccess: {}
+  FullAccess: {}
   Student:
     resolverName: resolveStudent
   Professor:
     resolverName: resolveProfessor
-  Building: {}
-  AccessResult: {}
 
 commands:
   AccessBuildingCommand:
