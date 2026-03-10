@@ -251,8 +251,12 @@ Read both resources in full before writing any code:
 
 Mimic the file structure and patterns from these real-world files exactly:
 
-- SUBJECTS: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/domain-types.ts
-- COMMAND: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/commands/validate-entry.ts
+- SUBJECT1: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/domain-types.ts
+- SUBJECT2: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/transform/domain-types.ts
+- SUBJECT3: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/load/domain-types.ts
+- COMMAND1: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/extract/commands/validate-entry.ts
+- COMMAND2: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/transform/commands/emit-ast.ts
+- COMMAND3: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/load/commands/write-file.ts
 - SCHEMA: https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/src/schema.ts
 - YAML (extract): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/extract.yaml
 - YAML (transform): https://raw.githubusercontent.com/scorpevans/codascon/main/packages/odetovibe/specs/transform.yaml
