@@ -29,17 +29,6 @@
 
 namespace: transform
 
-typeImports:
-  "../schema.js":
-    - DomainType
-    - Command
-    - Template
-    - Strategy
-  "ts-morph":
-    - Project
-  "../extract/domain-types.js":
-    - ConfigIndex
-
 domainTypes:
   # ── Base type ────────────────────────────────────────────────────
   ConfigEntry:
