@@ -341,7 +341,7 @@ Codascon is particularly well-suited for LLM-assisted ("vibe") coding. Note howe
 Provide a domain description and let the LLM generate the full codascon implementation in one shot:
 
 ```markdown
-You are an expert TypeScript architect. Build a new domain using the **codascon** protocol — a strict, double-dispatch visitor framework.
+You are an expert TypeScript architect. Build a new domain using **codascon** — a structural protocol for code organization with exhaustive compile-time type checking.
 
 ### Step 1: Understand the Protocol
 
