@@ -47,6 +47,15 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Odetovibe self-generation check
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 22
+        run: |
+          cd packages/odetovibe
+          node dist/cli.js specs/extract.yaml --outDir src/
+          node dist/cli.js specs/transform.yaml --outDir src/
+          node dist/cli.js specs/load.yaml --outDir src/
+          git diff --exit-code src/
+
       - name: Pack packages
         run: |
           (cd packages/codascon && pnpm pack --pack-destination /tmp)
