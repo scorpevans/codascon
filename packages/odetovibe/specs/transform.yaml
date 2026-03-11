@@ -31,7 +31,6 @@ namespace: transform
 
 typeImports:
   "../extract/domain-types.js":
-    - ConfigIndex
     - ConfigEntry
     - SubjectTypeEntry
     - PlainTypeEntry
