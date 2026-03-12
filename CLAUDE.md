@@ -25,8 +25,8 @@ Every time you receive a Prompt, you MUST follow this protocol:
    **0a. Thread continuity:**
    - If the prompt continues the active thread → proceed to step 1.
    - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo thread resumes unchanged after a noop.
-   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply proceed. Mark the active thread as CLOSED in the current branch's PROMPT file. Then follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
-   - If there is no active repo-related thread → open a new one and follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
+   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply proceed. Follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
+   - If there is no active PROMPT file → open a new one and follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
 
    **Branch check resets on every repo-related prompt.** A user choosing to stay on the current branch for one prompt does NOT carry forward to the next. Each new repo-related prompt defaults to running the Switch Branch procedure — not even with the justification _"The user just said to use this branch, so I'll keep using it."_
 
@@ -39,7 +39,7 @@ Every time you receive a Prompt, you MUST follow this protocol:
 2. **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
 3. **Create or Update Workflows** - If certain workflows were created or followed in handling the Prompt, ensure that they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
 4. **Create missing Skills** - If in 2 or 3 you wanted to record Lessons but found no Skill under which to record them, ask confirmation from the user to create a relevant Skill so that you can record these.
-5. **Clean up** — In case you opened a connection, created a file, or left behind any other clutter in handling a Prompt, consider cleaning them up or undo-ing.
+5. **Clean up** — Identify any connections opened, files created, or other side effects left behind while handling this Prompt, and clean them up. The specific actions are context-dependent, but this step is mandatory.
 
 ## Task Prompt Protocol:
 
@@ -49,7 +49,7 @@ Every time you receive a Task, you MUST follow this protocol:
 2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Task. Never skip — especially not with the justification _"I already know what's in there."_
 3. **Understand the intention or goal behind the Task** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
 4. **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in the current branch's PROMPT file to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. Then present your proposed plan or plans to the user for debate and brainstorming.
-5. **Task Execution** - In case the next Prompt from the user is an unambiguous confirmation to proceed with the execution of the plan (a clear "yes" or equivalent — not merely the absence of objection or an ambiguous reply), proceed to the _Execution Protocol_.
+5. **Task Execution** — Execution is triggered when a subsequent Confirmation Prompt approves the plan. A clear "yes" or equivalent is required — not merely the absence of objection or an ambiguous reply. The Confirmation Protocol routes that Confirmation to the _Execution Protocol_.
 6. Yield control flow to _Prompt Protocol_.
 
 ## Question Prompt Protocol:
@@ -60,13 +60,13 @@ Every time you receive a Question, you MUST follow this protocol:
 2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Question. Never skip — especially not with the justification _"I already know what's in there."_
 3. **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
 4. **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in the current branch's PROMPT file to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
-5. **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation. In case the next prompt from the user is a confirmation, follow the steps in the _Execution Protocol_.
+5. **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation. When the user's subsequent Confirmation Prompt approves the research plan, the Confirmation Protocol MUST route that Confirmation to the _Execution Protocol_.
 6. **Final Answer(s)** In case step 5 was not required or the Execution ended successfully, present your deliberated answer to the user for debate and brainstorming.
 7. Yield control flow to _Prompt Protocol_.
 
 ## Confirmation Prompt Protocol:
 
-Within a thread, in case the user confirms to proceed or abort an action, or when the user has responded to your question, you MUST ensure that you have already fulfilled the requirements for proceeding with the action, according to the section _Evaluate Intention or Goal_, _Planning Constraints_, and other such protocols. If they have been fulfilled then proceed to act on the user's Confirmation Prompt according to the _Task Prompt Protocol_ or _Question Prompt Protocol_ or _Comment Prompt Protocol_ or _Execution Protocol_ depending on whether the Confirmation was about a Task, Question, Comment or Execution. If you have further questions or have to fulfill some constraints, go ahead and then handle the next Prompt according to the _Prompt Protocol_. If the Confirmation Prompt is not in the context of an ongoing thread, consider it according to the _Comment Prompt Protocol_.
+Within a thread, in case the user confirms to proceed or abort an action, or when the user has responded to your question, you MUST ensure that you have already fulfilled the requirements for proceeding with the action, according to the section _Evaluate Intention or Goal_, _Planning Constraints_, and other such protocols. If they have been fulfilled then proceed to act on the user's Confirmation Prompt according to the _Task Prompt Protocol_ or _Question Prompt Protocol_ or _Comment Prompt Protocol_ or _Execution Protocol_ depending on whether the Confirmation was about a Task, Question, Comment or Execution. If the Confirmation is in response to a protocol-internal check — any explicit stop-and-confirm step within a protocol rather than a Task, Question, Comment, or Execution handler — resume at the protocol step that generated the request, picking up immediately after the confirmation point. If you have further questions or have to fulfill some constraints, go ahead and then handle the next Prompt according to the _Prompt Protocol_. If the Confirmation Prompt is not in the context of an ongoing thread, consider it according to the _Comment Prompt Protocol_.
 
 ## Comment Prompt Protocol:
 
@@ -94,8 +94,7 @@ Follow this before any git action. Referencing an untracked file reveals its exi
 
 Pre-approved workflows are those documented in the devops skill's SKILL.md.
 
-- **Ask once** — request permission at the start of the workflow, not before each individual step. Approval covers every command in the workflow regardless of type (git, gh, cat, pnpm, etc.) — do not stop between steps to ask "shall I push?" or "shall I create the PR now?".
-- **Execute without interruption** — once started, run all steps in sequence without prompting, unless there's a deviation in which case you jump to the step below.
+- **Execute without interruption** — once started, run all steps in sequence without prompting; the Confirmation that triggered execution authorizes the entire workflow. Do not stop between steps to ask "shall I push?" or "shall I create the PR now?". Re-ask only if a deviation forces a change (see below).
 - **Re-ask mid-workflow** if an event forces a deviation from the documented steps — for example: a step fails, an unexpected error requires a recovery action, or completing the workflow would require interleaving steps not listed in the workflow. State what happened, what you propose to do instead and proceed to the next steps of the ongoing Prompt protocol.
 
 ### In case of Changing execution Plans or implementation approaches
