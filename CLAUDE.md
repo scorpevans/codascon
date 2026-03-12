@@ -47,7 +47,8 @@ Every time you receive a Task, you MUST follow this protocol:
 2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Task. Never skip — especially not with the justification _"I already know what's in there."_
 3. **Understand the intention or goal behind the Task** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
 4. **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in the current branch's PROMPT file to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. Then present your proposed plan or plans to the user for debate and brainstorming.
-5. **Task Execution** - In case the next Prompt from the user is an unambiguous confirmation to proceed with the execution of the plan (a clear "yes" or equivalent — not merely the absence of objection or an ambiguous reply), proceed to the _Execution Protocol_, else move on to the next step with this pending Prompt. After execution wait for the next Prompt then handle it according to the _Prompt Protocol_.
+5. **Task Execution** - In case the next Prompt from the user is an unambiguous confirmation to proceed with the execution of the plan (a clear "yes" or equivalent — not merely the absence of objection or an ambiguous reply), proceed to the _Execution Protocol_.
+6. Yield control flow to _Prompt Protocol_.
 
 ## Question Prompt Protocol:
 
@@ -57,8 +58,9 @@ Every time you receive a Question, you MUST follow this protocol:
 2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Question. Never skip — especially not with the justification _"I already know what's in there."_
 3. **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
 4. **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in the current branch's PROMPT file to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
-5. **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation. In case the next prompt from the user is a confirmation, follow the steps in the _Execution Protocol_ and move to the next step, else move to the **Final Answer** step with this pending Prompt.
-6. **Final Answer(s)** In case step 5 was not required or the Execution ended successfully, present your deliberated answer to the user for debate and brainstorming. Either way, wait for the next Prompt then handle it according to the _Prompt Protocol_.
+5. **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation. In case the next prompt from the user is a confirmation, follow the steps in the _Execution Protocol_.
+6. **Final Answer(s)** In case step 5 was not required or the Execution ended successfully, present your deliberated answer to the user for debate and brainstorming.
+7. Yield control flow to _Prompt Protocol_.
 
 ## Confirmation Prompt Protocol:
 
