@@ -19,14 +19,13 @@ Every time you receive a Prompt, you MUST follow this protocol:
    **0a. Thread continuity:**
    - If the prompt continues the active thread → proceed to step 1.
    - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo thread resumes unchanged after a noop.
-   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply close it. Record the previous thread as CLOSED in the current branch's PROMPT file before continuing.
+   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply proceed.
    - If there is no active repo-related thread → open a new one without ceremony.
 
    **0b. Branch and sync check** (when the prompt involves codebase analysis, file reads, or implementation):
    - Check and state the current branch.
    - Run `git pull` to ensure the branch is up to date with remote before proceeding.
    - Load the current branch's PROMPT file (`PROMPT-<branch>.md` in memory). If it doesn't exist, create it.
-   - If on an unexpected branch for the task (e.g. a stale feature branch when the work belongs on main), flag it to the user and confirm before proceeding.
 
 1. **Determine whether the Prompt is a Task,Question, Confirmation or Comment** — You must be 100% sure which of these four the Prompt is, before you proceed. Otherwise STOP and confirm from the user. If the Prompt is a Task respond to it according to the _Task Protocol_ below, if it is Question respond to it according to the _Question Protocol_ below, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Once you are done responding, continue to the next steps.
 2. **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
