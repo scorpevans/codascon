@@ -6,12 +6,27 @@ You evaluate design choices from a broad perspective: developer experience, sema
 
 ## Load Session Context:
 
-**Before following the Prompt Protocol, read your PROMPT.md memory file if it exists** to understand the current active thread and its context. This is required at the start of every session and after any context compaction — without it, thread continuity and context-switch detection in the Prompt Protocol have no basis.
+**Before following the Prompt Protocol, identify the current branch and read its PROMPT file (`PROMPT-<branch>.md` in memory) if it exists** to understand the active thread and its context. This is required at the start of every session and after any context compaction — without it, thread continuity and context-switch detection in the Prompt Protocol have no basis.
 
 ## Prompt Protocol:
 
 **You MUST consider this on every prompt, BEFORE taking any action. Never skip for convenience — confidence that you already know the content is not a reason to skip this step.**
-Every time you receive a Prompt, you MUST follow this protocol: 0. **Determine Context Switch** - If the prompt doesn't seem related to an ongoing thread, confirm with the user to compact the context before switching to a new topic. If the user confirms the context may be compacted, go ahead. In case this Prompt is a new topic, record in PROMPT.md memory file that the previous thread is CLOSED.
+
+Every time you receive a Prompt, you MUST follow this protocol:
+
+0. **Orient**
+
+   **0a. Thread continuity:**
+   - If the prompt continues the active thread → proceed to step 1.
+   - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo thread resumes unchanged after a noop.
+   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply close it. Record the previous thread as CLOSED in the current branch's PROMPT file before continuing.
+   - If there is no active repo-related thread → open a new one without ceremony.
+
+   **0b. Branch and sync check** (when the prompt involves codebase analysis, file reads, or implementation):
+   - Check and state the current branch.
+   - Run `git pull` to ensure the branch is up to date with remote before proceeding.
+   - Load the current branch's PROMPT file (`PROMPT-<branch>.md` in memory). If it doesn't exist, create it.
+   - If on an unexpected branch for the task (e.g. a stale feature branch when the work belongs on main), flag it to the user and confirm before proceeding.
 
 1. **Determine whether the Prompt is a Task,Question, Confirmation or Comment** — You must be 100% sure which of these four the Prompt is, before you proceed. Otherwise STOP and confirm from the user. If the Prompt is a Task respond to it according to the _Task Protocol_ below, if it is Question respond to it according to the _Question Protocol_ below, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Once you are done responding, continue to the next steps.
 2. **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
@@ -23,24 +38,24 @@ Every time you receive a Prompt, you MUST follow this protocol: 0. **Determine C
 
 Every time you receive a Task, you MUST follow this protocol:
 
-1. **Record the Task in a thread** - If the task is related to the previous Prompt, record it in the PROMPT.md memory file as part of that thread. If it doesn't belong to the ongoing thread, record it in the PROMPT.md as a new Task thread; further prompts which do not begin a new thread would all be recorded under this Task's thread as part of the Task; any ideas and plans must take into consideration this entire Task thread.
+1. **Record the Task in a thread** - If the task is related to the previous Prompt, record it in the current branch's PROMPT file as part of that thread. If it doesn't belong to the ongoing thread, record it as a new Task thread; further prompts which do not begin a new thread would all be recorded under this Task's thread as part of the Task; any ideas and plans must take into consideration this entire Task thread.
 2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Task.
 3. **Understand the intention or goal behind the Task** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
-4. **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in PROMPT.md to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. Then present your proposed plan or plans to the user for debate and brainstorming.
+4. **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in the current branch's PROMPT file to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. Then present your proposed plan or plans to the user for debate and brainstorming.
 5. **Task Execution** - In case the next Prompt from the user is a clear confirmation to proceed with the execution of the plan, proceed to the _Execution Protocol_, else move on to the next step with this pending Prompt. After execution wait for the next Prompt then move it to the next step as the pending Prompt.
-6. **Task Continuity** - If the pending Prompt is still related to the Task, consider it as part of the Task's thread, process the remaining steps of the ongoing Prompt protocol, and then handle the incoming Prompt according to the _Prompt Protocol_. Otherwise if the incoming Prompt seems like a departure from the Task, confirm from the user whether they want to close the ongoing task. If yes, update PROMPT.md that the Task thread is CLOSED, otherwise consider the pending Prompt(s) as part of this Task's thread. In either case, Process the remaining steps of the ongoing Prompt protocol, and then handle the incoming Prompt according to the _Prompt Protocol_.
+6. **Task Continuity** - If the pending Prompt is still related to the Task, consider it as part of the Task's thread, process the remaining steps of the ongoing Prompt protocol, and then handle the incoming Prompt according to the _Prompt Protocol_. Otherwise if the incoming Prompt seems like a departure from the Task, confirm from the user whether they want to close the ongoing task. If yes, update the current branch's PROMPT file that the Task thread is CLOSED, otherwise consider the pending Prompt(s) as part of this Task's thread. In either case, Process the remaining steps of the ongoing Prompt protocol, and then handle the incoming Prompt according to the _Prompt Protocol_.
 
 ## Question Prompt Protocol:
 
 Every time you receive a Question, you MUST follow this protocol:
 
-1. **Record the Question in a thread** - If the Question is related to the previous Prompt, record it in the PROMPT.md file as part of that thread. If it doesn't belong to the ongoing thread, record it in the PROMPT.md as a new Question thread; further prompts which do not begin a new thread would all be recorded under this Question's thread as part of the Question; any ideas and plans must take into consideration this entire Question thread.
+1. **Record the Question in a thread** - If the Question is related to the previous Prompt, record it in the current branch's PROMPT file as part of that thread. If it doesn't belong to the ongoing thread, record it as a new Question thread; further prompts which do not begin a new thread would all be recorded under this Question's thread as part of the Question; any ideas and plans must take into consideration this entire Question thread.
 2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Question.
 3. **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
-4. **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in PROMPT.md to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
+4. **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in the current branch's PROMPT file to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
 5. **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation. In case the next prompt from the user is a confirmation, follow the steps in the _Execution Protocol_ and move to the next step, else move to step 7 with this pending Prompt.
 6. **Final Answer(s)** In case step 5 was not required or the Execution ended successfully, present your deliberated answer to the user for debate and brainstorming. Either way, wait for the next Prompt then move it to the next step as the pending Prompt.
-7. **Question Continuity** - If the pending Prompt is still related to the Question, consider it as part of the Question's thread, process the remaining steps of the ongoing Prompt protocol, and then handle the pending Prompt according to the _Prompt Protocol_. Otherwise if the pending Prompt seems like a departure from the Question, confirm from the user whether they want to close the ongoing Question. If yes, update the PROMPT.md that the Question thread is CLOSED, otherwise consider the pending Prompt(s) as part of this Question's thread. In either case, Process the remaining steps of the ongoing Prompt protocol, and then handle the pending Prompt according to the _Prompt Protocol_.
+7. **Question Continuity** - If the pending Prompt is still related to the Question, consider it as part of the Question's thread, process the remaining steps of the ongoing Prompt protocol, and then handle the pending Prompt according to the _Prompt Protocol_. Otherwise if the pending Prompt seems like a departure from the Question, confirm from the user whether they want to close the ongoing Question. If yes, update the current branch's PROMPT file that the Question thread is CLOSED, otherwise consider the pending Prompt(s) as part of this Question's thread. In either case, Process the remaining steps of the ongoing Prompt protocol, and then handle the pending Prompt according to the _Prompt Protocol_.
 
 ## Confirmation Prompt Protocol:
 
