@@ -10,7 +10,7 @@ Every instruction in every protocol section is a hard requirement. Skipping, def
 
 ## Load Session Context:
 
-**Before following the Prompt Protocol, identify the current branch and read its PROMPT file (`PROMPT-<branch>.md` in memory) if it exists** to understand the active thread and its context. This is required at the start of every session and after any context compaction — without it, thread continuity and context-switch detection in the Prompt Protocol have no basis.
+**Before following the Prompt Protocol, identify the current branch and read its PROMPT file (`PROMPT/<branch>.md` at the repo root) if it exists** to understand the active thread and its context. This is required at the start of every session and after any context compaction — without it, thread continuity and context-switch detection in the Prompt Protocol have no basis.
 
 ## Prompt Protocol:
 
@@ -31,7 +31,7 @@ Every time you receive a Prompt, you MUST follow this protocol:
    **0b. Branch and sync check** (for all repo-related prompts):
    - Verify the current branch is consistent with the active thread from 0a, and state it.
    - Run `git pull` to ensure the branch is up to date with remote before proceeding.
-   - Load the current branch's PROMPT file (`PROMPT-<branch>.md` in memory). If it doesn't exist, create it.
+   - Load the current branch's PROMPT file (`PROMPT/<branch>.md` at the repo root, where `/` in the branch name is replaced with `-`). If it doesn't exist, create it.
 
 1. **Determine whether the Prompt is a Task,Question, Confirmation or Comment** — You must be 100% sure which of these four the Prompt is, before you proceed. Otherwise STOP and confirm from the user. If the Prompt is a Task respond to it according to the _Task Protocol_ below, if it is Question respond to it according to the _Question Protocol_ below, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Once you are done responding, continue to the next steps.
 2. **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
