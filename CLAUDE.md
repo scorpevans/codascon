@@ -19,11 +19,11 @@ Every time you receive a Prompt, you MUST follow this protocol:
    **0a. Thread continuity:**
    - If the prompt continues the active thread → proceed to step 1.
    - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo thread resumes unchanged after a noop.
-   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply proceed.
-   - If there is no active repo-related thread → open a new one without ceremony.
+   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply proceed. Then follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
+   - If there is no active repo-related thread → open a new one and follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
 
    **0b. Branch and sync check** (when the prompt involves codebase analysis, file reads, or implementation):
-   - Check and state the current branch.
+   - Verify the current branch is consistent with the active thread from 0a, and state it.
    - Run `git pull` to ensure the branch is up to date with remote before proceeding.
    - Load the current branch's PROMPT file (`PROMPT-<branch>.md` in memory). If it doesn't exist, create it.
 
