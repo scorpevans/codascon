@@ -8,6 +8,8 @@ You evaluate design choices from a broad perspective: developer experience, sema
 
 Every instruction in every protocol section is a hard requirement. Skipping, deferring, or abbreviating any instruction — for any reason, including confidence, time pressure, or the feeling that it's already been done — is not permitted. The "MUST" applies to each instruction individually.
 
+Each step in a protocol is evaluated sequentially. Unless a step contains an explicit redirect (e.g., "proceed to step X", "yield to Prompt Protocol"), flow always advances to the next step, and some steps may be skipped if the step's conditions are not met.
+
 ## Load Session Context:
 
 **Before following the Prompt Protocol, identify the current branch and read its PROMPT file (`PROMPT/<branch>.md` at the repo root) if it exists** to understand the active thread and its context. This is required at the start of every session and after any context compaction — without it, thread continuity and context-switch detection in the Prompt Protocol have no basis.
@@ -29,7 +31,7 @@ Every time you receive a Prompt, you MUST follow this protocol:
    **Branch check resets on every repo-related prompt.** A user choosing to stay on the current branch for one prompt does NOT carry forward to the next. Each new repo-related prompt defaults to running the Switch Branch procedure — not even with the justification _"The user just said to use this branch, so I'll keep using it."_
 
    **0b. Branch and sync check** (for all repo-related prompts):
-   - Verify the current branch is consistent with the active thread from 0a, and state it.
+   - Verify the current branch is consistent with the active thread from 0a, and state it. If inconsistent, follow the third bullet of step 0a.
    - Run `git pull` to ensure the branch is up to date with remote before proceeding.
    - Load the current branch's PROMPT file (`PROMPT/<branch>.md` at the repo root, where `/` in the branch name is replaced with `-`). If it doesn't exist, create it.
 
@@ -90,6 +92,8 @@ Consider this before any git action. Referencing an untracked file reveals its e
 
 ### In case of Executing Pre-Approved Workflows
 
+Pre-approved workflows are those documented in the devops skill's SKILL.md.
+
 - **Ask once** — request permission at the start of the workflow, not before each individual step. Approval covers every command in the workflow regardless of type (git, gh, cat, pnpm, etc.) — do not stop between steps to ask "shall I push?" or "shall I create the PR now?".
 - **Execute without interruption** — once started, run all steps in sequence without prompting, unless there's a deviation in which case you jump to the step below.
 - **Re-ask mid-workflow** if an event forces a deviation from the documented steps — for example: a step fails, an unexpected error requires a recovery action, or completing the workflow would require interleaving steps not listed in the workflow. State what happened, what you propose to do instead and proceed to the next steps of the ongoing Prompt protocol.
@@ -130,7 +134,7 @@ Only proceed after receiving an explicit **yes** from the user.
 
 ### Termination of Execution
 
-Once execution is done successfully, continue to the next step of the calling protocol. However if progress is stalled by multiple failures or other irregularities like repetition of the same process or loops, abort execution, inform the user of the situation, and continue to the next step of the calling protocol.
+Once execution is done successfully, resume the protocol that called Execution at the step immediately following the trigger step. However if progress is stalled by multiple failures or other irregularities like repetition of the same process or loops, abort execution, inform the user of the situation, and resume the protocol that called Execution at the step immediately following the trigger step.
 
 ### PR Review Must Be Critical, Not Superficial
 
