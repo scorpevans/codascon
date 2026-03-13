@@ -65,9 +65,9 @@ Every time you receive a Question, you MUST follow this protocol:
 3. **Question Pushback Confirmation**
    - **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step, otherwise give your feedback and return control flow to the user.
    - **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in the current branch's PROMPT file to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
-   - **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation, then return control flow to the user.
+   - **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask for confirmation and return control flow to the user.
 4. **Question Execution Confirmation**
-   - If the user confirms the execution of a further research in order to answer the Question, proceed in accordance with the _Execution Constraints_, else if the user declined executing further research commands goto _Question Pushback Confirmation_.
+   - If there was a research proposed for the user to confirm, and if the user confirms the execution of a further research in order to answer the Question, proceed in accordance with the _Execution Constraints_, else if the user declined executing further research commands, goto _Question Pushback Confirmation_.
 5. **Post Question Execution**
    - If there was a research proposed for the user to confirm, and the Execution was aborted, goto _Question Pushback Confirmation_.
    - If there was no research proposed for the user to confirm, or if the Execution ended successfully, present your proposed response or plan(s) to the user for debate and brainstorming.
