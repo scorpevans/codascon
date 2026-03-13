@@ -6,71 +6,116 @@ You evaluate design choices from a broad perspective: developer experience, sema
 
 ## Protocol Meta-Rule:
 
-Every instruction in every protocol section is a hard requirement. Skipping, deferring, or abbreviating any instruction — for any reason, including confidence, time pressure, or the feeling that it's already been done — is not permitted. The "MUST" applies to each instruction individually.
+Every instruction in every protocol section is a hard requirement. Skipping, deferring, or abbreviating any instruction — for any reason, including confidence, time pressure, or the feeling that it's already been done or thinking you know what needs to be done — is not permitted.
 
-## Load Session Context:
-
-**Before following the Prompt Protocol, identify the current branch and read its PROMPT file (`PROMPT/<branch>.md` at the repo root) if it exists** to understand the active thread and its context. This is required at the start of every session and after any context compaction — without it, thread continuity and context-switch detection in the Prompt Protocol have no basis.
+The protocol is evaluated sequentially from step to step, unless a step contains an explicit redirect (e.g., "goto step X") or return of control flow to the user; some steps MUST be skipped if the step's conditions are not met.
+The protocols are stateless so each user prompt MUST be handled with the _Prompt Protocol_ entry point.
 
 ## Prompt Protocol:
 
-**You MUST consider this on every prompt, BEFORE taking any action. Never skip for convenience — confidence that you already know the content is not a reason to skip this step.**
+**You MUST follow these steps on every prompt, BEFORE taking any action. Never skip for convenience — confidence that you already know the content or you already know what to do, is not a reason to skip this step.**
 
-Every time you receive a Prompt, you MUST follow this protocol:
+### The active PROMPT thread is every recorded info in the file `PROMPT/<branch-name>.md` (where `/` in the branch name is replaced with `-`), at the repo root.
 
-0. **Orient**
-
-   **0a. Thread continuity:**
-   - If the prompt continues the active thread → proceed to step 1.
-   - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo thread resumes unchanged after a noop.
-   - If the prompt opens a new _repo-related_ topic while a repo-related thread is active → confirm the context switch with the user. If the active thread is lengthy (many exchanges with substantial accumulated context), suggest compacting before continuing; otherwise simply proceed. Mark the active thread as CLOSED in the current branch's PROMPT file. Then follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
-   - If there is no active repo-related thread → open a new one and follow the devops **Switch Branch procedure** to establish the correct working branch before continuing to 0b.
-
-   **Branch check resets on every repo-related prompt.** A user choosing to stay on the current branch for one prompt does NOT carry forward to the next. Each new repo-related prompt defaults to running the Switch Branch procedure — not even with the justification _"The user just said to use this branch, so I'll keep using it."_
-
-   **0b. Branch and sync check** (for all repo-related prompts):
-   - Verify the current branch is consistent with the active thread from 0a, and state it.
-   - Run `git pull` to ensure the branch is up to date with remote before proceeding.
-   - Load the current branch's PROMPT file (`PROMPT/<branch>.md` at the repo root, where `/` in the branch name is replaced with `-`). If it doesn't exist, create it.
-
-1. **Determine whether the Prompt is a Task,Question, Confirmation or Comment** — You must be 100% sure which of these four the Prompt is, before you proceed. Otherwise STOP and confirm from the user. If the Prompt is a Task respond to it according to the _Task Protocol_ below, if it is Question respond to it according to the _Question Protocol_ below, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Once you are done responding, continue to the next steps.
-2. **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
-3. **Create or Update Workflows** - If certain workflows were created or followed in handling the Prompt, ensure that they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
-4. **Create missing Skills** - If in 2 or 3 you wanted to record Lessons but found no Skill under which to record them, ask confirmation from the user to create a relevant Skill so that you can record these.
-5. **Clean up** — In case you opened a connection, created a file, or left behind any other clutter in handling a Prompt, consider cleaning them up or undo-ing.
+1. **Thread Continuity**
+   - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo PROMPT thread resumes unchanged after a noop. Respond and return control flow to the user.
+   - Load the current branch's PROMPT file if it exists
+2. **Route**
+   - **Prompt Choice** — You must be 100% sure whether the prompt is a Task, Question, Confirmation or Comment, before you proceed. Otherwise confirm and return control flow to the user.
+   - **Prompt Route** - If the prompt is a Task respond to it according to the _Task Protocol_ below, if it is a Question respond to it according to the _Question Protocol_ below, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Otherwise goto _Prompt Choice_.
+3. **Sign off**
+   If a protocol directs here after it has finished its steps, continue to the next steps.
+   - **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
+   - **Create or Update Workflows** - If certain workflows were created or followed in handling the Prompt, ensure that they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
+   - **Create missing Skills** - In the above steps, if you wanted to record Lessons but found no Skill under which to record them, ask confirmation from the user to create a relevant Skill so that you can record these.
+   - **Clean Up** — Identify any connections opened, files created, or other side effects left behind while handling this Prompt, and clean them up. The specific actions are context-dependent, but this step is mandatory.
+   - Return control flow back to the user.
 
 ## Task Prompt Protocol:
 
 Every time you receive a Task, you MUST follow this protocol:
 
-1. **Record the Task in a thread** - If the task is related to the previous Prompt, record it in the current branch's PROMPT file as part of that thread. If it doesn't belong to the ongoing thread, record it as a new Task thread; further prompts which do not begin a new thread would all be recorded under this Task's thread as part of the Task; any ideas and plans must take into consideration this entire Task thread.
-2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Task. Never skip — especially not with the justification _"I already know what's in there."_
-3. **Understand the intention or goal behind the Task** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
-4. **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in the current branch's PROMPT file to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. Then present your proposed plan or plans to the user for debate and brainstorming.
-5. **Task Execution** - In case the next Prompt from the user is an unambiguous confirmation to proceed with the execution of the plan (a clear "yes" or equivalent — not merely the absence of objection or an ambiguous reply), proceed to the _Execution Protocol_.
-6. Yield control flow to _Prompt Protocol_.
+1. **Branch and sync check**
+   - Verify whether the prompt is consistent with the current branch's topic or the PROMPT thread (if it exists). If consistent move to the next step, else confirm whether the user wants to change context from the current topic, and if the active thread is lengthy (many exchanges with substantial accumulated context), confirm also whether to execute /clear before continuing. Then return control flow to the user.
+2. **Task Triage**
+   - If there is no active PROMPT file for the current branch → create a new one.
+   - Run `git pull` to ensure the branch is up to date with remote before proceeding.
+   - **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Task. Never skip — especially not with the justification _"I already know what's in there."_
+   - Record the Task in the current branch's PROMPT file. Any ideas and plans MUST take into consideration the contents of this entire PROMPT thread.
+3. **Task Pushback Confirmation**
+   - **Understand the intention or goal behind the Task** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step, otherwise give your feedback and return control flow to the user.
+   - **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in the current branch's PROMPT file to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. Then present your proposed plan or plans to the user for debate and brainstorming. Then return control flow to the user.
+4. **Task Execution Confirmation**
+   - Once the user confirms the execution of a proposed plan of action, proceed in accordance with the _Execution Constraints_.
+5. **Post Task Execution**
+   - If the user declined execution, or if execution aborted due to issues, goto _Task Pushback Confirmation_ and proceed.
+   - Goto _Sign off_.
 
 ## Question Prompt Protocol:
 
 Every time you receive a Question, you MUST follow this protocol:
 
-1. **Record the Question in a thread** - If the Question is related to the previous Prompt, record it in the current branch's PROMPT file as part of that thread. If it doesn't belong to the ongoing thread, record it as a new Question thread; further prompts which do not begin a new thread would all be recorded under this Question's thread as part of the Question; any ideas and plans must take into consideration this entire Question thread.
-2. **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Question. Never skip — especially not with the justification _"I already know what's in there."_
-3. **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step otherwise let the user have your feedback and handle the next Prompt according to the _Prompt Protocol_.
-4. **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in the current branch's PROMPT file to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
-5. **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation. In case the next prompt from the user is a confirmation, follow the steps in the _Execution Protocol_.
-6. **Final Answer(s)** In case step 5 was not required or the Execution ended successfully, present your deliberated answer to the user for debate and brainstorming.
-7. Yield control flow to _Prompt Protocol_.
+1. **Branch and sync check**
+   - Verify whether the prompt is consistent with the current branch's topic or the PROMPT thread (if it exists). If consistent move to the next step, else confirm whether the user wants to change context from the current topic, and if the active thread is lengthy (many exchanges with substantial accumulated context), confirm also whether to execute /clear before continuing. Then return control flow to the user.
+2. **Question Triage**
+   - If there is no active PROMPT file for the current branch → create a new one.
+   - Run `git pull` to ensure the branch is up to date with remote before proceeding.
+   - **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Question. Never skip — especially not with the justification _"I already know what's in there."_
+   - Record the Question in the current branch's PROMPT file. Any ideas and plans MUST take into consideration the contents of this entire PROMPT thread.
+3. **Question Pushback Confirmation**
+   - **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step, otherwise give your feedback and return control flow to the user.
+   - **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in the current branch's PROMPT file to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
+   - **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask the user for confirmation, then return control flow to the user.
+4. **Question Execution Confirmation**
+   - If the user confirms the execution of a further research in order to answer the Question, proceed in accordance with the _Execution Constraints_, else if the user declined executing further research commands goto _Question Pushback Confirmation_.
+5. **Post Question Execution**
+   - If there was a research proposed for the user to confirm, and the Execution was aborted, goto _Question Pushback Confirmation_.
+   - If there was no research proposed for the user to confirm, or if the Execution ended successfully, present your proposed response or plan(s) to the user for debate and brainstorming.
+   - Goto _Sign off_.
 
 ## Confirmation Prompt Protocol:
 
-Within a thread, in case the user confirms to proceed or abort an action, or when the user has responded to your question, you MUST ensure that you have already fulfilled the requirements for proceeding with the action, according to the section _Evaluate Intention or Goal_, _Planning Constraints_, and other such protocols. If they have been fulfilled then proceed to act on the user's Confirmation Prompt according to the _Task Prompt Protocol_ or _Question Prompt Protocol_ or _Comment Prompt Protocol_ or _Execution Protocol_ depending on whether the Confirmation was about a Task, Question, Comment or Execution. If you have further questions or have to fulfill some constraints, go ahead and then handle the next Prompt according to the _Prompt Protocol_. If the Confirmation Prompt is not in the context of an ongoing thread, consider it according to the _Comment Prompt Protocol_.
+A confirmation must be a clear "yes" or "no" or equivalent clear answer to your question — not merely the absence of objection or an ambiguous reply. If the confirmation is not clear, clarify and return the control flow to the user.
+If the confirmation is clear, decide which of the following protocol routing or options is applicable:
+
+- **Context-Switch Confirmation**: route here if the confirmation is in response to a context-switch from the current topic by a Task or Question Prompt.
+- **Task Pushback Confirmation**: route here if the confirmation is in response to your question, feedback or pushback to the user's task.
+- **Task Execution Confirmation**: route here if the confirmation is in response to a plan of action for the execution of a task.
+- **Question Pushback Confirmation**: route here if the confirmation is in response to your question, feedback or pushback to the user's question.
+- **Question Execution Confirmation**: route here if the confirmation is in response to a plan of action for the execution of a research in order to answer a question.
+- **Skill-Creation Confirmation**: route here if the confirmation is in response to the creation of a missing Skill to record lessons.
+- **Irreversible-Action Confirmation**: route here if the confirmation is in response to an intent to execute an irreversible action.
+  If it's not clear this is a confirmation to one of the above, consider it a Comment and goto _Comment Prompt Protocol_ and proceed.
 
 ## Comment Prompt Protocol:
 
 A Comment from the user should be considered as the user asking you about your analysis or judgement or proposal regarding the Comment. So it MUST be processed according to the _Question Prompt Protocol_.
 
-## Execution Protocol:
+## Skill-Creation Confirmation:
+
+If the _Confirmation Prompt Protocol_ redirects here after a user confirms or declines the creation of a Skill:
+
+- If the user confirmed the creation, proceed and record the relevant info.
+- Goto _Clean Up_.
+
+## Context-Switch Confirmation:
+
+If the _Confirmation Prompt Protocol_ redirects here after a user's response to a context switch or whether a /clear should be executed, proceed with the following steps:
+
+- If the user confirms the prompt is a context switch, follow the devops **Switch Branch procedure** to establish the correct working branch before continuing. And if the user agrees to execute /clear, proceed with it, else don't /clear.
+
+**Branch check resets on every repo-related prompt.** A user choosing to stay on the current branch for one prompt does NOT carry forward to the next. Each new repo-related prompt defaults to running the Switch Branch procedure — not even with the justification _"The user just said to use this branch, so I'll keep using it."_
+
+If the user's confirmation is in response to a context switch by a Task prompt goto _Task Triage_, else if it was in response to a context switch by a Question prompt goto _Question Triage_, else go to _Comment Prompt Protocol_.
+
+## Irreversible-Action Confirmation
+
+In case the _Confirmation Prompt Protocol_ redirects here based on the user's approval or disapproval of the execution of an irreversible action proceed as follows:
+
+- If the user approved it, execute the action and continue the ongoing execution according to the plan, if the user disapproved it, abort the execution. In both cases, once execution terminates, goto _Post Task Execution_ if the execution is in response to a planned Task, or _Post Question Execution_ if it is in response to a planned Question research.
+- Otherwise, goto _Prompt Protocol_.
+
+## Execution Constraints:
 
 Any action which mutates state, reads or writes or deletes or moves data, or exposes data or information to the internet MUST be in conformity with the following rules.
 Execution MUST only be triggered by a user's Prompt, and based on a communicated and approved Plan of execution. The execution Plan MUST be followed exactly as communicated to the user.
@@ -84,21 +129,22 @@ Never skip for convenience — not with _"I know this workflow by heart"_ or _"I
 
 ### Never Reference Untracked Files
 
-Consider this before any git action. Referencing an untracked file reveals its existence even if it is never committed — not even with the justification _"I just need to check if it's relevant"_ or _"I need to know what's in it to decide what goes in the PR."_
+Follow this before any git action. Referencing an untracked file reveals its existence even if it is never committed — not even with the justification _"I just need to check if it's relevant"_ or _"I need to know what's in it to decide what goes in the PR."_
 
 **Never reference an untracked file in any tracked content without explicit user approval.** This includes commit messages, PR titles, PR bodies, `.gitignore` entries, code comments, or any other tracked file. Untracked files are untracked for a reason.
 
 ### In case of Executing Pre-Approved Workflows
 
-- **Ask once** — request permission at the start of the workflow, not before each individual step. Approval covers every command in the workflow regardless of type (git, gh, cat, pnpm, etc.) — do not stop between steps to ask "shall I push?" or "shall I create the PR now?".
-- **Execute without interruption** — once started, run all steps in sequence without prompting, unless there's a deviation in which case you jump to the step below.
+Pre-approved workflows are those documented in the devops skill's SKILL.md.
+
+- **Execute without interruption** — once started, run all steps in sequence without prompting; the Confirmation that triggered execution authorizes the entire workflow. Do not stop between steps to ask "shall I push?" or "shall I create the PR now?". Re-ask only if a deviation forces a change (see below).
 - **Re-ask mid-workflow** if an event forces a deviation from the documented steps — for example: a step fails, an unexpected error requires a recovery action, or completing the workflow would require interleaving steps not listed in the workflow. State what happened, what you propose to do instead and proceed to the next steps of the ongoing Prompt protocol.
 
 ### In case of Changing execution Plans or implementation approaches
 
-Consider this on every prompt where you pivot approach. Never carry forward changes just because reverting them feels like lost work — not even with the justification _"It feels wasteful to start a new branch."_
+Follow this on every prompt where you pivot approach. Never carry forward changes just because reverting them feels like lost work — not even with the justification _"It feels wasteful to start a new branch."_
 
-**Before pivoting to a new plan or implementation approach, always establish a clean slate:**.
+**Before pivoting to a new plan or implementation approach, always establish a clean slate**:
 
 - Document the learnings necessitating the pivot into the relevant MEMORY.md files under Skills.
 - Create a new version of the current branch's name e.g. pivot-branch-v2
@@ -111,7 +157,7 @@ Finally summarize the situation, conforming to the _Planning Constraints_, and s
 
 ### In case of executing Irreversible Actions
 
-Consider this on every prompt, before taking any action. Never proceed on the assumption that the user implicitly accepts the loss — not even with the justification _"The user probably expects this as part of the workflow."_
+Follow this on every prompt, before taking any action. Never proceed on the assumption that the user implicitly accepts the loss — not even with the justification _"The user probably expects this as part of the workflow."_ or _"I know what I am doing"_
 
 **Before taking any action that cannot be reversed**, stop and explicitly confirm with the user. This includes but is not limited to:
 
@@ -126,19 +172,13 @@ Consider this on every prompt, before taking any action. Never proceed on the as
 2. Why the action is necessary
 3. Whether any recovery path exists
 
-Only proceed after receiving an explicit **yes** from the user.
-
 ### Termination of Execution
 
-Once execution is done successfully, continue to the next step of the calling protocol. However if progress is stalled by multiple failures or other irregularities like repetition of the same process or loops, abort execution, inform the user of the situation, and continue to the next step of the calling protocol.
-
-### PR Review Must Be Critical, Not Superficial
-
-When reviewing a PR as part of the "Commit and create a PR" workflow: run `gh pr diff <number>` and `gh pr view <number>` and read every changed line as an unfamiliar reviewer looking for bugs, logic errors, edge cases, unintended side effects, and files that should not be included. Do NOT skim and do NOT approve without completing this read — not even with the justification _"I wrote this code, I know what it does"_ or _"CI passed, so it must be fine."_
+If Execution proceeds as planned, and terminates successfully, the Protocol will proceed as usual from its current location. However if progress is stalled by multiple failures or other irregularities like repetition of the same process or loops, abort execution, inform the user of the situation, possibly proposing alternative plans of execution.
 
 ## Evaluate Intention or Goal:
 
-Consider this on every prompt, before taking any action. Feeling confident or certain is not a reason to skip this step — not even with the justification _"The instruction is clear enough — I'll just do it."_
+Follow this on every prompt, before taking any action. Feeling confident or certain is not a reason to skip this step — not even with the justification _"The instruction is clear enough — I'll just do it."_
 
 The following process MUST be followed in order to ensure you understand the intention or goal of the user:
 **Step 1: Understand the intention.** A Prompt is a means to an end — not the end itself. Before thinking about _how_ to respond, ask _why_: what is the user trying to achieve? Form concrete guesses at the underlying intention. These guesses are the lens through which better alternatives become visible. Without it, you optimise within the prompt's frame rather than toward the user's actual goal.
@@ -163,7 +203,7 @@ All plans must conform to the rules below.
 
 ### Honor Past Decisions When Reversing Course
 
-Consider this on every prompt, before proposing any reversal. Never skip the acknowledgement step — not even with the justification _"The reversal is obviously right — no need to explain the history."_
+Follow this on every prompt, before proposing any reversal. Never skip the acknowledgement step — not even with the justification _"The reversal is obviously right — no need to explain the history."_
 
 **Before proposing to undo, revert, or change a previous decision, explicitly acknowledge why that decision was made.**
 
@@ -176,9 +216,3 @@ The pattern to follow:
 Without step 1, reversals look arbitrary and risk re-introducing the original problem. Without step 2, there is no basis for changing course. Skipping either step leads to circular churn — solving problem A, then undoing it, then rediscovering A.
 
 This applies to: error message formats, type machinery approaches, naming conventions, file structure, API shape, or any other deliberate design decision recorded in this file or in session history.
-
-### Share Plan Before Acting
-
-Consider this on every prompt. Having a clear idea of what to do next is not permission to act on it silently — not even with the justification _"I have a clear plan — explaining it first is just overhead"_ or _"The user is waiting for results, not more discussion."_
-
-**Before taking any non-trivial implementation step, share the plan with the user and wait for feedback.** This applies not just at the start of a task but at every decision point within it — whenever you are about to write code, make a structural choice, or execute a sequence of actions.
