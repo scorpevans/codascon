@@ -10,6 +10,29 @@ _The Power:_ Pure type-level enforcement via four primitives: `Subject`, `Comman
 
 ---
 
+## How It Compares
+
+The shared limitation of every mainstream exhaustiveness tool — ts-pattern, Effect Match, fp-ts fold, and native discriminated union switches — is that they enforce exhaustiveness over a **single dimension**: all entity types handled in _this one operation_. None of them structurally guarantee that all operations handle all entity types. That second dimension is left to developer discipline.
+
+|                                             | ts-pattern | Effect Match | Native `switch` | GoF Visitor | **codascon** |
+| ------------------------------------------- | :--------: | :----------: | :-------------: | :---------: | :----------: |
+| All entity types exhaustive (per operation) |     ✓      |      ✓       |        ✓        |      ✓      |      ✓       |
+| All operations exhaustive (across entities) |     ✗      |      ✗       |        ✗        |      ✗      |      ✓       |
+| N×M matrix enforced structurally            |     ✗      |      ✗       |        ✗        |   partial   |      ✓       |
+| Hook / collaborator enforcement             |     ✗      |      ✗       |        ✗        |      ✗      |      ✓       |
+| Runtime footprint                           |   ~2 kB    |    large     |      zero       |    zero     |  ~10 lines   |
+| YAML schema + scaffolding codegen           |     ✗      |      ✗       |        ✗        |      ✗      |      ✓       |
+
+**ts-pattern** (~3M weekly downloads) is the closest in spirit — fluent, compile-time exhaustive pattern matching. You can match on an `[entity, operation]` tuple, but a wildcard in one arm satisfies the check without a per-handler structural requirement. It also has known compile-time performance issues with large unions.
+
+**Effect Match** (~5M weekly downloads) has the same single-dimension limitation with the added cost of pulling in a large effect-system runtime. Its strength is elsewhere — concurrency, error channels, dependency injection — not N×M dispatch.
+
+**Native discriminated unions** with `assertNever` catch exhaustiveness per `switch`, but the second dimension is left to discipline. Adding a new entity type won't propagate errors to every operation — only to switches that already have an `assertNever` default.
+
+**GoF Visitor** is the closest architectural match. A visitor interface enforces handlers for all entity types per operation, but TypeScript cannot enforce that the set of visitor interfaces is exhaustive, that all interfaces cover the same entity set, or that collaborator dependencies are present. Codascon is a typed, enforced, zero-runtime implementation of the GoF Visitor with those gaps closed.
+
+---
+
 ## The Problem
 
 Every codebase demands structural decisions before a line of business logic is written: which patterns apply, how responsibilities divide, where new code belongs. SOLID principles and design patterns provide guidance, but they remain advisory — there is no formal protocol that enforces them, and no two codebases look alike.
