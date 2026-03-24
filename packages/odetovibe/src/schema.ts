@@ -322,7 +322,7 @@ export type Command = {
   subjectUnion?: SubjectRef[];
   middleware?: MiddlewareRef[];
   dispatch: {
-    [subject: SubjectRef]: TemplateRef | StrategyRef;
+    [subject: SubjectRef]: StrategyRef;
   };
   templates: {
     [key: string]: Template;
