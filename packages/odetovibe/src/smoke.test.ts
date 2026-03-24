@@ -333,6 +333,124 @@ describe("smoke", () => {
     }
   }, 20_000);
 
+  it("full pipeline handles middleware commands with templates and strategies", async () => {
+    tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
+
+    // A YAML with one regular command wired to one middleware via middleware[].
+    // The middleware has two subjects (Rock, Gem), parameterized and fixed template
+    // paths, and one strategy each. Validates all middleware emitter paths in a
+    // single pipeline run:
+    //   • MiddlewareCommandClassEmitter — extends MiddlewareCommand, MiddlewareTemplate return types
+    //   • MiddlewareParameterizedTemplateEmitter — abstract class with SU type param, 3-arg execute
+    //   • MiddlewareFixedTemplateEmitter — abstract class with fixed SU, 3-arg execute
+    //   • MiddlewareParameterizedParentStrategyEmitter — extends TraceRock<Rock>
+    //   • MiddlewareFixedParentStrategyEmitter — extends TraceGem (no type arg)
+    //   • CommandClassEmitter — emits override get middleware() getter
+    const middlewareYaml = [
+      "namespace: mine",
+      "",
+      "domainTypes:",
+      "  Base:",
+      "  Ctx:",
+      "  Res:",
+      "  Rock:",
+      "    resolverName: resolveRock",
+      "  Gem:",
+      "    resolverName: resolveGem",
+      "",
+      "commands:",
+      "  MineCommand:",
+      "    commandName: mine",
+      "    baseType: Base",
+      "    objectType: Ctx",
+      "    returnType: Res",
+      "    dispatch:",
+      "      Rock: RockMinerDefault",
+      "      Gem: GemMinerDefault",
+      "    middleware:",
+      "      - TraceMiddleware",
+      "    templates:",
+      "      RockMiner:",
+      "        isParameterized: false",
+      "        strategies:",
+      "          RockMinerDefault: {}",
+      "      GemMiner:",
+      "        isParameterized: false",
+      "        strategies:",
+      "          GemMinerDefault: {}",
+      "",
+      "middleware:",
+      "  TraceMiddleware:",
+      "    commandName: trace",
+      "    baseType: Base",
+      "    objectType: Ctx",
+      "    returnType: Res",
+      "    dispatch:",
+      "      Rock: TraceRockDefault",
+      "      Gem: TraceGemDefault",
+      "    templates:",
+      "      TraceRock:",
+      "        isParameterized: true",
+      "        subjectSubset: [Rock]",
+      "        strategies:",
+      "          TraceRockDefault:",
+      "            subjectSubset: [Rock]",
+      "      TraceGem:",
+      "        isParameterized: false",
+      "        strategies:",
+      "          TraceGemDefault: {}",
+    ].join("\n");
+
+    writeFileSync(resolve(tmpDir, "middleware.yaml"), middlewareYaml);
+    const configIndex = parseYaml(resolve(tmpDir, "middleware.yaml"));
+    const validation = validateYaml(configIndex);
+    expect(validation.valid, "middleware.yaml must be valid").toBe(true);
+
+    const project = new Project({ useInMemoryFileSystem: true });
+    emitAst(configIndex, { configIndex, project });
+    const written = await writeFiles(project, { targetDir: tmpDir, mode: "overwrite" });
+
+    expect(written.length, "pipeline should write at least one file").toBeGreaterThan(0);
+    for (const r of written) {
+      expect(r.compileErrors ?? [], `${r.path} has no compile errors`).toHaveLength(0);
+    }
+
+    // Middleware command file should be present with MiddlewareCommand extends clause
+    const mwFile = written.find((r) => r.path.includes("/commands/trace-middleware.ts"));
+    expect(mwFile, "middleware file should be written").toBeDefined();
+    const mwContent = readFileSync(mwFile!.path, "utf8");
+    expect(mwContent).toContain("extends MiddlewareCommand<");
+    // Resolver return types include MiddlewareTemplate<TraceMiddleware, [], RockOrGem>
+    // (may be Prettier-wrapped across lines)
+    expect(mwContent).toContain("MiddlewareTemplate");
+    expect(mwContent).toContain("resolveRock");
+    expect(mwContent).toContain("resolveGem");
+
+    // Parameterized middleware template: abstract class with SU type param
+    expect(mwContent).toContain("abstract class TraceRock");
+    expect(mwContent).toMatch(/TraceRock<SU\s+extends\s+Rock>/);
+
+    // 3-arg execute with Runnable inner param
+    expect(mwContent).toContain("inner:");
+    expect(mwContent).toContain("Runnable<");
+
+    // Fixed middleware template: abstract class without type param
+    expect(mwContent).toContain("abstract class TraceGem");
+    // implements clause may be Prettier-wrapped; check the key parts are present
+    expect(mwContent).toContain("implements MiddlewareTemplate");
+
+    // Strategies extend their parent templates
+    expect(mwContent).toContain("class TraceRockDefault extends TraceRock<Rock>");
+    expect(mwContent).toContain("class TraceGemDefault extends TraceGem");
+
+    // Regular command file: override get middleware() getter
+    const cmdFile = written.find((r) => r.path.includes("/commands/mine.ts"));
+    expect(cmdFile, "command file should be written").toBeDefined();
+    const cmdContent = readFileSync(cmdFile!.path, "utf8");
+    expect(cmdContent).toContain("override get middleware()");
+    expect(cmdContent).toContain("new TraceMiddleware()");
+  }, 30_000);
+
   it("generates golden output for smoke.yaml", async () => {
     tmpDir = mkdtempSync(`${tmpdir()}/odetovibe-smoke-`);
 

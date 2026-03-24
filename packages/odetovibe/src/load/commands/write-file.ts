@@ -76,6 +76,12 @@ const GENERATED_HEADER = "/* @odetovibe-generated */\n";
  * TS2583 — "Cannot find name X. Do you need to change your target library?" —
  *   fires for names like `Set`, `Map`, `Promise` that live in ES2015+ libs.
  *   Same lib-version mismatch; not a codegen error.
+ *
+ * TS4112 — "This member cannot have an 'override' modifier because its containing
+ *   class does not extend another class." — fires when the base class (e.g.
+ *   `Command` from codascon) can't be resolved in the isolated FS, causing
+ *   TypeScript to treat the class as not extending anything. Valid in real
+ *   projects where codascon resolves correctly.
  */
 // Codes suppressed in the in-memory fallback (no tsconfig found, e.g. test tmp dirs).
 // These are all environment false-positives from the isolated ES3 in-memory project,
@@ -86,6 +92,7 @@ const FALLBACK_FILTERED_CODES = new Set([
   2552, // TS2552: Cannot find name — ES3 lib missing ES2015+ globals (ReadonlyMap etc.)
   2583, // TS2583: Cannot find name 'Set' — ES3 lib missing Set/Map constructors
   2705, // TS2705: Async requires Promise — ES3 lib has no Promise
+  4112, // TS4112: override modifier invalid — base class unresolvable in isolated FS
 ]);
 
 // ═══════════════════════════════════════════════════════════════════

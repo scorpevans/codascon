@@ -55,6 +55,7 @@ export type {
   ExtractResult,
 } from "./domain-types.js";
 export { ValidateEntryCommand } from "./commands/validate-entry.js";
+export { ValidateCommandHooksCommand } from "./commands/validate-command-hooks.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // parseYaml
