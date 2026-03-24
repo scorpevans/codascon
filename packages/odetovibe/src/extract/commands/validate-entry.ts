@@ -18,6 +18,9 @@ import type {
   CommandEntry,
   AbstractTemplateEntry,
   StrategyEntry,
+  MiddlewareCommandEntry,
+  MiddlewareTemplateEntry,
+  MiddlewareStrategyEntry,
 } from "../domain-types.js";
 import { ValidateCommandHooksCommand } from "./validate-command-hooks.js";
 
@@ -275,6 +278,34 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
+    // Rule 10 + 11: validate Command.middleware[] list
+    for (const mwRef of config.middleware ?? []) {
+      const mwEntry = object.middlewareCommands.get(mwRef);
+      if (!mwEntry) {
+        errors.push(
+          err(
+            key,
+            "middleware-ref",
+            `middleware "${mwRef}" does not reference a known middleware command`,
+          ),
+        );
+      } else {
+        // Rule 11: middleware dispatch keys must be a superset of this command's dispatch keys
+        const mwSubjects = new Set(effectiveSubjectUnion(mwEntry.config));
+        for (const subjectRef of effectiveSubjectUnion(config)) {
+          if (!mwSubjects.has(subjectRef)) {
+            errors.push(
+              err(
+                key,
+                "middleware-coverage",
+                `middleware "${mwRef}" does not cover subject "${subjectRef}" — its dispatch keys must be a superset of "${key}"'s`,
+              ),
+            );
+          }
+        }
+      }
+    }
+
     return errors.length > 0 ? fail(...errors) : ok();
   }
 }
@@ -417,6 +448,287 @@ abstract class StrategyValidator implements Template<
 class StrategyValidatorDefault extends StrategyValidator {}
 
 // ═══════════════════════════════════════════════════════════════════
+// TEMPLATE: MiddlewareCommandValidator
+//
+// Rules: identical to CommandValidator PLUS:
+//   - Rule 10: config.middleware[] entries must reference keys in
+//     object.middlewareCommands
+//   - Rule 11: each referenced middleware's effective subject union
+//     must be a superset of this command's effective subject union
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class MiddlewareCommandValidator implements Template<
+  ValidateEntryCommand,
+  [],
+  MiddlewareCommandEntry
+> {
+  execute(subject: MiddlewareCommandEntry, object: Readonly<ConfigIndex>): ValidationResult {
+    const errors: ValidationError[] = [];
+    const { key, config } = subject;
+    const importedNames = allTypeImportNames(object);
+
+    // baseType, objectType, returnType must reference known domainTypes or typeImports
+    for (const refField of ["baseType", "objectType", "returnType"] as const) {
+      const ref = config[refField];
+      if (importedNames.has(ref)) {
+        console.info(
+          `[odetovibe] INFO: typeImport "${ref}" referenced as ${refField} of middleware "${key}" — skipping domainType validation`,
+        );
+      } else if (!findDomainType(object, ref)) {
+        errors.push(
+          err(key, `${refField}-ref`, `${refField} "${ref}" does not reference a known domainType`),
+        );
+      }
+    }
+
+    // effective subject list
+    const subjects = effectiveSubjectUnion(config);
+
+    // subject entries must reference subjectTypes or typeImports
+    for (const subjectRef of subjects) {
+      if (importedNames.has(subjectRef)) {
+        console.info(
+          `[odetovibe] INFO: typeImport "${subjectRef}" used as subject of middleware "${key}" — skipping Subject validation; compiler will enforce implementation`,
+        );
+      } else if (!findDomainType(object, subjectRef)) {
+        errors.push(
+          err(
+            key,
+            "subjectUnion-ref",
+            `subject "${subjectRef}" does not reference a known domainType`,
+          ),
+        );
+      } else if (!object.subjectTypes.has(subjectRef)) {
+        errors.push(
+          err(
+            key,
+            "subjectUnion-resolverName",
+            `subject "${subjectRef}" is not a Subject (no resolverName)`,
+          ),
+        );
+      }
+    }
+
+    // cross-validation: when subjectUnion is present, it must match dispatch keys exactly
+    const dispatchKeys = new Set(Object.keys(config.dispatch));
+    const unionSet = new Set(subjects);
+
+    for (const subjectRef of subjects) {
+      if (!dispatchKeys.has(subjectRef)) {
+        errors.push(
+          err(
+            key,
+            "dispatch-coverage",
+            `Subject "${subjectRef}" is in subjectUnion but missing from dispatch`,
+          ),
+        );
+      }
+    }
+    for (const dk of dispatchKeys) {
+      if (!unionSet.has(dk)) {
+        errors.push(err(key, "dispatch-extra", `dispatch key "${dk}" is not in subjectUnion`));
+      }
+    }
+
+    // dispatch values must be plain strategy names unique across this middleware's templates
+    const ownTemplates = config.templates ?? {};
+
+    const stratNameToTpl = new Map<string, string>();
+    for (const [tplName, tplConfig] of Object.entries(ownTemplates)) {
+      for (const stratName of Object.keys(tplConfig.strategies)) {
+        const existing = stratNameToTpl.get(stratName);
+        if (existing !== undefined) {
+          errors.push(
+            err(
+              key,
+              "strategy-name-unique",
+              `strategy name "${stratName}" is declared in both "${existing}" and "${tplName}" — strategy names must be unique across all templates within a middleware`,
+            ),
+          );
+        } else {
+          stratNameToTpl.set(stratName, tplName);
+        }
+      }
+    }
+
+    for (const [subjectRef, target] of Object.entries(config.dispatch)) {
+      if (!target.includes(".")) {
+        const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
+        if (!isStrategy) {
+          errors.push(
+            err(
+              key,
+              "dispatch-target-ref",
+              `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
+            ),
+          );
+        }
+      } else {
+        errors.push(
+          err(
+            key,
+            "dispatch-target-format",
+            `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
+          ),
+        );
+      }
+    }
+
+    // commandName-file-unique: normalized file names must be unique across all middleware commands
+    const ownNorm = normalizeCommandKey(key);
+    for (const [otherKey] of object.middlewareCommands) {
+      if (otherKey !== key && normalizeCommandKey(otherKey) === ownNorm) {
+        errors.push(
+          err(
+            key,
+            "commandName-file-unique",
+            `middleware "${key}" and "${otherKey}" both normalize to file name "${ownNorm}.ts"`,
+          ),
+        );
+      }
+    }
+
+    return errors.length > 0 ? fail(...errors) : ok();
+  }
+}
+
+class MiddlewareCommandValidatorDefault extends MiddlewareCommandValidator {}
+
+// ═══════════════════════════════════════════════════════════════════
+// TEMPLATE: MiddlewareTemplateValidator
+//
+// Rules: identical to AbstractTemplateValidator but looks up parent
+// in object.middlewareCommands instead of object.commands.
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class MiddlewareTemplateValidator implements Template<
+  ValidateEntryCommand,
+  [ValidateCommandHooksCommand],
+  MiddlewareTemplateEntry
+> {
+  readonly validateCommandHooks = new ValidateCommandHooksCommand();
+
+  execute(subject: MiddlewareTemplateEntry, object: Readonly<ConfigIndex>): ValidationResult {
+    const errors: ValidationError[] = [];
+    const { key, commandKey, config } = subject;
+
+    const cmdEntry = object.middlewareCommands.get(commandKey);
+    if (!cmdEntry) {
+      errors.push(
+        err(
+          key,
+          "parent-command",
+          `parent middleware command "${commandKey}" not found in ConfigIndex`,
+        ),
+      );
+      return fail(...errors);
+    }
+
+    if (config.subjectSubset) {
+      const union = new Set(effectiveSubjectUnion(cmdEntry.config));
+      for (const ref of config.subjectSubset) {
+        if (!union.has(ref)) {
+          errors.push(
+            err(
+              key,
+              "subjectSubset",
+              `subjectSubset entry "${ref}" is not in "${commandKey}"'s subject union`,
+            ),
+          );
+        }
+      }
+    }
+
+    errors.push(...this.validateCommandHooks.run(subject, object).errors);
+
+    // Abstract templates must not appear directly in dispatch
+    for (const [, target] of Object.entries(cmdEntry.config.dispatch)) {
+      if (target === key) {
+        errors.push(
+          err(
+            key,
+            "abstract-in-dispatch",
+            `abstract template "${key}" is referenced directly in "${commandKey}" dispatch — use a plain strategy name instead`,
+          ),
+        );
+      }
+    }
+
+    return errors.length > 0 ? fail(...errors) : ok();
+  }
+}
+
+class MiddlewareTemplateValidatorDefault extends MiddlewareTemplateValidator {}
+
+// ═══════════════════════════════════════════════════════════════════
+// TEMPLATE: MiddlewareStrategyValidator
+//
+// Rules: identical to StrategyValidator but looks up parent template
+// in object.middlewareTemplates and parent command in
+// object.middlewareCommands.
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class MiddlewareStrategyValidator implements Template<
+  ValidateEntryCommand,
+  [ValidateCommandHooksCommand],
+  MiddlewareStrategyEntry
+> {
+  readonly validateCommandHooks = new ValidateCommandHooksCommand();
+
+  execute(subject: MiddlewareStrategyEntry, object: Readonly<ConfigIndex>): ValidationResult {
+    const errors: ValidationError[] = [];
+    const { key, templateKey, commandKey, config } = subject;
+
+    const tplQualifiedKey = `${commandKey}.${templateKey}`;
+    const tpl = object.middlewareTemplates.get(tplQualifiedKey);
+    if (!tpl) {
+      errors.push(
+        err(
+          key,
+          "parent-template",
+          `parent template "${tplQualifiedKey}" not found in middlewareTemplates`,
+        ),
+      );
+      return fail(...errors);
+    }
+
+    if (config.subjectSubset) {
+      if (!tpl.config.isParameterized) {
+        errors.push(
+          err(
+            key,
+            "subjectSubset-moot",
+            `subjectSubset is declared but parent template "${templateKey}" is not parameterized`,
+          ),
+        );
+      } else {
+        const cmdEntry = object.middlewareCommands.get(commandKey);
+        const parentSubset =
+          tpl.config.subjectSubset ?? (cmdEntry ? effectiveSubjectUnion(cmdEntry.config) : []);
+        const parentSet = new Set(parentSubset);
+        for (const ref of config.subjectSubset) {
+          if (!parentSet.has(ref)) {
+            errors.push(
+              err(
+                key,
+                "subjectSubset-parent",
+                `subjectSubset entry "${ref}" is not in parent template "${templateKey}"'s subjectSubset`,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    errors.push(...this.validateCommandHooks.run(subject, object).errors);
+
+    return errors.length > 0 ? fail(...errors) : ok();
+  }
+}
+
+class MiddlewareStrategyValidatorDefault extends MiddlewareStrategyValidator {}
+
+// ═══════════════════════════════════════════════════════════════════
 // COMMAND: ValidateEntryCommand
 // ═══════════════════════════════════════════════════════════════════
 
@@ -425,13 +737,25 @@ const plainTypeValidator = new PlainTypeValidatorDefault();
 const commandValidator = new CommandValidatorDefault();
 const abstractTemplateValidator = new AbstractTemplateValidatorDefault();
 const strategyValidator = new StrategyValidatorDefault();
+const middlewareCommandValidator = new MiddlewareCommandValidatorDefault();
+const middlewareTemplateValidator = new MiddlewareTemplateValidatorDefault();
+const middlewareStrategyValidator = new MiddlewareStrategyValidatorDefault();
 
 /** Dispatches each config entry to its schema validator via double dispatch. */
 export class ValidateEntryCommand extends Command<
   ConfigEntry,
   ConfigIndex,
   ValidationResult,
-  [SubjectTypeEntry, PlainTypeEntry, CommandEntry, AbstractTemplateEntry, StrategyEntry]
+  [
+    SubjectTypeEntry,
+    PlainTypeEntry,
+    CommandEntry,
+    AbstractTemplateEntry,
+    StrategyEntry,
+    MiddlewareCommandEntry,
+    MiddlewareTemplateEntry,
+    MiddlewareStrategyEntry,
+  ]
 > {
   readonly commandName = "validateEntry" as const;
 
@@ -464,5 +788,23 @@ export class ValidateEntryCommand extends Command<
     object: Readonly<ConfigIndex>,
   ): Template<ValidateEntryCommand, [], StrategyEntry> {
     return strategyValidator;
+  }
+  resolveMiddlewareCommand(
+    subject: MiddlewareCommandEntry,
+    object: Readonly<ConfigIndex>,
+  ): Template<ValidateEntryCommand, [], MiddlewareCommandEntry> {
+    return middlewareCommandValidator;
+  }
+  resolveMiddlewareTemplate(
+    subject: MiddlewareTemplateEntry,
+    object: Readonly<ConfigIndex>,
+  ): Template<ValidateEntryCommand, [], MiddlewareTemplateEntry> {
+    return middlewareTemplateValidator;
+  }
+  resolveMiddlewareStrategy(
+    subject: MiddlewareStrategyEntry,
+    object: Readonly<ConfigIndex>,
+  ): Template<ValidateEntryCommand, [], MiddlewareStrategyEntry> {
+    return middlewareStrategyValidator;
   }
 }

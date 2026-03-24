@@ -38,6 +38,9 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     commands: new Map(),
     abstractTemplates: new Map(),
     strategies: new Map(),
+    middlewareCommands: new Map(),
+    middlewareTemplates: new Map(),
+    middlewareStrategies: new Map(),
     ...overrides,
   };
 }

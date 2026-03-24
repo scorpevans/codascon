@@ -92,6 +92,48 @@ export class StrategyEntry extends Subject implements ConfigEntry {
   }
 }
 
+/** A parsed `middleware` map entry from the YAML config. */
+export class MiddlewareCommandEntry extends Subject implements ConfigEntry {
+  readonly resolverName = "resolveMiddlewareCommand" as const;
+  constructor(
+    public readonly key: string,
+    public readonly config: Command,
+  ) {
+    super();
+  }
+}
+
+/**
+ * A Template entry inside a MiddlewareCommand — generates an abstract class.
+ * Carries `commandKey` (the parent MiddlewareCommand's key).
+ */
+export class MiddlewareTemplateEntry extends Subject implements ConfigEntry {
+  readonly resolverName = "resolveMiddlewareTemplate" as const;
+  constructor(
+    public readonly key: string,
+    public readonly commandKey: string,
+    public readonly config: Template,
+  ) {
+    super();
+  }
+}
+
+/**
+ * A parsed Strategy entry from a MiddlewareTemplate's `strategies` map.
+ * Carries both `templateKey` and `commandKey` for ancestry lookup.
+ */
+export class MiddlewareStrategyEntry extends Subject implements ConfigEntry {
+  readonly resolverName = "resolveMiddlewareStrategy" as const;
+  constructor(
+    public readonly key: string,
+    public readonly templateKey: string,
+    public readonly commandKey: string,
+    public readonly config: Strategy,
+  ) {
+    super();
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // OBJECT TYPE
 // ═══════════════════════════════════════════════════════════════════
@@ -114,6 +156,9 @@ export interface ConfigIndex {
   readonly commands: ReadonlyMap<string, CommandEntry>;
   readonly abstractTemplates: ReadonlyMap<string, AbstractTemplateEntry>;
   readonly strategies: ReadonlyMap<string, StrategyEntry>;
+  readonly middlewareCommands: ReadonlyMap<string, MiddlewareCommandEntry>;
+  readonly middlewareTemplates: ReadonlyMap<string, MiddlewareTemplateEntry>;
+  readonly middlewareStrategies: ReadonlyMap<string, MiddlewareStrategyEntry>;
 }
 
 // ═══════════════════════════════════════════════════════════════════

@@ -22,6 +22,9 @@ import type {
   CommandEntry,
   AbstractTemplateEntry,
   StrategyEntry,
+  MiddlewareCommandEntry,
+  MiddlewareTemplateEntry,
+  MiddlewareStrategyEntry,
 } from "../../extract/domain-types.js";
 import type { EmitContext, EmitResult } from "../domain-types.js";
 
@@ -233,6 +236,17 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       isReadonly: true,
       initializer: `"${config.commandName}" as const`,
     });
+
+    if (config.middleware && config.middleware.length > 0) {
+      for (const mwRef of config.middleware) {
+        ensureValueImport(sf, hookImportPath(mwRef, namespace), mwRef);
+      }
+      const getter = cls.addGetAccessor({ name: "middleware" });
+      getter.toggleModifier("override", true);
+      getter.addStatements([
+        `return [${config.middleware.map((m) => `new ${m}()`).join(", ")}]; // @odetovibe-generated`,
+      ]);
+    }
 
     for (const subjectRef of subjects) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
@@ -553,6 +567,351 @@ class FixedParentStrategyEmitter extends StrategyClassEmitter {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// TEMPLATE: MiddlewareAbstractTemplateEmitter
+//
+// Identical to AbstractTemplateEmitter but:
+//   - Looks up parent in configIndex.middlewareCommands
+//   - Emits `implements MiddlewareTemplate<C, H, SU>` instead of Template
+//   - Adds `inner: Runnable<SU, O, R>` parameter to execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class MiddlewareAbstractTemplateEmitter implements Template<
+  EmitAstCommand,
+  [],
+  MiddlewareTemplateEntry
+> {
+  protected abstract applyClassSignature(
+    cls: ClassDeclaration,
+    commandKey: string,
+    hooksParam: string,
+    suRef: string,
+  ): void;
+
+  protected abstract subjectParamType(suRef: string): string;
+
+  execute(subject: MiddlewareTemplateEntry, object: Readonly<EmitContext>): EmitResult {
+    const { configIndex } = object;
+    const { key, commandKey, config } = subject;
+    const namespace = configIndex.namespace;
+    const filePath = commandFilePath(commandKey, namespace);
+    const sf = getOrCreate(object.project, filePath);
+    const dtPath = domainTypesRelPath(namespace);
+    const importSrc = buildImportSourceMap(configIndex);
+
+    ensureTypeImport(sf, "codascon", "MiddlewareTemplate");
+    ensureTypeImport(sf, "codascon", "Runnable");
+
+    const cmdEntry = configIndex.middlewareCommands.get(commandKey)!;
+    const isFullUnion = !config.subjectSubset?.length;
+    const subjectSubset = isFullUnion
+      ? effectiveSubjectUnion(cmdEntry.config)
+      : config.subjectSubset!;
+    const subsetUnion = subjectSubset.join(" | ");
+    const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
+
+    if (isFullUnion) ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
+
+    for (const ref of subjectSubset) {
+      const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+      ensureTypeImport(sf, src, ref);
+    }
+    const retSrc = importSrc.has(cmdEntry.config.returnType)
+      ? toCommandDepth(importSrc.get(cmdEntry.config.returnType)!)
+      : dtPath;
+    const objSrc = importSrc.has(cmdEntry.config.objectType)
+      ? toCommandDepth(importSrc.get(cmdEntry.config.objectType)!)
+      : dtPath;
+    ensureTypeImport(sf, retSrc, cmdEntry.config.returnType);
+    ensureTypeImport(sf, objSrc, cmdEntry.config.objectType);
+
+    const hookEntries = Object.entries(config.commandHooks ?? {});
+    const hookTypes = hookEntries.map(([, cmdRef]) => cmdRef);
+
+    for (const cmdRef of hookTypes) {
+      ensureValueImport(sf, hookImportPath(cmdRef, namespace), cmdRef);
+    }
+
+    const hooksParam = hookTypes.length > 0 ? `[${hookTypes.join(", ")}]` : "[]";
+    const cls = sf.addClass({ name: key, isAbstract: true, isExported: false });
+
+    this.applyClassSignature(cls, commandKey, hooksParam, suRef);
+
+    for (const [propName, cmdRef] of hookEntries) {
+      cls.addProperty({
+        name: propName,
+        isReadonly: true,
+        initializer: `new ${cmdRef}()`, // @odetovibe-generated
+      });
+    }
+
+    const subjectType = this.subjectParamType(suRef);
+    const returnTypeStr = maybeAsync(cmdEntry.config.returnType, cmdEntry.config.returnAsync);
+    const executeMethod = cls.addMethod({
+      name: "execute",
+      isAsync: cmdEntry.config.returnAsync === true,
+    });
+    executeMethod.addParameter({ name: "subject", type: subjectType });
+    executeMethod.addParameter({ name: "object", type: `Readonly<${cmdEntry.config.objectType}>` });
+    executeMethod.addParameter({
+      name: "inner",
+      type: `Runnable<${subjectType}, ${cmdEntry.config.objectType}, ${returnTypeStr}>`,
+    });
+    executeMethod.setReturnType(returnTypeStr);
+    executeMethod.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
+
+    return { targetFile: filePath };
+  }
+}
+
+class MiddlewareParameterizedTemplateEmitter extends MiddlewareAbstractTemplateEmitter {
+  protected applyClassSignature(
+    cls: ClassDeclaration,
+    commandKey: string,
+    hooksParam: string,
+    suRef: string,
+  ): void {
+    cls.addTypeParameter({ name: "SU", constraint: suRef });
+    cls.addImplements(`MiddlewareTemplate<${commandKey}, ${hooksParam}, SU>`);
+  }
+
+  protected subjectParamType(_suRef: string): string {
+    return "SU";
+  }
+}
+
+class MiddlewareFixedTemplateEmitter extends MiddlewareAbstractTemplateEmitter {
+  protected applyClassSignature(
+    cls: ClassDeclaration,
+    commandKey: string,
+    hooksParam: string,
+    suRef: string,
+  ): void {
+    cls.addImplements(`MiddlewareTemplate<${commandKey}, ${hooksParam}, ${suRef}>`);
+  }
+
+  protected subjectParamType(suRef: string): string {
+    return suRef;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TEMPLATE: MiddlewareStrategyClassEmitter
+//
+// Identical to StrategyClassEmitter but looks up parent template in
+// configIndex.middlewareTemplates and parent command in
+// configIndex.middlewareCommands.
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class MiddlewareStrategyClassEmitter implements Template<
+  EmitAstCommand,
+  [],
+  MiddlewareStrategyEntry
+> {
+  protected abstract ensureSubjectImports(
+    sf: SourceFile,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+    importSrc: Map<string, string>,
+    dtPath: string,
+  ): void;
+
+  protected abstract buildExtendsClause(
+    templateKey: string,
+    commandKey: string,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+  ): string;
+
+  execute(subject: MiddlewareStrategyEntry, object: Readonly<EmitContext>): EmitResult {
+    const { configIndex } = object;
+    const { key, templateKey, commandKey, config } = subject;
+    const namespace = configIndex.namespace;
+    const filePath = commandFilePath(commandKey, namespace);
+    const sf = getOrCreate(object.project, filePath);
+    const dtPath = domainTypesRelPath(namespace);
+    const importSrc = buildImportSourceMap(configIndex);
+
+    const tplEntry = configIndex.middlewareTemplates.get(`${commandKey}.${templateKey}`)!;
+    const cmdEntry = configIndex.middlewareCommands.get(commandKey)!;
+
+    const strategyHasSubset = !!config.subjectSubset?.length;
+    const templateHasSubset = !!tplEntry.config.subjectSubset?.length;
+    const isFullUnion = !strategyHasSubset && !templateHasSubset;
+
+    const subjectSubset = strategyHasSubset
+      ? config.subjectSubset!
+      : templateHasSubset
+        ? tplEntry.config.subjectSubset!
+        : effectiveSubjectUnion(cmdEntry.config);
+
+    this.ensureSubjectImports(sf, isFullUnion, subjectSubset, importSrc, dtPath);
+
+    const retSrc = importSrc.has(cmdEntry.config.returnType)
+      ? toCommandDepth(importSrc.get(cmdEntry.config.returnType)!)
+      : dtPath;
+    const objSrc = importSrc.has(cmdEntry.config.objectType)
+      ? toCommandDepth(importSrc.get(cmdEntry.config.objectType)!)
+      : dtPath;
+    ensureTypeImport(sf, retSrc, cmdEntry.config.returnType);
+    ensureTypeImport(sf, objSrc, cmdEntry.config.objectType);
+
+    const hookOverrides = Object.entries(config.commandHooks ?? {});
+    for (const [, cmdRef] of hookOverrides) {
+      ensureValueImport(sf, hookImportPath(cmdRef, namespace), cmdRef);
+    }
+
+    const cls = sf.addClass({
+      name: key,
+      isExported: false,
+      extends: this.buildExtendsClause(templateKey, commandKey, isFullUnion, subjectSubset),
+    });
+
+    for (const [propName, cmdRef] of hookOverrides) {
+      cls.addProperty({
+        name: propName,
+        isReadonly: true,
+        initializer: `new ${cmdRef}()`, // @odetovibe-generated
+      });
+    }
+
+    return { targetFile: filePath };
+  }
+}
+
+class MiddlewareParameterizedParentStrategyEmitter extends MiddlewareStrategyClassEmitter {
+  protected ensureSubjectImports(
+    sf: SourceFile,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+    importSrc: Map<string, string>,
+    dtPath: string,
+  ): void {
+    if (isFullUnion) {
+      ensureTypeImport(sf, "codascon", "CommandSubjectUnion");
+    } else {
+      for (const ref of subjectSubset) {
+        const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+        ensureTypeImport(sf, src, ref);
+      }
+    }
+  }
+
+  protected buildExtendsClause(
+    templateKey: string,
+    commandKey: string,
+    isFullUnion: boolean,
+    subjectSubset: readonly string[],
+  ): string {
+    const suArg = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subjectSubset.join(" | ");
+    return `${templateKey}<${suArg}>`;
+  }
+}
+
+class MiddlewareFixedParentStrategyEmitter extends MiddlewareStrategyClassEmitter {
+  protected ensureSubjectImports(
+    sf: SourceFile,
+    _isFullUnion: boolean,
+    subjectSubset: readonly string[],
+    importSrc: Map<string, string>,
+    dtPath: string,
+  ): void {
+    for (const ref of subjectSubset) {
+      const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+      ensureTypeImport(sf, src, ref);
+    }
+  }
+
+  protected buildExtendsClause(
+    templateKey: string,
+    _commandKey: string,
+    _isFullUnion: boolean,
+    _subjectSubset: readonly string[],
+  ): string {
+    return templateKey;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TEMPLATE: MiddlewareCommandClassEmitter
+//
+// Emits: export class AuditMiddleware extends MiddlewareCommand<B, O, R, [S1, S2]> {
+//          readonly commandName = "auditMiddleware" as const;
+//          resolveS1(subject: S1, object: Readonly<O>): MiddlewareTemplate<AuditMiddleware, [], S1> {
+//            throw new Error("Not implemented"); // @odetovibe-generated
+//          }
+//        }
+// Target: <namespace>/commands/<middleware-name>.ts
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class MiddlewareCommandClassEmitter implements Template<
+  EmitAstCommand,
+  [],
+  MiddlewareCommandEntry
+> {
+  execute(subject: MiddlewareCommandEntry, object: Readonly<EmitContext>): EmitResult {
+    const { configIndex } = object;
+    const { key, config } = subject;
+    const namespace = configIndex.namespace;
+    const filePath = commandFilePath(key, namespace);
+    const sf = getOrCreate(object.project, filePath);
+    const dtPath = domainTypesRelPath(namespace);
+    const importSrc = buildImportSourceMap(configIndex);
+
+    ensureValueImport(sf, "codascon", "MiddlewareCommand");
+    ensureTypeImport(sf, "codascon", "MiddlewareTemplate");
+
+    for (const ref of [config.baseType, config.objectType, config.returnType]) {
+      const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+      ensureTypeImport(sf, src, ref);
+    }
+    const subjects = effectiveSubjectUnion(config);
+    for (const ref of subjects) {
+      const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
+      ensureTypeImport(sf, src, ref);
+    }
+
+    const returnType = maybeAsync(config.returnType, config.returnAsync);
+    const subjectTuple = subjects.join(", ");
+    const cls = sf.addClass({
+      name: key,
+      isExported: true,
+      extends: `MiddlewareCommand<${config.baseType}, ${config.objectType}, ${returnType}, [${subjectTuple}]>`,
+    });
+
+    cls.addProperty({
+      name: "commandName",
+      isReadonly: true,
+      initializer: `"${config.commandName}" as const`,
+    });
+
+    for (const subjectRef of subjects) {
+      const subjectEntry = configIndex.subjectTypes.get(subjectRef);
+      if (!subjectEntry) {
+        if (importSrc.has(subjectRef)) {
+          console.info(
+            `[odetovibe] INFO: typeImport "${subjectRef}" in subject list of middleware "${key}" — no resolver stub generated; compiler will enforce implementation`,
+          );
+        }
+        continue;
+      }
+      const resolverName = subjectEntry.config.resolverName;
+      const method = cls.addMethod({ name: resolverName });
+      method.addParameter({ name: "subject", type: subjectRef });
+      method.addParameter({
+        name: "object",
+        type: `Readonly<${config.objectType}>`,
+      });
+      method.setReturnType(`MiddlewareTemplate<${key}, [], ${subjectRef}>`);
+      method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
+    }
+
+    return { targetFile: filePath };
+  }
+}
+
+class MiddlewareCommandClassEmitterDefault extends MiddlewareCommandClassEmitter {}
+
+// ═══════════════════════════════════════════════════════════════════
 // COMMAND: EmitAstCommand
 // ═══════════════════════════════════════════════════════════════════
 
@@ -563,13 +922,28 @@ const parameterizedTemplateEmitter = new ParameterizedTemplateEmitter();
 const fixedTemplateEmitter = new FixedTemplateEmitter();
 const parameterizedParentStrategyEmitter = new ParameterizedParentStrategyEmitter();
 const fixedParentStrategyEmitter = new FixedParentStrategyEmitter();
+const middlewareCommandClassEmitter = new MiddlewareCommandClassEmitterDefault();
+const middlewareParameterizedTemplateEmitter = new MiddlewareParameterizedTemplateEmitter();
+const middlewareFixedTemplateEmitter = new MiddlewareFixedTemplateEmitter();
+const middlewareParameterizedParentStrategyEmitter =
+  new MiddlewareParameterizedParentStrategyEmitter();
+const middlewareFixedParentStrategyEmitter = new MiddlewareFixedParentStrategyEmitter();
 
 /** Dispatches each config entry to its TypeScript AST emitter via double dispatch. */
 export class EmitAstCommand extends Command<
   ConfigEntry,
   EmitContext,
   EmitResult,
-  [SubjectTypeEntry, PlainTypeEntry, CommandEntry, AbstractTemplateEntry, StrategyEntry]
+  [
+    SubjectTypeEntry,
+    PlainTypeEntry,
+    CommandEntry,
+    AbstractTemplateEntry,
+    StrategyEntry,
+    MiddlewareCommandEntry,
+    MiddlewareTemplateEntry,
+    MiddlewareStrategyEntry,
+  ]
 > {
   readonly commandName = "emitAst" as const;
 
@@ -607,5 +981,30 @@ export class EmitAstCommand extends Command<
     return tplEntry.config.isParameterized
       ? parameterizedParentStrategyEmitter
       : fixedParentStrategyEmitter;
+  }
+  resolveMiddlewareCommand(
+    subject: MiddlewareCommandEntry,
+    object: Readonly<EmitContext>,
+  ): Template<EmitAstCommand, [], MiddlewareCommandEntry> {
+    return middlewareCommandClassEmitter;
+  }
+  resolveMiddlewareTemplate(
+    subject: MiddlewareTemplateEntry,
+    object: Readonly<EmitContext>,
+  ): Template<EmitAstCommand, [], MiddlewareTemplateEntry> {
+    return subject.config.isParameterized
+      ? middlewareParameterizedTemplateEmitter
+      : middlewareFixedTemplateEmitter;
+  }
+  resolveMiddlewareStrategy(
+    subject: MiddlewareStrategyEntry,
+    object: Readonly<EmitContext>,
+  ): Template<EmitAstCommand, [], MiddlewareStrategyEntry> {
+    const tplEntry = object.configIndex.middlewareTemplates.get(
+      `${subject.commandKey}.${subject.templateKey}`,
+    )!;
+    return tplEntry.config.isParameterized
+      ? middlewareParameterizedParentStrategyEmitter
+      : middlewareFixedParentStrategyEmitter;
   }
 }

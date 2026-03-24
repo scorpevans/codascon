@@ -40,6 +40,9 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     commands: new Map(),
     abstractTemplates: new Map(),
     strategies: new Map(),
+    middlewareCommands: new Map(),
+    middlewareTemplates: new Map(),
+    middlewareStrategies: new Map(),
     ...overrides,
   };
 }
@@ -1091,6 +1094,9 @@ describe("StrategyClassEmitter", () => {
       commands: new Map([["AccessBuildingCommand", cmdEntry]]),
       abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTplEntry]]),
       strategies: new Map(),
+      middlewareCommands: new Map(),
+      middlewareTemplates: new Map(),
+      middlewareStrategies: new Map(),
     };
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(index, project));
