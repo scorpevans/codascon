@@ -26,7 +26,7 @@
  * **MiddlewareCommand** — A Command subclass that intercepts dispatch.
  * Middleware receives the subject, object, and `inner` (the wrapped command —
  * the next step in the chain), and can run logic before and after calling
- * `inner?.run()`. Registered at the command level via `Command.middleware`:
+ * `inner.run()`. Registered at the command level via `Command.middleware`:
  * wraps the full dispatch cycle — resolver method selection and execute —
  * for every Subject. The first element in the array is the outermost layer.
  *
@@ -864,8 +864,9 @@ export type Template<
  *
  * `inner` is the next command in the middleware chain — call `inner.run(subject, object)`
  * to invoke it, optionally enriching `object` first. `inner` is always defined when
- * invoked as part of a chain. Invoking a `MiddlewareCommand` directly via `run()` throws
- * — middleware must be registered in a chain, not called standalone.
+ * invoked as part of a chain. Invoking a `MiddlewareCommand` directly via `run()` is a
+ * compile error in well-typed TypeScript and throws at runtime when bypassed — always
+ * register middleware via `Command.middleware`.
  *
  * **Note:** TypeScript's fewer-params rule means an `execute` that omits `inner` still
  * satisfies this type — the requirement is not enforced at the implementer's declaration
