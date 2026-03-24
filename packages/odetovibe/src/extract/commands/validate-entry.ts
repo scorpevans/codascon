@@ -52,6 +52,15 @@ function allTypeImportNames(index: ConfigIndex): Set<string> {
 }
 
 /**
+ * Returns the effective subject list for a Command config.
+ * When `subjectUnion` is present (deprecated), returns it for backward compat.
+ * When absent, derives the list from the `dispatch` map's keys.
+ */
+function effectiveSubjectUnion(config: import("../../schema.js").Command): string[] {
+  return config.subjectUnion ?? Object.keys(config.dispatch);
+}
+
+/**
  * Normalize a command key to the base file name it produces:
  * strip a trailing "Command" suffix, then convert PascalCase to kebab-case.
  * "AccessBuildingCommand" → "access-building"
@@ -129,8 +138,9 @@ class PlainTypeValidatorDefault extends PlainTypeValidator {}
 //
 // Rules:
 //   - baseType, objectType, returnType must reference known domainTypes
-//   - subjectUnion entries must reference subjectTypes (types with resolverName)
-//   - dispatch must have exactly one entry per subjectUnion member
+//   - effective subject list (dispatch keys, or subjectUnion when present)
+//     must reference subjectTypes (types with resolverName)
+//   - when subjectUnion is present: cross-validated against dispatch keys
 //   - dispatch values must be plain strategy names (no dot notation)
 //   - dispatch values must resolve to a known strategy within this Command's templates
 //   - strategy names must be unique across all templates within a Command
@@ -156,18 +166,21 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // subjectUnion entries must reference subjectTypes (types with resolverName) or typeImports
-    for (const subjectRef of config.subjectUnion) {
+    // effective subject list: dispatch keys (authoritative), or subjectUnion when present (deprecated)
+    const subjects = effectiveSubjectUnion(config);
+
+    // subject entries must reference subjectTypes (types with resolverName) or typeImports
+    for (const subjectRef of subjects) {
       if (importedNames.has(subjectRef)) {
         console.info(
-          `[odetovibe] INFO: typeImport "${subjectRef}" used as subjectUnion member of "${key}" — skipping Subject validation; compiler will enforce implementation`,
+          `[odetovibe] INFO: typeImport "${subjectRef}" used as subject of "${key}" — skipping Subject validation; compiler will enforce implementation`,
         );
       } else if (!findDomainType(object, subjectRef)) {
         errors.push(
           err(
             key,
             "subjectUnion-ref",
-            `subjectUnion entry "${subjectRef}" does not reference a known domainType`,
+            `subject "${subjectRef}" does not reference a known domainType`,
           ),
         );
       } else if (!object.subjectTypes.has(subjectRef)) {
@@ -175,17 +188,17 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
           err(
             key,
             "subjectUnion-resolverName",
-            `subjectUnion entry "${subjectRef}" is not a Subject (no resolverName)`,
+            `subject "${subjectRef}" is not a Subject (no resolverName)`,
           ),
         );
       }
     }
 
-    // dispatch coverage: exactly one entry per subjectUnion member
+    // cross-validation: when subjectUnion is present, it must match dispatch keys exactly
     const dispatchKeys = new Set(Object.keys(config.dispatch));
-    const unionSet = new Set(config.subjectUnion);
+    const unionSet = new Set(subjects);
 
-    for (const subjectRef of config.subjectUnion) {
+    for (const subjectRef of subjects) {
       if (!dispatchKeys.has(subjectRef)) {
         errors.push(
           err(
@@ -297,14 +310,14 @@ abstract class AbstractTemplateValidator implements Template<
     }
 
     if (config.subjectSubset) {
-      const union = new Set(cmdEntry.config.subjectUnion);
+      const union = new Set(effectiveSubjectUnion(cmdEntry.config));
       for (const ref of config.subjectSubset) {
         if (!union.has(ref)) {
           errors.push(
             err(
               key,
               "subjectSubset",
-              `subjectSubset entry "${ref}" is not in "${commandKey}"'s subjectUnion`,
+              `subjectSubset entry "${ref}" is not in "${commandKey}"'s subject union`,
             ),
           );
         }
@@ -378,7 +391,8 @@ abstract class StrategyValidator implements Template<
         );
       } else {
         const cmdEntry = object.commands.get(commandKey);
-        const parentSubset = tpl.config.subjectSubset ?? cmdEntry?.config.subjectUnion ?? [];
+        const parentSubset =
+          tpl.config.subjectSubset ?? (cmdEntry ? effectiveSubjectUnion(cmdEntry.config) : []);
         const parentSet = new Set(parentSubset);
         for (const ref of config.subjectSubset) {
           if (!parentSet.has(ref)) {
