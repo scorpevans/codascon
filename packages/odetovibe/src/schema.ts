@@ -22,16 +22,18 @@
  *   are plain types used as object types, return types, or base types.
  *
  * - **Command**: An operation performed on Subjects. Declares its generic
- *   parameters (base type, object type, return type, subject union) and
- *   its dispatch map — which Template or Strategy handles each Subject.
- *   A Command may also declare an ordered list of middleware to apply.
+ *   parameters (base type, object type, return type) and its dispatch map —
+ *   which Strategy handles each Subject. The dispatch map's keys are the
+ *   authoritative subject list. A Command may also declare an ordered list
+ *   of middleware to apply.
  *
  * - **MiddlewareCommand**: An interceptor for a Command's dispatch. Declared
  *   in the top-level `middleware` map. Structurally identical to a Command —
  *   same generic parameters, same dispatch map, same templates — but generates
  *   a class extending `MiddlewareCommand<B, O, R, BSL>` rather than
- *   `Command<B, O, R, BSL>`. A middleware's `subjectUnion` must be a superset
- *   of every Command it is registered in (coverage, not equality).
+ *   `Command<B, O, R, BSL>`. A middleware's subject union (its dispatch keys)
+ *   must be a superset of every Command it is registered in (coverage, not
+ *   equality).
  *
  * - **Template**: The strategy interface/abstract class. Declares which
  *   Command it serves, its hook dependencies (other Commands invoked during
@@ -62,17 +64,16 @@
  *    names, looked up across the Templates of the same Command.
  *
  * 3. **Subject identity**: A `domainTypes` entry with a `resolverName` property
- *    is a Subject; without it, a plain type. All keys in a Command's `dispatch`
- *    map (and `subjectUnion` entries when present) must reference Subjects
- *    (types with `resolverName`).
+ *    is a Subject; without it, a plain type. (The dispatch key constraint is
+ *    stated in rule 1; this rule defines the distinction for reference.)
  *
  * 4. **resolverName convention**: By convention, `resolverName` should be prefixed
  *    with `"resolve"` (e.g. `"resolveStudent"`). The resolverName must be unique
- *    across all Subjects used within the same Command's subject union.
+ *    across all Subjects used within the same Command's subject list.
  *
  * 5. **Template subjectSubset**: When provided, must be a subset of the
- *    parent Command's `subjectUnion`. When omitted, defaults to the
- *    full `subjectUnion`.
+ *    parent Command's effective subject union (its `dispatch` keys). When
+ *    omitted, defaults to the full subject union.
  *
  * 6. **Strategy subjectSubset**: Must be a subset of the parent Template's
  *    effective `subjectSubset`. Only meaningful when the Template's
@@ -94,9 +95,10 @@
  *     map.
  *
  * 11. **Middleware coverage**: Each middleware in a Command's `middleware`
- *     list must declare a `subjectUnion` that is a superset of (or equal to)
- *     the Command's `subjectUnion`. A middleware covering fewer Subjects than
- *     the Command would leave some Subjects unintercepted.
+ *     list must cover all Subjects in the Command's dispatch map — its own
+ *     dispatch keys must be a superset of the Command's dispatch keys. A
+ *     middleware covering fewer Subjects than the Command would leave some
+ *     Subjects unintercepted.
  *
  * ## Out of Scope
  *
@@ -173,7 +175,7 @@
  *     middleware: [AuditMiddleware]
  *     dispatch:
  *       Student: DepartmentMatch
- *       Professor: GrantAccess
+ *       Professor: GrantAccessDefault
  *     templates:
  *       AccessTemplate:
  *         isParameterized: true
@@ -189,7 +191,8 @@
  *               audit: StrictAuditCommand
  *       GrantAccess:
  *         isParameterized: false
- *         strategies: {}
+ *         strategies:
+ *           GrantAccessDefault: {}
  * ```
  *
  */
@@ -202,7 +205,7 @@ export type DomainTypeRef = string;
 /** Key in `domainTypes` that must have `resolverName` (a Subject). */
 export type SubjectRef = string;
 
-/** Key in `commands`. */
+/** Key in `commands` or `middleware`. */
 export type CommandRef = string;
 
 /** Unqualified reference to a Template: `"TemplateName"`. */
@@ -240,10 +243,10 @@ export type DomainType = {
  * An operation that can be performed on Subjects.
  *
  * Maps directly to a class extending `Command<B, O, R, CSU>` in the
- * framework. The Command's resolver methods (one per Subject in the union)
- * are not declared here — they are derived from `subjectUnion` entries
- * and their `resolverName` values. The `dispatch` map specifies which
- * Template or Strategy each resolver method resolves to.
+ * framework. The Command's resolver methods (one per Subject) are not
+ * declared here — they are derived from the `dispatch` map's keys and
+ * the `resolverName` of each Subject in `domainTypes`. The `dispatch`
+ * map specifies which Strategy each resolver method returns.
  *
  * @property commandName    — The string literal used as the Command's
  *                            `commandName` property. Also used as the key
@@ -251,7 +254,7 @@ export type DomainType = {
  *                            hook on a Template.
  *
  * @property baseType       — The `B` generic parameter. All Subjects in
- *                            `subjectUnion` must extend `B & Subject`.
+ *                            the `dispatch` map must extend `B & Subject`.
  *                            Use this to constrain Subjects to share a
  *                            common interface (e.g. `CampusPerson`).
  *
@@ -289,10 +292,11 @@ export type DomainType = {
  *                            (runs first, finishes last).
  *
  *                            Each listed middleware must cover all Subjects in
- *                            this Command's `subjectUnion` (middleware BSL ⊇
- *                            command BSL — coverage, not equality). Codegen
- *                            emits an `override get middleware()` getter on the
- *                            Command class returning the registered instances.
+ *                            this Command's dispatch map — the middleware's own
+ *                            dispatch keys must be a superset of the Command's
+ *                            (coverage, not equality). Codegen emits an
+ *                            `override get middleware()` getter on the Command
+ *                            class returning the registered instances.
  *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
@@ -385,8 +389,9 @@ export type Command = {
  *
  * @property subjectSubset  — Optional narrowing of the parent Command's
  *                            subject union. When provided, must be a subset
- *                            of the Command's `subjectUnion`. When omitted,
- *                            defaults to the full `subjectUnion`.
+ *                            of the Command's effective subject union (its
+ *                            `dispatch` keys). When omitted, defaults to the
+ *                            full subject union.
  *
  *                            This becomes the `SU` parameter (or its
  *                            constraint, when `isParameterized` is true).
@@ -438,7 +443,7 @@ export type Template = {
  * @property commandHooks   — Hook overrides. Keys must be a subset of the
  *                            parent Template's `commandHooks` keys —
  *                            Strategies do not introduce new hooks. Values
- *                            reference entries in `commands`.
+ *                            reference entries in `commands` or `middleware`.
  *
  *                            Use this when the Strategy needs a different
  *                            concrete Command for a hook than what the
@@ -476,8 +481,9 @@ export type Strategy = {
  *
  *                                 These types are not first-class domain
  *                                 participants — they cannot appear in structural
- *                                 positions such as `subjectUnion` or `dispatch`.
- *                                 Only `domainTypes` entries are first-class.
+ *                                 positions such as `dispatch` keys or
+ *                                 `subjectSubset` lists. Only `domainTypes`
+ *                                 entries are first-class.
  *
  *                                 ```yaml
  *                                 typeImports:
