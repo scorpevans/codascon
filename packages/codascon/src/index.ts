@@ -934,9 +934,18 @@ export type MiddlewareTemplate<
  * }
  * ```
  * The subject is fixed across the chain — dispatch routes on subject type,
- * so passing a different subject to `inner?.run()` would re-route to that
+ * so passing a different subject to `inner.run()` would re-route to that
  * subject's resolver in the next chain step, which is rarely intended. Only
  * the object should be enriched.
+ *
+ * For the spread to typecheck, `O` must declare the enrichment slot as
+ * optional:
+ * ```ts
+ * type Ctx = { factor: number; timestamp?: number };
+ * //                          ^^^^^^^^^^
+ * ```
+ * Strategies that do not use the slot simply ignore it. Enrichment fields
+ * belong in `O` — they are part of the command's contextual contract.
  *
  * ## Standalone invocation
  *
