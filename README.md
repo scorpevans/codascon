@@ -239,6 +239,68 @@ const result = await parkingCmd.run(student, lotA);
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
 
+### Middleware
+
+A `MiddlewareCommand` intercepts every dispatch through a `Command` — wrapping resolver selection
+and strategy execution for every Subject. Resolver methods return `MiddlewareTemplate` instead of
+`Template`, with a third `inner` continuation argument in `execute`:
+
+```typescript
+class LogMiddleware extends MiddlewareCommand<
+  Principal, // base type — must match the Command's
+  Building,
+  AccessResult,
+  [Student, Professor] // must cover all Subjects in any Command it wraps
+> {
+  readonly commandName = "log" as const;
+
+  resolveStudent(_s: Student, _b: Building): MiddlewareTemplate<LogMiddleware, [], Student> {
+    return {
+      execute(s: Student, b: Building, inner: Runnable<Student, Building, AccessResult>) {
+        console.log(`Attempting access to ${b.name}`);
+        const result = inner.run(s, b); // invoke the next step in the chain
+        console.log(`Access ${result.granted ? "granted" : "denied"}`);
+        return result;
+      },
+    };
+  }
+
+  resolveProfessor(_p: Professor, _b: Building): MiddlewareTemplate<LogMiddleware, [], Professor> {
+    return { execute: (s, b, inner) => inner.run(s, b) }; // passthrough
+  }
+}
+```
+
+Register middleware by overriding `get middleware()` on the Command — first element is outermost:
+
+```typescript
+class AccessBuildingCommand extends Command<
+  Principal,
+  Building,
+  AccessResult,
+  [Student, Professor]
+> {
+  readonly commandName = "accessBuilding" as const;
+
+  override get middleware() {
+    return [new LogMiddleware()]; // [auth, log] → auth wraps log wraps dispatch
+  }
+
+  resolveStudent(_s: Student, _b: Building) {
+    return new BasicAccess();
+  }
+  resolveProfessor(_p: Professor, _b: Building) {
+    return new FullAccess();
+  }
+}
+```
+
+Omitting `inner.run()` short-circuits the chain — the downstream command and strategy do not
+execute. Pass a modified object to `inner.run()` to enrich context downstream. Calling
+`MiddlewareCommand.run()` directly is a compile error — only register middleware via
+`Command.middleware`. To share middleware across all Commands in a domain, override
+`get middleware()` in a shared base class and compose with `[...super.middleware, mw]`.
+
 ## Odetovibe — YAML Configuration & Code Generation
 
 Instead of jumping straight into coding, you can focus on architecting your business logic and let **Odetovibe** generate the TypeScript scaffolding:

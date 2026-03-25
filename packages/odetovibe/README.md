@@ -64,6 +64,21 @@ domainTypes:
   Building: {}
   AccessResult: {}
 
+# Optional: cross-cutting concerns registered on Commands via middleware: [...]
+middleware:
+  LogMiddleware:
+    commandName: log
+    baseType: Principal
+    objectType: Building
+    returnType: AccessResult
+    dispatch:
+      Student: LogTemplate
+      Professor: LogTemplate
+    templates:
+      LogTemplate:
+        isParameterized: false
+        strategies: {}
+
 commands:
   AccessBuildingCommand:
     commandName: accessBuilding
@@ -71,6 +86,7 @@ commands:
     objectType: Building
     returnType: AccessResult
     subjectUnion: [Student, Professor]
+    middleware: [LogMiddleware] # first is outermost; applied to every dispatch
     dispatch:
       Student: BasicAccess
       Professor: FullAccess
@@ -90,6 +106,9 @@ commands:
 - All Templates generate as abstract classes, regardless of whether `strategies` is empty or not
 - Template `subjectSubset` must be a subset of the parent Command's `subjectUnion`
 - Strategy `subjectSubset` must be a subset of the parent Template's `subjectSubset`; invalid (error) when the parent Template is not parameterized
+- `middleware` entries are structurally identical to Commands — same generic params, dispatch map, and templates; generated template `execute` stubs receive a third `inner: Runnable<SU, O, R>` argument (call `inner.run(subject, object)` to proceed; omit to short-circuit)
+- A `command`'s `middleware:` list registers interceptors in order — first is outermost; each middleware's dispatch must cover all Subjects in the Command
+- Commands with a `middleware:` list emit `override get middleware()` — no manual wiring needed
 
 See [`src/schema.ts`](./src/schema.ts) for the full schema type definitions and validation rules.
 
@@ -134,13 +153,17 @@ for (const fileResult of results) {
 
 For each YAML entry, odetovibe emits:
 
-| YAML entry                          | Generated output                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------------------------- |
-| `domainType` with `resolverName`    | `class SubjectName extends Subject`                                                   |
-| `domainType` without `resolverName` | `interface TypeName`                                                                  |
-| `command`                           | `class CommandName extends Command<...>` with typed resolver method stubs             |
-| template                            | `abstract class TemplateName implements Template<...>` with a concrete `execute` stub |
-| `strategy`                          | `class StrategyName extends TemplateName`                                             |
+| YAML entry                          | Generated output                                                                               |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `domainType` with `resolverName`    | `class SubjectName extends Subject`                                                            |
+| `domainType` without `resolverName` | `interface TypeName`                                                                           |
+| `command`                           | `class CommandName extends Command<...>` with typed resolver method stubs                      |
+| template                            | `abstract class TemplateName implements Template<...>` with a concrete `execute` stub          |
+| `strategy`                          | `class StrategyName extends TemplateName`                                                      |
+| `middleware` command                | `class MiddlewareName extends MiddlewareCommand<...>` with `MiddlewareTemplate` resolver stubs |
+| middleware template                 | `abstract class TemplateName implements MiddlewareTemplate<...>` with a 3-arg `execute` stub   |
+| middleware strategy                 | `class StrategyName extends TemplateName`                                                      |
+| `command` with `middleware:` list   | Adds `override get middleware()` returning the registered middleware instances                 |
 
 All classes are fully typed — generic parameters, resolver method signatures, hook properties — so the compiler enforces the codascon protocol from the first run.
 
