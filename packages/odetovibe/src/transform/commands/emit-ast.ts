@@ -339,12 +339,14 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       ]);
     }
 
-    // Only emit singletons for concrete strategy targets — abstract template names
-    // (dispatch values that resolve directly to a template, not a strategy) cannot be
-    // instantiated and fall back to the throw stub.
+    // Only emit singletons for subjects that will receive a resolver stub:
+    //   - exclude abstract template targets (cannot be instantiated)
+    //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
     const concreteDispatch = Object.fromEntries(
       Object.entries(config.dispatch).filter(
-        ([, v]) => !configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(v)}`),
+        ([subjectRef, v]) =>
+          !configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(v)}`) &&
+          configIndex.subjectTypes.has(subjectRef),
       ),
     );
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
@@ -994,12 +996,14 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       initializer: `"${config.commandName}" as const`,
     });
 
-    // Only emit singletons for concrete strategy targets — abstract template names
-    // (dispatch values that resolve directly to a middleware template, not a strategy)
-    // cannot be instantiated and fall back to the throw stub.
+    // Only emit singletons for subjects that will receive a resolver stub:
+    //   - exclude abstract middleware template targets (cannot be instantiated)
+    //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
     const concreteDispatch = Object.fromEntries(
       Object.entries(config.dispatch).filter(
-        ([, v]) => !configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(v)}`),
+        ([subjectRef, v]) =>
+          !configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(v)}`) &&
+          configIndex.subjectTypes.has(subjectRef),
       ),
     );
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);

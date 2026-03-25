@@ -21,8 +21,11 @@
  *     when generated as false (strategies, commands, subjects), client's choice is preserved.
  *   - Class implements → union-merge by base name: codegen entries win per
  *     base name; user-added entries (not in generated) are preserved.
- *   - Class properties → odetovibe owns; always updated.
- *   - Class constructors → odetovibe owns; always updated.
+ *   - Class properties (existing in file) → odetovibe owns; always updated.
+ *   - Class properties (absent from file) → injected only when no associated resolver method
+ *     already has a non-empty body.  A non-empty body means implementation ownership belongs
+ *     to the developer; injecting the property would produce an orphan.
+ *   - Class constructors → user owns; preserved unconditionally (codegen never emits constructors).
  *   - Class method signatures → odetovibe owns; always updated.
  *   - Class method bodies → user owns; always preserved regardless of content.
  *   - User-added class members (absent from generated) → preserved.
@@ -42,8 +45,6 @@ import type {
   ClassDeclaration,
   MethodDeclaration,
   MethodDeclarationStructure,
-  ConstructorDeclaration,
-  ConstructorDeclarationStructure,
   PropertyDeclaration,
   ImportSpecifier,
 } from "ts-morph";
@@ -320,7 +321,9 @@ function implBaseName(text: string): string {
  * - `implements` → union-merge by base name: codegen entries replace any
  *   existing entry with the same base name; user-added entries (base names
  *   absent from generated) are preserved.
- * - Properties and constructors → codegen owns; always updated.
+ * - Properties (existing) → codegen owns; always updated.
+ * - Properties (new) → injected only when no associated resolver already has a non-empty body.
+ * - Constructors → user owns; not touched (codegen never emits constructors).
  * - Methods → merged via mergeMethod (signature updated, body preserved).
  * - Members present in existing but absent from generated → preserved.
  */
@@ -390,15 +393,21 @@ function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): vo
         docs: existingProp.getJsDocs().map((d) => d.getStructure()),
       });
     } else {
-      existing.addProperty(genProp.getStructure());
-    }
-  }
-
-  if (generated.getConstructors().length > 0) {
-    for (const ctor of existing.getConstructors()) ctor.remove();
-    for (const genCtor of generated.getConstructors()) {
-      // Generated code never uses constructor overloads — cast is safe.
-      existing.addConstructor(genCtor.getStructure() as ConstructorDeclarationStructure);
+      // Only inject a property absent from the existing class when there is no
+      // associated method that already has a non-empty body.  A non-empty body
+      // means implementation ownership belongs to the developer; injecting the
+      // property would produce an orphan the developer never asked for.
+      const propRef = `this.${genProp.getName()}`;
+      const referencingMethods = generated
+        .getMethods()
+        .filter((m) => (m.getBodyText() ?? "").includes(propRef));
+      const shouldAdd =
+        referencingMethods.length === 0 ||
+        referencingMethods.every((genMethod) => {
+          const existingMethod = existing.getMethod(genMethod.getName());
+          return !existingMethod || (existingMethod.getBodyText() ?? "").length === 0;
+        });
+      if (shouldAdd) existing.addProperty(genProp.getStructure());
     }
   }
 
@@ -470,14 +479,6 @@ function propSignature(p: PropertyDeclaration): string {
   const typePart = type ? `: ${type}` : "";
   const initPart = init ? ` = ${init}` : "";
   return `${mods} ${p.getName()}${typePart}${initPart}`.trim();
-}
-
-/** Canonical parameter list text for a constructor. */
-function ctorParamSignature(ctor: ConstructorDeclaration): string {
-  return ctor
-    .getParameters()
-    .map((p) => p.getText())
-    .join(", ");
 }
 
 /** Canonical signature text for a method (no body, no JSDoc).
@@ -554,22 +555,6 @@ function hasConflict(generatedText: string, existingContent: string): boolean {
       if (!existingProp) continue; // new property — not a conflict
       if (normalizeWs(propSignature(genProp)) !== normalizeWs(propSignature(existingProp)))
         return true;
-    }
-
-    // constructors — codegen owns completely when it declares any
-    const genCtors = genCls.getConstructors();
-    if (genCtors.length > 0) {
-      const existingCtors = existingCls.getConstructors();
-      if (existingCtors.length > 0) {
-        if (genCtors.length !== existingCtors.length) return true;
-        for (let i = 0; i < genCtors.length; i++) {
-          if (
-            normalizeWs(ctorParamSignature(genCtors[i])) !==
-            normalizeWs(ctorParamSignature(existingCtors[i]))
-          )
-            return true;
-        }
-      }
     }
 
     // method signatures
