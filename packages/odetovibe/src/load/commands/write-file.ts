@@ -39,7 +39,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { format as prettierFormat, resolveConfig as prettierResolveConfig } from "prettier";
-import { Project, IndentationText } from "ts-morph";
+import { Project, IndentationText, SyntaxKind } from "ts-morph";
 import type {
   SourceFile,
   ClassDeclaration,
@@ -397,10 +397,18 @@ function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): vo
       // associated method that already has a non-empty body.  A non-empty body
       // means implementation ownership belongs to the developer; injecting the
       // property would produce an orphan the developer never asked for.
-      const propRef = `this.${genProp.getName()}`;
+      const propName = genProp.getName();
       const referencingMethods = generated
         .getMethods()
-        .filter((m) => (m.getBodyText() ?? "").includes(propRef));
+        .filter((m) =>
+          m
+            .getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)
+            .some(
+              (pae) =>
+                pae.getExpression().getKind() === SyntaxKind.ThisKeyword &&
+                pae.getName() === propName,
+            ),
+        );
       const shouldAdd =
         referencingMethods.length === 0 ||
         referencingMethods.every((genMethod) => {
