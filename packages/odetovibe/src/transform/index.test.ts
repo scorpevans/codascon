@@ -274,6 +274,79 @@ describe("CommandClassEmitter", () => {
     expect(t).toContain("@odetovibe-generated");
   });
 
+  it("emits a private readonly singleton for a strategy dispatch target", () => {
+    // Use a configIndex with abstractTemplates populated so the filter applies.
+    // Student → "AccessTemplate.DepartmentMatch" — terminal "DepartmentMatch" is NOT in abstractTemplates → singleton
+    // Professor → "GrantAccess" — "AccessBuildingCommand.GrantAccess" IS in abstractTemplates → no singleton
+    const withTemplates = idx({
+      ...withCmd,
+      abstractTemplates: new Map([
+        [
+          "AccessBuildingCommand.GrantAccess",
+          new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+            isParameterized: false,
+            strategies: {},
+          }),
+        ],
+      ]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(withTemplates, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    const dept = cls.getPropertyOrThrow("departmentMatch");
+    expect(dept.isReadonly()).toBe(true);
+    expect(dept.getInitializer()?.getText()).toBe("new DepartmentMatch()");
+    expect(cls.getProperty("grantAccess")).toBeUndefined(); // abstract template → no singleton
+  });
+
+  it("resolver stub returns singleton for strategy target; throws for abstract template target", () => {
+    const withTemplates = idx({
+      ...withCmd,
+      abstractTemplates: new Map([
+        [
+          "AccessBuildingCommand.GrantAccess",
+          new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+            isParameterized: false,
+            strategies: {},
+          }),
+        ],
+      ]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(withTemplates, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    expect(cls.getMethodOrThrow("resolveStudent").getBodyText()).toContain(
+      "return this.departmentMatch",
+    );
+    expect(cls.getMethodOrThrow("resolveProfessor").getBodyText()).toContain("throw new Error");
+  });
+
+  it("deduplicates singleton fields when multiple subjects share the same dispatch target", () => {
+    const sharedDispatchCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "SharedStrategy", Professor: "SharedStrategy" },
+    });
+    const project = makeProject();
+    emitCmd.run(sharedDispatchCmd, ctx(withTypes, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    // Only one singleton field, not two
+    const singletonProps = cls.getProperties().filter((p) => p.getName() === "sharedStrategy");
+    expect(singletonProps).toHaveLength(1);
+    expect(cls.getMethodOrThrow("resolveStudent").getBodyText()).toContain(
+      "return this.sharedStrategy",
+    );
+    expect(cls.getMethodOrThrow("resolveProfessor").getBodyText()).toContain(
+      "return this.sharedStrategy",
+    );
+  });
+
   it("imports Command as value and Template as type from codascon", () => {
     const project = makeProject();
     emitCmd.run(cmdEntry, ctx(withTypes, project));
@@ -1419,6 +1492,36 @@ describe("MiddlewareCommandClassEmitter", () => {
       .getImportDeclarations()
       .find((d) => d.getModuleSpecifierValue() === "codascon" && d.isTypeOnly());
     expect(typeImport?.getNamedImports().map((n) => n.getName())).toContain("MiddlewareTemplate");
+  });
+
+  it("emits private readonly singleton fields for each unique dispatch target", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/trace-middleware.ts")
+      .getClassOrThrow("TraceMiddleware");
+    // dispatch: Rock → "TraceRockDefault" → traceRockDefault
+    //           Gem  → "TraceGemDefault"  → traceGemDefault
+    const rockField = cls.getPropertyOrThrow("traceRockDefault");
+    expect(rockField.isReadonly()).toBe(true);
+    expect(rockField.getInitializer()?.getText()).toBe("new TraceRockDefault()");
+    const gemField = cls.getPropertyOrThrow("traceGemDefault");
+    expect(gemField.isReadonly()).toBe(true);
+    expect(gemField.getInitializer()?.getText()).toBe("new TraceGemDefault()");
+  });
+
+  it("resolver stubs return the singleton field instead of throwing", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/trace-middleware.ts")
+      .getClassOrThrow("TraceMiddleware");
+    expect(cls.getMethodOrThrow("resolveRock").getBodyText()).toContain(
+      "return this.traceRockDefault",
+    );
+    expect(cls.getMethodOrThrow("resolveGem").getBodyText()).toContain(
+      "return this.traceGemDefault",
+    );
   });
 });
 

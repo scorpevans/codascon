@@ -14,7 +14,7 @@
 
 import { Command } from "codascon";
 import type { Template } from "codascon";
-import type { ClassDeclaration, Project, SourceFile } from "ts-morph";
+import { Scope, type ClassDeclaration, type Project, type SourceFile } from "ts-morph";
 import type {
   ConfigEntry,
   SubjectTypeEntry,
@@ -100,6 +100,95 @@ function domainTypesRelPath(_namespace: string | undefined): string {
 function hookImportPath(hookCmdKey: string, namespace: string | undefined): string {
   const fileName = commandFilePath(hookCmdKey, namespace).split("/").pop()!;
   return `./${fileName.replace(/\.ts$/, ".js")}`;
+}
+
+/** Extracts the concrete class name from a dispatch target value.
+ * For qualified "TemplateName.StrategyName", returns "StrategyName".
+ * For plain "StrategyName", returns "StrategyName".
+ */
+function dispatchTargetClass(dispatchValue: string): string {
+  return dispatchValue.split(".").at(-1)!;
+}
+
+/** JavaScript/TypeScript reserved words that cannot be used as field names. */
+const RESERVED_IDENTIFIERS = new Set([
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "let",
+  "new",
+  "null",
+  "return",
+  "static",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+]);
+
+/**
+ * Derives the private singleton field name for a dispatch target class.
+ * Primary: camelCase of the class name (e.g. "TraceRockDefault" → "traceRockDefault").
+ * Fallback: prefix with commandName value when camelCase result is a reserved word
+ * (e.g. "Default" → "default" → "{commandName}Default").
+ */
+function singletonFieldName(className: string, commandName: string): string {
+  const camel = className.charAt(0).toLowerCase() + className.slice(1);
+  return RESERVED_IDENTIFIERS.has(camel) ? `${commandName}${className}` : camel;
+}
+
+/**
+ * Emits a private readonly singleton field on `cls` for each unique dispatch target.
+ * Returns a map from dispatch-target class name → emitted field name.
+ * Multiple subjects sharing the same dispatch target produce one deduplicated field.
+ */
+function emitDispatchSingletons(
+  cls: ClassDeclaration,
+  dispatch: Record<string, string>,
+  commandName: string,
+): Map<string, string> {
+  const classToField = new Map<string, string>();
+  for (const dispatchValue of Object.values(dispatch)) {
+    const className = dispatchTargetClass(dispatchValue);
+    if (!classToField.has(className)) {
+      classToField.set(className, singletonFieldName(className, commandName));
+    }
+  }
+  for (const [className, fieldName] of classToField) {
+    cls.addProperty({
+      name: fieldName,
+      scope: Scope.Private,
+      isReadonly: true,
+      initializer: `new ${className}()`,
+    });
+  }
+  return classToField;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -192,8 +281,10 @@ class InterfaceEmitterDefault extends InterfaceEmitter {}
 //
 // Emits: export class FooCommand extends Command<B, O, R, [S1, S2]> {
 //          readonly commandName = "foo" as const;
+//          private readonly strategy1 = new Strategy1();
+//          private readonly strategy2 = new Strategy2();
 //          resolveS1(subject: S1, object: Readonly<O>): Template<FooCommand, [], S1> {
-//            throw new Error("Not implemented"); // @odetovibe-generated
+//            return this.strategy1; // @odetovibe-generated
 //          }
 //          ...
 //        }
@@ -248,6 +339,16 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       ]);
     }
 
+    // Only emit singletons for concrete strategy targets — abstract template names
+    // (dispatch values that resolve directly to a template, not a strategy) cannot be
+    // instantiated and fall back to the throw stub.
+    const concreteDispatch = Object.fromEntries(
+      Object.entries(config.dispatch).filter(
+        ([, v]) => !configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(v)}`),
+      ),
+    );
+    const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
+
     for (const subjectRef of subjects) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
@@ -266,7 +367,15 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
         type: `Readonly<${config.objectType}>`,
       });
       method.setReturnType(`Template<${key}, [], ${subjectRef}>`);
-      method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
+      const dispatchValue = config.dispatch[subjectRef];
+      const fieldName = dispatchValue
+        ? singletonMap.get(dispatchTargetClass(dispatchValue))
+        : undefined;
+      method.addStatements([
+        fieldName
+          ? `return this.${fieldName}; // @odetovibe-generated`
+          : `throw new Error("Not implemented"); // @odetovibe-generated`,
+      ]);
     }
 
     return { targetFile: filePath };
@@ -836,8 +945,9 @@ class MiddlewareFixedParentStrategyEmitter extends MiddlewareStrategyClassEmitte
 //
 // Emits: export class AuditMiddleware extends MiddlewareCommand<B, O, R, [S1, S2]> {
 //          readonly commandName = "auditMiddleware" as const;
+//          private readonly strategy1 = new Strategy1();
 //          resolveS1(subject: S1, object: Readonly<O>): MiddlewareTemplate<AuditMiddleware, [], S1> {
-//            throw new Error("Not implemented"); // @odetovibe-generated
+//            return this.strategy1; // @odetovibe-generated
 //          }
 //        }
 // Target: <namespace>/commands/<middleware-name>.ts
@@ -884,6 +994,16 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       initializer: `"${config.commandName}" as const`,
     });
 
+    // Only emit singletons for concrete strategy targets — abstract template names
+    // (dispatch values that resolve directly to a middleware template, not a strategy)
+    // cannot be instantiated and fall back to the throw stub.
+    const concreteDispatch = Object.fromEntries(
+      Object.entries(config.dispatch).filter(
+        ([, v]) => !configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(v)}`),
+      ),
+    );
+    const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
+
     for (const subjectRef of subjects) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
@@ -902,7 +1022,15 @@ abstract class MiddlewareCommandClassEmitter implements Template<
         type: `Readonly<${config.objectType}>`,
       });
       method.setReturnType(`MiddlewareTemplate<${key}, [], ${subjectRef}>`);
-      method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
+      const dispatchValue = config.dispatch[subjectRef];
+      const fieldName = dispatchValue
+        ? singletonMap.get(dispatchTargetClass(dispatchValue))
+        : undefined;
+      method.addStatements([
+        fieldName
+          ? `return this.${fieldName}; // @odetovibe-generated`
+          : `throw new Error("Not implemented"); // @odetovibe-generated`,
+      ]);
     }
 
     return { targetFile: filePath };
