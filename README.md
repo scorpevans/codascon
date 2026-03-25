@@ -445,6 +445,7 @@ Additional implementation rules:
 - Apply the template method pattern in `execute`: extract variable behaviour into `protected abstract` methods or fields that Strategies implement
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
 - Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
+- Use middleware for cross-cutting concerns such as logging, auditing, timing, and default enrichments — prefer a middleware Command over duplicating the same logic in individual Templates or Strategies
 
 ### Step 4: Implement This Domain
 
