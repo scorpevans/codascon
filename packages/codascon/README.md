@@ -86,7 +86,7 @@ class Professor extends Subject implements Person {
 
 ### Define a Command
 
-A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute. When all subjects are handled the same way, a `defaultResolver` can be declared instead of per-subject methods.
+A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute. A `defaultResolver` can be provided as a fallback instead of listing all resolver methods.
 
 ```typescript
 import { Command } from "codascon";
