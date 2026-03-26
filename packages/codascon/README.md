@@ -57,56 +57,65 @@ pnpm add codascon
 A **`Subject`** is an entity (`Student`, `Professor`). Codascon enforces that each `Subject` declares a `resolverName` — the name of the resolver method it expects its `Command`s to implement.
 
 ```typescript
-// index.ts
 import { Subject } from "codascon";
 
-interface Principal {
-  clearance: string;
+interface Person {
+  name: string;
 }
 
-class Student extends Subject implements Principal {
+class Student extends Subject implements Person {
   readonly resolverName = "resolveStudent" as const;
-  clearance = "basic";
+  constructor(
+    public readonly name: string,
+    public readonly year: number,
+  ) {
+    super();
+  }
 }
 
-class Professor extends Subject implements Principal {
+class Professor extends Subject implements Person {
   readonly resolverName = "resolveProfessor" as const;
-  clearance = "full";
+  constructor(
+    public readonly name: string,
+    public readonly department: string,
+  ) {
+    super();
+  }
 }
 ```
 
 ### Define a Command
 
-A **`Command`** is an operation (`AccessBuildingCommand`). Codascon enforces (at the call site) that a `Command` implements the resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute.
+A **`Command`** is an operation (`CheckoutCommand`). Codascon enforces (at the call site) that a `Command` implements the resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute.
 
 ```typescript
-// index.ts
 import { Command } from "codascon";
 
-interface Building {
+interface Equipment {
   name: string;
-  department: string;
+  days?: number;
 }
 
-interface AccessResult {
-  granted: boolean;
-  reason: string;
+interface CheckoutResult {
+  approved: boolean;
+  daysGranted?: number;
+  reason?: string;
 }
 
-class AccessBuildingCommand extends Command<
-  { clearance: string }, // base type — any type; all subjects must extend it
-  Building, // object type — context
-  AccessResult, // return type
+class CheckoutCommand extends Command<
+  Person, // base type — all Subjects must extend it
+  Equipment, // object type — context passed to every resolver and execute
+  CheckoutResult, // return type
   [Student, Professor] // subject union
 > {
-  readonly commandName = "accessBuilding" as const;
+  readonly commandName = "checkout" as const;
 
-  resolveStudent(_student: Student, _building: Building) {
-    return new BasicAccess(); // Strategy — defined below
+  resolveStudent(_student: Student, _equipment: Equipment) {
+    return new StudentCheckout(); // Strategy — defined below
   }
 
-  resolveProfessor(_professor: Professor, _building: Building) {
-    return new FullAccess(); // Strategy — defined below
+  resolveProfessor(_professor: Professor, _equipment: Equipment) {
+    return new ProfessorCheckout(); // Strategy — defined below
   }
 }
 ```
@@ -116,25 +125,27 @@ class AccessBuildingCommand extends Command<
 A `Template` abstract class implements how a `Command` is executed. It may be configured to handle only a subset of the `Command`'s `Subject` union and may declare **hooks** — references to other `Command`s it invokes during execution (see Advanced Patterns below). `Strategy` classes extend those implementations.
 
 ```typescript
-// index.ts
 import { type Template, type CommandSubjectUnion } from "codascon";
 
-abstract class AccessTemplate implements Template<AccessBuildingCommand> {
-  execute(subject: CommandSubjectUnion<AccessBuildingCommand>, building: Building): AccessResult {
-    return this.tryAccess(subject.clearance, building.name);
+abstract class CheckoutTemplate implements Template<CheckoutCommand> {
+  execute(subject: CommandSubjectUnion<CheckoutCommand>, equipment: Equipment): CheckoutResult {
+    return this.computeTerms(subject, equipment);
   }
-  protected abstract tryAccess(clearance: string, buildingName: string): AccessResult;
+  protected abstract computeTerms(
+    subject: CommandSubjectUnion<CheckoutCommand>,
+    equipment: Equipment,
+  ): CheckoutResult;
 }
 
-class BasicAccess extends AccessTemplate {
-  protected tryAccess(clearance: string, buildingName: string): AccessResult {
-    return { granted: true, reason: `${clearance} access to ${buildingName}` };
+class StudentCheckout extends CheckoutTemplate {
+  protected computeTerms(_student: Student, equipment: Equipment): CheckoutResult {
+    return { approved: true, daysGranted: equipment.days ?? 7 };
   }
 }
 
-class FullAccess extends AccessTemplate {
-  protected tryAccess(clearance: string, buildingName: string): AccessResult {
-    return { granted: true, reason: `${clearance} access to ${buildingName}; including labs` };
+class ProfessorCheckout extends CheckoutTemplate {
+  protected computeTerms(_professor: Professor, equipment: Equipment): CheckoutResult {
+    return { approved: true, daysGranted: equipment.days ?? 14 };
   }
 }
 ```
@@ -142,10 +153,9 @@ class FullAccess extends AccessTemplate {
 ### Run
 
 ```typescript
-// index.ts
-const cmd = new AccessBuildingCommand();
-const result = cmd.run(new Professor(), { name: "Science Hall", department: "CS" });
-// { granted: true, reason: "full access to Science Hall; including labs" }
+const checkout = new CheckoutCommand();
+const result = checkout.run(new Professor("Prof. Smith", "CS"), { name: "Projector", days: 7 });
+// { approved: true, daysGranted: 7 }
 ```
 
 ```
@@ -161,46 +171,73 @@ command.run(subject, object)
 
 ### Command Hooks
 
-`Template`s can declare dependencies on other `Command`s via the `H` parameter:
+`Template`s can declare dependencies on other `Command`s via the `H` parameter. Hook properties are named after the Command's `commandName` and instantiated on the Template — shared across all Strategies:
 
 ```typescript
-abstract class AuditedTemplate implements Template<MyCommand, [AuditCommand, LogCommand]> {
-  // Instantiated on the Template — shared across all Strategies
-  readonly log = new LogCommand();
-  // Abstract — each Strategy must provide its own instance
-  abstract readonly audit: AuditCommand;
+// A log command — used as a hook in CheckoutTemplate
+class LogCommand extends Command<Person, { action: string }, void, [Student, Professor]> {
+  readonly commandName = "log" as const;
+  resolveStudent() {
+    return new LogActivity();
+  }
+  resolveProfessor() {
+    return new LogActivity();
+  }
 }
 
-class MyStrategy extends AuditedTemplate {
-  readonly audit = new AuditCommand(); // Strategy provides the abstract hook
+class LogActivity {
+  execute(subject: Student | Professor, entry: { action: string }): void {
+    console.log(`[${subject.name}] ${entry.action}`);
+  }
+}
+
+// CheckoutTemplate declares LogCommand as a hook — property named after commandName ("log")
+abstract class CheckoutTemplate implements Template<CheckoutCommand, [LogCommand]> {
+  readonly log = new LogCommand(); // instantiated on the Template — shared across all Strategies
+
+  execute(subject: CommandSubjectUnion<CheckoutCommand>, equipment: Equipment): CheckoutResult {
+    this.log.run(subject, { action: `checkout "${equipment.name}"` });
+    return this.computeTerms(subject, equipment);
+  }
+
+  protected abstract computeTerms(
+    subject: CommandSubjectUnion<CheckoutCommand>,
+    equipment: Equipment,
+  ): CheckoutResult;
 }
 ```
+
+Hook properties can also be `abstract` — requiring each Strategy to provide its own instance instead of sharing the Template's.
 
 ### Parameterized Templates
 
 A `Template` can leave its subject union as a type parameter, letting `Strategy` classes narrow which `Subject`s they handle:
 
 ```typescript
-abstract class CheckoutTemplate<SU extends CommandSubjectUnion<CheckoutCmd>> implements Template<
-  CheckoutCmd,
-  [AccessBuildingCommand],
-  SU
-> {
-  constructor(readonly accessBuilding: AccessBuildingCommand) {}
+// SU lets each Strategy declare exactly which Subjects it handles
+abstract class CheckoutTemplate<
+  SU extends CommandSubjectUnion<CheckoutCommand>,
+> implements Template<CheckoutCommand, [LogCommand], SU> {
+  readonly log = new LogCommand();
 
   execute(subject: SU, equipment: Equipment): CheckoutResult {
-    const access = this.accessBuilding.run(subject, equipmentBuilding);
-    if (!access.granted) return deny(access.reason);
+    this.log.run(subject, { action: `checkout "${equipment.name}" for ${equipment.days} days` });
     return this.computeTerms(subject, equipment);
   }
 
-  protected abstract computeTerms(subject: SU, eq: Equipment): CheckoutResult;
+  protected abstract computeTerms(subject: SU, equipment: Equipment): CheckoutResult;
 }
 
-// Strategy narrows to Student only
+// Each Strategy narrows SU to its specific Subject
 class StudentCheckout extends CheckoutTemplate<Student> {
-  protected computeTerms(student: Student, eq: Equipment): CheckoutResult {
-    return { approved: true, days: 14 };
+  protected computeTerms(_student: Student, equipment: Equipment): CheckoutResult {
+    return { approved: true, daysGranted: equipment.days };
+  }
+}
+
+class ProfessorCheckout extends CheckoutTemplate<Professor> {
+  protected computeTerms(_professor: Professor, equipment: Equipment): CheckoutResult {
+    return { approved: true, daysGranted: equipment.days };
   }
 }
 ```
@@ -210,17 +247,44 @@ class StudentCheckout extends CheckoutTemplate<Student> {
 Set the return type to `Promise<T>`:
 
 ```typescript
-class AssignParkingCommand extends Command<
+interface Room {
+  name: string;
+}
+interface ReservationResult {
+  confirmed: boolean;
+  room: string;
+}
+
+class ReserveRoomCommand extends Command<
   Person,
-  ParkingLot,
-  Promise<ParkingAssignment>,
+  Room,
+  Promise<ReservationResult>,
   [Student, Professor]
 > {
-  /* ... */
+  readonly commandName = "reserveRoom" as const;
+  resolveStudent() {
+    return new StudentReservation();
+  }
+  resolveProfessor() {
+    return new ProfessorReservation();
+  }
+}
+
+class StudentReservation {
+  async execute(_s: Student, room: Room): Promise<ReservationResult> {
+    return { confirmed: true, room: room.name };
+  }
+}
+
+class ProfessorReservation {
+  async execute(_p: Professor, room: Room): Promise<ReservationResult> {
+    return { confirmed: true, room: room.name };
+  }
 }
 
 // Usage
-const result = await parkingCmd.run(student, lotA);
+const result = await reserveRoom.run(new Professor("Prof. Smith", "CS"), { name: "Room 101" });
+// { confirmed: true, room: "Room 101" }
 ```
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
@@ -232,30 +296,19 @@ and strategy execution for every Subject. Resolver methods return `MiddlewareTem
 `Template`, with a third `inner` continuation argument in `execute`:
 
 ```typescript
-interface LoanRequest {
-  item: string;
-  days?: number; // optional — defaulted to 7 by middleware
-}
-
-interface LoanResult {
-  approved: boolean;
-  dueDate?: string;
-  reason?: string;
-}
-
 // Template — validates loan period, sets default, and logs timing; strategies are empty
 abstract class LoanCheckTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
   LoanCheckMiddleware,
   [],
   SU
 > {
-  execute(subject: SU, req: LoanRequest, inner: Runnable<SU, LoanRequest, LoanResult>) {
-    if ((req.days ?? 7) >= 30) {
+  execute(subject: SU, eq: Equipment, inner: Runnable<SU, Equipment, CheckoutResult>) {
+    if ((eq.days ?? 7) >= 30) {
       return { approved: false, reason: "Loan period must be less than 30 days" };
     }
     const start = Date.now();
-    const result = inner.run(subject, { ...req, days: req.days ?? 7 });
-    console.log(`LoanCommand: ${Date.now() - start}ms`);
+    const result = inner.run(subject, { ...eq, days: eq.days ?? 7 });
+    console.log(`CheckoutCommand: ${Date.now() - start}ms`);
     return result;
   }
 }
@@ -266,24 +319,21 @@ class ProfessorLoanCheck extends LoanCheckTemplate<Professor> {}
 
 // MiddlewareCommand — resolver methods return MiddlewareTemplate instances
 class LoanCheckMiddleware extends MiddlewareCommand<
-  Principal, // base type — must match the Command's
-  LoanRequest,
-  LoanResult,
+  Person, // base type — must match the Command's
+  Equipment,
+  CheckoutResult,
   [Student, Professor] // must cover all Subjects in any Command it wraps
 > {
   readonly commandName = "loanCheck" as const;
   private readonly forStudent = new StudentLoanCheck();
   private readonly forProfessor = new ProfessorLoanCheck();
 
-  resolveStudent(
-    _s: Student,
-    _r: LoanRequest,
-  ): MiddlewareTemplate<LoanCheckMiddleware, [], Student> {
+  resolveStudent(_s: Student, _e: Equipment): MiddlewareTemplate<LoanCheckMiddleware, [], Student> {
     return this.forStudent;
   }
   resolveProfessor(
     _p: Professor,
-    _r: LoanRequest,
+    _e: Equipment,
   ): MiddlewareTemplate<LoanCheckMiddleware, [], Professor> {
     return this.forProfessor;
   }
@@ -293,18 +343,18 @@ class LoanCheckMiddleware extends MiddlewareCommand<
 Register middleware by overriding `get middleware()` on the Command — first element is outermost:
 
 ```typescript
-class LoanCommand extends Command<Principal, LoanRequest, LoanResult, [Student, Professor]> {
-  readonly commandName = "loan" as const;
+class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Student, Professor]> {
+  readonly commandName = "checkout" as const;
 
   override get middleware() {
     return [new LoanCheckMiddleware()];
   }
 
-  resolveStudent(_s: Student, _r: LoanRequest) {
-    return new StudentLoan();
+  resolveStudent(_s: Student, _e: Equipment) {
+    return studentCheckout;
   }
-  resolveProfessor(_p: Professor, _r: LoanRequest) {
-    return new ProfessorLoan();
+  resolveProfessor(_p: Professor, _e: Equipment) {
+    return professorCheckout;
   }
 }
 ```
