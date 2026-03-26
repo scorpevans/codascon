@@ -1424,6 +1424,7 @@ const traceMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
   baseType: "Ctx",
   objectType: "Ctx",
   returnType: "Res",
+  subjectUnion: ["Rock", "Gem"],
   dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
   templates: {
     TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
@@ -1714,6 +1715,7 @@ describe("CommandClassEmitter — middleware getter", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
+    subjectUnion: ["Rock"],
     dispatch: { Rock: "RockMinerDefault" },
     templates: { RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } } },
     middleware: ["TraceMiddleware"],
@@ -1762,6 +1764,7 @@ describe("CommandClassEmitter — middleware getter", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock"],
       dispatch: { Rock: "RockMinerDefault" },
       templates: { RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } } },
     });

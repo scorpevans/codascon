@@ -1020,6 +1020,7 @@ describe("MiddlewareCommandValidator", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
+    subjectUnion: ["Rock", "Gem"],
     dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
     templates: {
       TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
@@ -1069,6 +1070,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
       templates: {
         RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
@@ -1099,6 +1101,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock"],
       dispatch: { Rock: "TraceRockDefault" }, // Gem missing
       templates: {
         TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
@@ -1109,6 +1112,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
       templates: {
         RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
@@ -1139,6 +1143,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock"],
       dispatch: { Rock: "RockMinerDefault" }, // only Rock
       templates: {
         RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
@@ -1175,6 +1180,7 @@ describe("MiddlewareTemplateValidator", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
+    subjectUnion: ["Rock"],
     dispatch: { Rock: "TraceRockDefault" },
     templates: {
       TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
@@ -1244,6 +1250,7 @@ describe("MiddlewareStrategyValidator", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
+    subjectUnion: ["Rock"],
     dispatch: { Rock: "TraceRockDefault" },
     templates: {
       TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
@@ -1304,6 +1311,7 @@ describe("ValidateCommandHooksCommand — MiddlewareTemplateEntry and Middleware
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
+    subjectUnion: ["Rock"],
     dispatch: { Rock: "AuditRockDefault" },
     templates: { AuditRock: { isParameterized: false, strategies: { AuditRockDefault: {} } } },
   });

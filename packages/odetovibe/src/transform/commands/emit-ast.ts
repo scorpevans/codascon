@@ -969,7 +969,7 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     }
 
     const returnType = maybeAsync(config.returnType, config.returnAsync);
-    const subjectTuple = subjects.join(", ");
+    const subjectTuple = config.subjectUnion.join(", ");
     const cls = sf.addClass({
       name: key,
       isExported: true,
@@ -994,7 +994,7 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     );
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
-    for (const subjectRef of subjects) {
+    for (const subjectRef of config.subjectUnion) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {

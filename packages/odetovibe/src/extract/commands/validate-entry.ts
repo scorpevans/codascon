@@ -494,9 +494,9 @@ abstract class MiddlewareCommandValidator implements Template<
 
     // cross-validation: when subjectUnion is present, it must match dispatch keys exactly
     const dispatchKeys = new Set(Object.keys(config.dispatch));
-    const unionSet = new Set(subjects);
+    const unionSet = new Set(config.subjectUnion);
 
-    for (const subjectRef of subjects) {
+    for (const subjectRef of config.subjectUnion) {
       if (!dispatchKeys.has(subjectRef)) {
         errors.push(
           err(
