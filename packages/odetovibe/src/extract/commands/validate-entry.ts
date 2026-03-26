@@ -184,12 +184,13 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // dispatch coverage: exactly one entry per subjectUnion member
+    // dispatch coverage: every subject in subjectUnion must have a dispatch entry,
+    // unless defaultResolver is declared (which acts as the catch-all for uncovered subjects).
     const dispatchKeys = new Set(Object.keys(config.dispatch));
     const unionSet = new Set(config.subjectUnion);
 
     for (const subjectRef of config.subjectUnion) {
-      if (!dispatchKeys.has(subjectRef)) {
+      if (!dispatchKeys.has(subjectRef) && !config.defaultResolver) {
         errors.push(
           err(
             key,
@@ -524,12 +525,13 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    // cross-validation: when subjectUnion is present, it must match dispatch keys exactly
+    // dispatch coverage: every subject in subjectUnion must have a dispatch entry,
+    // unless defaultResolver is declared (which acts as the catch-all for uncovered subjects).
     const dispatchKeys = new Set(Object.keys(config.dispatch));
     const unionSet = new Set(config.subjectUnion);
 
     for (const subjectRef of config.subjectUnion) {
-      if (!dispatchKeys.has(subjectRef)) {
+      if (!dispatchKeys.has(subjectRef) && !config.defaultResolver) {
         errors.push(
           err(
             key,

@@ -1,6 +1,7 @@
 import { describe, it } from "vitest";
 import {
   Command,
+  MiddlewareCommand,
   Subject,
   type Template,
   type CommandObject,
@@ -8,6 +9,7 @@ import {
   type CommandName,
   type SubjectResolverName,
   type CommandSubjectUnion,
+  type Runnable,
 } from "./index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
@@ -638,9 +640,7 @@ describe("§14 compile-time constraint tests", () => {
     // satisfies the run() this constraint via the defaultResolver branch of the union.
     class DefaultCmd extends Command<Person, string, string, [Dog, Cat]> {
       readonly commandName = "defaultCmd" as const;
-      defaultResolver(subject: Dog | Cat, object: string) {
-        return { execute: (s: Dog | Cat, o: string): string => s.name };
-      }
+      defaultResolver = { execute: (s: Dog | Cat, _o: string): string => s.name };
     }
 
     void DefaultCmd;
@@ -662,6 +662,34 @@ describe("§14 compile-time constraint tests", () => {
       cmd.run(new Dog("Rex", "Lab"), "");
     };
     void _14j3;
+  });
+
+  it("14j4: defaultResolver with wrong return type — compile error at implementation site", () => {
+    // DefaultResolverResult requires { execute(subject, object): R }.
+    // Returning a plain string (no execute method) must be rejected.
+    class BadDefaultCmd extends Command<Person, string, string, [Dog]> {
+      readonly commandName = "badDefault" as const;
+      // @ts-expect-error — `string` is not assignable to DefaultResolverResult
+      defaultResolver = "not a template";
+    }
+    void BadDefaultCmd;
+  });
+
+  it("14j5: MiddlewareCommand with defaultResolver — run() still uncallable (this: never)", () => {
+    // The override run(this: never) on MiddlewareCommand ensures direct invocation
+    // remains a compile error even when defaultResolver is declared. Without this fix,
+    // the | { defaultResolver: ... } branch of run()'s this constraint would satisfy
+    // the check and make run() callable.
+    class DefMw extends MiddlewareCommand<Person, string, string, [Dog]> {
+      readonly commandName = "defMw" as const;
+      override defaultResolver = { execute: (_s: Dog, _o: string): string => "" };
+    }
+    const cmd = new DefMw();
+    const _14j5 = () => {
+      // @ts-expect-error — MiddlewareCommand.run() is always uncallable (this: never)
+      cmd.run(new Dog("Rex", "Lab"), "");
+    };
+    void _14j5;
   });
 
   it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {

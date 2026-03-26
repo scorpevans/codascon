@@ -200,12 +200,29 @@ describe("CommandValidator", () => {
     );
   });
 
-  it("[dispatch-coverage] fails when a subjectUnion member has no dispatch entry", () => {
+  it("[dispatch-coverage] fails when a subjectUnion member has no dispatch entry and no defaultResolver", () => {
     const entry = makeCmd({
       subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccess" }, // Professor missing
+      dispatch: { Student: "GrantAccess" }, // Professor missing, no defaultResolver
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-coverage");
+  });
+
+  it("[dispatch-coverage] passes when a subjectUnion member has no dispatch entry but defaultResolver is declared", () => {
+    // Professor is absent from dispatch — valid because defaultResolver handles it at runtime.
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault" }, // Professor intentionally absent
+      defaultResolver: "GrantAccessDefault",
+      templates: {
+        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+      },
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
   it("[dispatch-extra] fails when a dispatch key is not in subjectUnion", () => {
@@ -1103,6 +1120,24 @@ describe("MiddlewareCommandValidator", () => {
 
   it("passes for a valid middleware command", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", validMwConfig);
+    expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+  });
+
+  it("[dispatch-coverage] fails when a subject has no dispatch entry and no defaultResolver", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      dispatch: { Rock: "TraceRockDefault" }, // Gem missing, no defaultResolver
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-coverage");
+  });
+
+  it("[dispatch-coverage] passes when a subject has no dispatch entry but defaultResolver is declared", () => {
+    // Gem is absent from dispatch — valid because defaultResolver handles it at runtime.
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      dispatch: { Rock: "TraceRockDefault" }, // Gem intentionally absent
+      defaultResolver: "TraceRockDefault",
+    });
     expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
   });
 

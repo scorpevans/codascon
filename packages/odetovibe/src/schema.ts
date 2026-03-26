@@ -54,7 +54,9 @@
  * The following constraints should be enforced by tooling consuming this schema:
  *
  * 1. **Dispatch coverage**: Every Subject in a Command's `subjectUnion` must
- *    have exactly one entry in its `dispatch` map.
+ *    have an entry in its `dispatch` map, unless `defaultResolver` is declared —
+ *    in which case subjects absent from `dispatch` are valid and will be routed
+ *    to `defaultResolver` at runtime.
  *
  * 2. **Dispatch target validity**: All dispatch targets must be plain Strategy
  *    names, looked up across the Templates of the same Command.
@@ -100,7 +102,7 @@
  *     Its effective `subjectSubset` — the Strategy's own `subjectSubset` if
  *     declared, otherwise the parent Template's `subjectSubset`, otherwise
  *     the full command subject union — must cover every subject in the
- *     Command's dispatch map.
+ *     Command's `subjectUnion`.
  *
  * ## Out of Scope
  *
@@ -298,11 +300,18 @@ export type DomainType = {
  *                            Command class returning the registered instances.
  *
  * @property defaultResolver — Optional catch-all resolver. When present,
- *                            subjects without a specific resolver method fall
- *                            back to `defaultResolver` instead of throwing.
+ *                            subjects absent from `dispatch` are valid and
+ *                            will be routed to `defaultResolver` at runtime
+ *                            (validation rule 1 is relaxed). Subjects that
+ *                            do appear in `dispatch` retain their specific
+ *                            resolver stubs, which take precedence.
+ *
  *                            Codegen emits a `defaultResolver` method on the
  *                            Command class returning an instance of the
- *                            referenced Strategy.
+ *                            referenced Strategy. Resolver stubs are only
+ *                            generated for subjects present in `dispatch` —
+ *                            subjects absent from `dispatch` route to
+ *                            `defaultResolver` via the runtime fallback.
  *
  *                            The referenced Strategy must exist within this
  *                            Command's templates and its effective
@@ -310,7 +319,7 @@ export type DomainType = {
  *                            `subjectSubset` if declared, otherwise the parent
  *                            Template's `subjectSubset`, otherwise the full
  *                            command subject union — must cover every subject
- *                            in the Command's `dispatch` map (validation
+ *                            in the Command's `subjectUnion` (validation
  *                            rule 12).
  *
  * @property templates      — All Templates (strategy implementations) for

@@ -347,7 +347,7 @@ describe("CommandClassEmitter", () => {
     );
   });
 
-  it("emits defaultResolver method returning the named strategy singleton", () => {
+  it("emits defaultResolver property initialised to the named strategy singleton", () => {
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
       subjectUnion: ["Student", "Professor"],
@@ -365,13 +365,9 @@ describe("CommandClassEmitter", () => {
     const cls = project
       .getSourceFileOrThrow("commands/access-building.ts")
       .getClassOrThrow("AccessBuildingCommand");
-    const method = cls.getMethodOrThrow("defaultResolver");
-    expect(method.getParameters()[0].getName()).toBe("subject");
-    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Student");
-    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Professor");
-    expect(method.getReturnTypeNode()?.getText()).toBe("CatchAll");
-    expect(method.getBodyText()).toContain("return this.catchAll");
-    expect(method.getBodyText()).toContain("@odetovibe-generated");
+    const prop = cls.getPropertyOrThrow("defaultResolver");
+    expect(prop.getTypeNode()?.getText()).toBe("CatchAll");
+    expect(prop.getInitializer()?.getText()).toContain("this.catchAll");
   });
 
   it("deduplicates singleton when defaultResolver names a strategy already used in dispatch", () => {
@@ -395,9 +391,37 @@ describe("CommandClassEmitter", () => {
     // Only one singleton field despite dispatch + defaultResolver both naming SharedStrategy
     const singletonProps = cls.getProperties().filter((p) => p.getName() === "sharedStrategy");
     expect(singletonProps).toHaveLength(1);
-    expect(cls.getMethodOrThrow("defaultResolver").getBodyText()).toContain(
-      "return this.sharedStrategy",
+    expect(cls.getPropertyOrThrow("defaultResolver").getInitializer()?.getText()).toContain(
+      "this.sharedStrategy",
     );
+  });
+
+  it("skips resolver stub for subjects absent from dispatch when defaultResolver is declared", () => {
+    // Professor is in subjectUnion but NOT in dispatch — defaultResolver handles it.
+    // The emitter must not generate a resolveProfessor stub; only resolveStudent is emitted.
+    const drCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "DepartmentMatch" }, // Professor intentionally absent
+      defaultResolver: "CatchAll",
+      templates: {
+        AccessTemplate: {
+          isParameterized: false,
+          strategies: { DepartmentMatch: {}, CatchAll: {} },
+        },
+      },
+    });
+    const project = makeProject();
+    emitCmd.run(drCmd, ctx(withTypes, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    // Student has a dispatch entry — its resolver stub must be emitted
+    expect(cls.getMethod("resolveStudent")).toBeDefined();
+    // Professor has no dispatch entry — its resolver stub must NOT be emitted
+    expect(cls.getMethod("resolveProfessor")).toBeUndefined();
+    // defaultResolver property must still be emitted
+    expect(cls.getProperty("defaultResolver")).toBeDefined();
   });
 
   it("imports Command as value and Template as type from codascon", () => {
@@ -1578,7 +1602,7 @@ describe("MiddlewareCommandClassEmitter", () => {
     );
   });
 
-  it("emits defaultResolver method returning the named strategy singleton", () => {
+  it("emits defaultResolver property initialised to the named strategy singleton", () => {
     const drMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...traceMwEntry.config,
       defaultResolver: "TraceRockDefault",
@@ -1588,15 +1612,33 @@ describe("MiddlewareCommandClassEmitter", () => {
     const cls = project
       .getSourceFileOrThrow("commands/trace-middleware.ts")
       .getClassOrThrow("TraceMiddleware");
-    const method = cls.getMethodOrThrow("defaultResolver");
-    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Rock");
-    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Gem");
-    expect(method.getReturnTypeNode()?.getText()).toBe("TraceRockDefault");
-    expect(method.getBodyText()).toContain("return this.traceRockDefault");
-    expect(method.getBodyText()).toContain("@odetovibe-generated");
+    const prop = cls.getPropertyOrThrow("defaultResolver");
+    expect(prop.getTypeNode()?.getText()).toBe("TraceRockDefault");
+    expect(prop.getInitializer()?.getText()).toContain("this.traceRockDefault");
     // singleton deduplication: TraceRockDefault already in dispatch — only one field
     const singletonProps = cls.getProperties().filter((p) => p.getName() === "traceRockDefault");
     expect(singletonProps).toHaveLength(1);
+  });
+
+  it("skips resolver stub for subjects absent from dispatch when defaultResolver is declared", () => {
+    // Gem is in subjectUnion but NOT in dispatch — defaultResolver handles it.
+    // The emitter must not generate a resolveGem stub; only resolveRock is emitted.
+    const drMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...traceMwEntry.config,
+      dispatch: { Rock: "TraceRockDefault" }, // Gem intentionally absent
+      defaultResolver: "TraceRockDefault",
+    });
+    const project = makeProject();
+    emitCmd.run(drMwEntry, ctx(withMwCmd, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/trace-middleware.ts")
+      .getClassOrThrow("TraceMiddleware");
+    // Rock has a dispatch entry — its resolver stub must be emitted
+    expect(cls.getMethod("resolveRock")).toBeDefined();
+    // Gem has no dispatch entry — its resolver stub must NOT be emitted
+    expect(cls.getMethod("resolveGem")).toBeUndefined();
+    // defaultResolver property must still be emitted
+    expect(cls.getProperty("defaultResolver")).toBeDefined();
   });
 });
 

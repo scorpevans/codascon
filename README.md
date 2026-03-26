@@ -100,7 +100,7 @@ class Professor extends Subject implements Person {
 
 ### Define a Command
 
-A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute.
+A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute. When all subjects are handled the same way, a `defaultResolver` can be declared instead of per-subject methods.
 
 ```typescript
 import { Command } from "codascon";
@@ -111,9 +111,7 @@ class LogCommand extends Command<Person, { message: string }, void, [Student, Pr
   resolveStudent(_s: Student) {
     return this.entry;
   }
-  resolveProfessor(_p: Professor) {
-    return this.entry;
-  }
+  defaultResolver = this.entry; // catch-all — fires for Professor and any other subject with no specific resolver
 }
 ```
 
@@ -374,7 +372,6 @@ const result = await parkingCmd.run(student, lotA);
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
 
-
 ### Default Resolver
 
 A `Command` can declare `defaultResolver` as a catch-all — it fires for any subject that has no specific resolver method. Declaring it relaxes exhaustiveness: `run()` is callable without a resolver per subject.
@@ -392,16 +389,12 @@ class AccessBuildingCommand extends Command<
     return new FullAccess(); // specific resolver — takes precedence for Professor
   }
 
-  defaultResolver(_subject: Student | Professor, _building: Building) {
-    return new BasicAccess(); // catch-all — fires for Student (and any subject with no specific resolver)
-  }
+  defaultResolver = new BasicAccess(); // catch-all — fires for Student (and any subject with no specific resolver)
 }
 ```
 
-- `defaultResolver` receives the full subject union — it must handle every subject it may be called with.
-- When a specific resolver method exists for a subject, it takes precedence.
+- When a specific resolver method exists for a subject, it takes precedence over `defaultResolver`.
 - `defaultResolver` fulfills the exhaustiveness requirement for every subject that has no specific resolver — coverage is maintained, just via the catch-all instead of a per-subject method.
-
 
 ## Odetovibe — YAML Configuration & Code Generation
 

@@ -1130,9 +1130,7 @@ class DogSpecificResult {
 // Command with only defaultResolver — no specific resolver methods
 class DefaultOnlyCommand extends Command<Person, string, string, [Dog, Cat]> {
   readonly commandName = "defaultOnly" as const;
-  defaultResolver(subject: Dog | Cat, object: string) {
-    return new DefaultOnlyResult();
-  }
+  defaultResolver = new DefaultOnlyResult();
 }
 
 // Command with defaultResolver AND a specific resolver — specific takes precedence
@@ -1141,9 +1139,7 @@ class MixedCommand extends Command<Person, string, string, [Dog, Cat]> {
   resolveDog(subject: Dog, object: string) {
     return new DogSpecificResult();
   }
-  defaultResolver(subject: Dog | Cat, object: string) {
-    return new DefaultOnlyResult();
-  }
+  defaultResolver = new DefaultOnlyResult();
 }
 
 describe("§D defaultResolver — catch-all fallback when no specific resolver is defined", () => {
@@ -1165,10 +1161,12 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     const received: string[] = [];
     class ObservingCommand extends Command<Person, string, string, [Dog]> {
       readonly commandName = "observing" as const;
-      defaultResolver(subject: Dog, object: string) {
-        received.push(object);
-        return new DefaultOnlyResult();
-      }
+      defaultResolver = {
+        execute: (subject: Dog, object: string): string => {
+          received.push(object);
+          return `default:${subject.name}`;
+        },
+      };
     }
     const cmd = new ObservingCommand();
     cmd.run(new Dog("Rex", "Lab"), "payload");
@@ -1218,11 +1216,9 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       override get middleware() {
         return [this.mw];
       }
-      defaultResolver(subject: Dog | Cat, object: string) {
-        return {
-          execute: (s: Dog | Cat, _o: string): string => `default:${s.name}`,
-        };
-      }
+      defaultResolver = {
+        execute: (s: Dog | Cat, _o: string): string => `default:${s.name}`,
+      };
     }
 
     const cmd = new DefaultWithMiddlewareCommand();
@@ -1234,6 +1230,60 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     log.length = 0;
     strictEqual(cmd.run(new Cat("Whiskers", true), ""), "default:Whiskers");
     deepEqual(log, ["before", "after"]);
+  });
+
+  it("MiddlewareCommand with defaultResolver preserves chain when registered as middleware", () => {
+    // A MiddlewareCommand that mixes a specific resolver (Dog) with defaultResolver (Cat
+    // falls through). Both paths must correctly invoke inner.run() to keep the chain intact.
+    const log: string[] = [];
+
+    class MixedMw extends MiddlewareCommand<Person, string, string, [Dog, Cat]> {
+      readonly commandName = "mixedMw" as const;
+      resolveDog(_d: Dog) {
+        return {
+          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string => {
+            log.push("mw-dog-before");
+            const r = inner.run(s, o);
+            log.push("mw-dog-after");
+            return r;
+          },
+        };
+      }
+      override defaultResolver = {
+        execute: (s: Dog | Cat, o: string, inner?: Runnable<Dog | Cat, string, string>): string => {
+          log.push("mw-default-before");
+          const r = inner!.run(s, o);
+          log.push("mw-default-after");
+          return r;
+        },
+      };
+    }
+
+    class InnerCommand extends Command<Person, string, string, [Dog, Cat]> {
+      readonly commandName = "inner" as const;
+      private readonly mw = new MixedMw();
+      override get middleware() {
+        return [this.mw];
+      }
+      resolveDog(s: Dog) {
+        return { execute: (_s: Dog): string => `dog:${s.name}` };
+      }
+      resolveCat(s: Cat) {
+        return { execute: (_s: Cat): string => `cat:${s.name}` };
+      }
+    }
+
+    const cmd = new InnerCommand();
+
+    // Dog dispatches via specific middleware resolver
+    log.length = 0;
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), ""), "dog:Rex");
+    deepEqual(log, ["mw-dog-before", "mw-dog-after"]);
+
+    // Cat falls through to middleware defaultResolver
+    log.length = 0;
+    strictEqual(cmd.run(new Cat("Whiskers", true), ""), "cat:Whiskers");
+    deepEqual(log, ["mw-default-before", "mw-default-after"]);
   });
 });
 

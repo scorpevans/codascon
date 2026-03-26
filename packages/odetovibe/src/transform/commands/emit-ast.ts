@@ -347,6 +347,10 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
     for (const subjectRef of config.subjectUnion) {
+      // When defaultResolver is declared, subjects without a dispatch entry are routed
+      // to defaultResolver at runtime — skip generating a specific resolver stub for them.
+      if (!config.dispatch[subjectRef] && config.defaultResolver) continue;
+
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {
@@ -378,12 +382,11 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
     if (config.defaultResolver) {
       const drClassName = dispatchTargetClass(config.defaultResolver);
       const fieldName = singletonMap.get(drClassName)!;
-      const subjectUnionType = config.subjectUnion.join(" | ");
-      const method = cls.addMethod({ name: "defaultResolver" });
-      method.addParameter({ name: "subject", type: subjectUnionType });
-      method.addParameter({ name: "object", type: `Readonly<${config.objectType}>` });
-      method.setReturnType(drClassName);
-      method.addStatements([`return this.${fieldName}; // @odetovibe-generated`]);
+      cls.addProperty({
+        name: "defaultResolver",
+        type: drClassName,
+        initializer: `this.${fieldName}`,
+      });
     }
 
     return { targetFile: filePath };
@@ -1014,6 +1017,10 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
     for (const subjectRef of config.subjectUnion) {
+      // When defaultResolver is declared, subjects without a dispatch entry are routed
+      // to defaultResolver at runtime — skip generating a specific resolver stub for them.
+      if (!config.dispatch[subjectRef] && config.defaultResolver) continue;
+
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {
@@ -1045,12 +1052,11 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     if (config.defaultResolver) {
       const drClassName = dispatchTargetClass(config.defaultResolver);
       const fieldName = singletonMap.get(drClassName)!;
-      const subjectUnionType = config.subjectUnion.join(" | ");
-      const method = cls.addMethod({ name: "defaultResolver" });
-      method.addParameter({ name: "subject", type: subjectUnionType });
-      method.addParameter({ name: "object", type: `Readonly<${config.objectType}>` });
-      method.setReturnType(drClassName);
-      method.addStatements([`return this.${fieldName}; // @odetovibe-generated`]);
+      cls.addProperty({
+        name: "defaultResolver",
+        type: drClassName,
+        initializer: `this.${fieldName}`,
+      });
     }
 
     return { targetFile: filePath };
