@@ -246,50 +246,60 @@ and strategy execution for every Subject. Resolver methods return `MiddlewareTem
 `Template`, with a third `inner` continuation argument in `execute`:
 
 ```typescript
-// Templates — MiddlewareTemplate contract; execute is concrete, strategies are empty
-abstract class LoggingTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
-  LogMiddleware,
+interface LoanRequest {
+  item: string;
+  days?: number; // optional — defaulted to 7 by middleware
+}
+
+interface LoanResult {
+  approved: boolean;
+  dueDate?: string;
+  reason?: string;
+}
+
+// Template — validates loan period, sets default, and logs timing; strategies are empty
+abstract class LoanCheckTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
+  LoanCheckMiddleware,
   [],
   SU
 > {
-  execute(subject: SU, b: Building, inner: Runnable<SU, Building, AccessResult>) {
-    console.log(`Attempting access to ${b.name}`);
-    const result = inner.run(subject, b);
-    console.log(`Access ${result.granted ? "granted" : "denied"}`);
+  execute(subject: SU, req: LoanRequest, inner: Runnable<SU, LoanRequest, LoanResult>) {
+    if ((req.days ?? 7) >= 30) {
+      return { approved: false, reason: "Loan period must be less than 30 days" };
+    }
+    const start = Date.now();
+    const result = inner.run(subject, { ...req, days: req.days ?? 7 });
+    console.log(`LoanCommand: ${Date.now() - start}ms`);
     return result;
   }
 }
 
-abstract class PassthroughTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
-  LogMiddleware,
-  [],
-  SU
-> {
-  execute(subject: SU, b: Building, inner: Runnable<SU, Building, AccessResult>) {
-    return inner.run(subject, b);
-  }
-}
-
 // Strategies — empty; behavior lives entirely in the Template
-class LogStudentAccess extends LoggingTemplate<Student> {}
-class LogProfessorAccess extends PassthroughTemplate<Professor> {}
+class StudentLoanCheck extends LoanCheckTemplate<Student> {}
+class ProfessorLoanCheck extends LoanCheckTemplate<Professor> {}
 
-// MiddlewareCommand — resolver methods return Template instances
-class LogMiddleware extends MiddlewareCommand<
+// MiddlewareCommand — resolver methods return MiddlewareTemplate instances
+class LoanCheckMiddleware extends MiddlewareCommand<
   Principal, // base type — must match the Command's
-  Building,
-  AccessResult,
+  LoanRequest,
+  LoanResult,
   [Student, Professor] // must cover all Subjects in any Command it wraps
 > {
-  readonly commandName = "log" as const;
-  private readonly logStudentAccess = new LogStudentAccess();
-  private readonly logProfessorAccess = new LogProfessorAccess();
+  readonly commandName = "loanCheck" as const;
+  private readonly forStudent = new StudentLoanCheck();
+  private readonly forProfessor = new ProfessorLoanCheck();
 
-  resolveStudent(_s: Student, _b: Building): MiddlewareTemplate<LogMiddleware, [], Student> {
-    return this.logStudentAccess;
+  resolveStudent(
+    _s: Student,
+    _r: LoanRequest,
+  ): MiddlewareTemplate<LoanCheckMiddleware, [], Student> {
+    return this.forStudent;
   }
-  resolveProfessor(_p: Professor, _b: Building): MiddlewareTemplate<LogMiddleware, [], Professor> {
-    return this.logProfessorAccess;
+  resolveProfessor(
+    _p: Professor,
+    _r: LoanRequest,
+  ): MiddlewareTemplate<LoanCheckMiddleware, [], Professor> {
+    return this.forProfessor;
   }
 }
 ```
@@ -297,23 +307,18 @@ class LogMiddleware extends MiddlewareCommand<
 Register middleware by overriding `get middleware()` on the Command — first element is outermost:
 
 ```typescript
-class AccessBuildingCommand extends Command<
-  Principal,
-  Building,
-  AccessResult,
-  [Student, Professor]
-> {
-  readonly commandName = "accessBuilding" as const;
+class LoanCommand extends Command<Principal, LoanRequest, LoanResult, [Student, Professor]> {
+  readonly commandName = "loan" as const;
 
   override get middleware() {
-    return [new LogMiddleware()]; // [auth, log] → auth wraps log wraps dispatch
+    return [new LoanCheckMiddleware()];
   }
 
-  resolveStudent(_s: Student, _b: Building) {
-    return new BasicAccess();
+  resolveStudent(_s: Student, _r: LoanRequest) {
+    return new StudentLoan();
   }
-  resolveProfessor(_p: Professor, _b: Building) {
-    return new FullAccess();
+  resolveProfessor(_p: Professor, _r: LoanRequest) {
+    return new ProfessorLoan();
   }
 }
 ```
