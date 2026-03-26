@@ -512,7 +512,7 @@ export abstract class Subject {
     command:
       | Visit<C, this & BS>
       | {
-          defaultResolver: DefaultResolverResult<
+          readonly defaultResolver: DefaultResolverResult<
             CommandObject<C>,
             CommandReturn<C>,
             CommandSubjectUnion<C>
@@ -630,7 +630,7 @@ export abstract class Subject {
  */
 type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
   | MiddlewareSubjectStrategies<B, O, R, BSL>
-  | { defaultResolver: DefaultResolverResult<O, R, BSL[number]> }
+  | { readonly defaultResolver: DefaultResolverResult<O, R, BSL[number]> }
 ) & {
   _runChain(subject: BSL[number], object: O, continuation: Runnable<BSL[number], O, R>): R;
 };
@@ -651,26 +651,6 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
   // exactly once per instance rather than on every `run()` call.
   // Protected (not private) so that MiddlewareCommand._runChain can access it.
   protected _mwCache?: MiddlewareElement<B, O, R, BSL>[];
-
-  /**
-   * Command-level middleware applied to every dispatch through this Command.
-   * Each element must cover every Subject in this Command's BSL — declare its
-   * own BSL as a superset and implement the required resolver methods.
-   *
-   * Array ordering: the first element is outermost (starts first, finishes last).
-   * To share middleware across all Commands in a domain, override this getter
-   * in a shared base class and compose with `[...super.middleware, myMiddleware]`.
-   *
-   * The framework caches the result of this getter on the first dispatch and
-   * reuses it for the lifetime of the instance. Middleware is therefore fixed
-   * after the first `run()` call — mutations to the returned array or replacing
-   * the getter's output after that point have no effect.
-   *
-   * Defaults to `[]`.
-   */
-  get middleware(): MiddlewareElement<B, O, R, BSL>[] {
-    return [];
-  }
 
   /**
    * Optional catch-all Template. When assigned, subjects without a specific resolver
@@ -696,7 +676,27 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
    * chain. The base `DefaultResolverResult` type does not enforce this — it is the
    * caller's responsibility to assign a correctly typed `MiddlewareTemplate`.
    */
-  declare defaultResolver?: DefaultResolverResult<O, R, BSL[number]>;
+  declare readonly defaultResolver?: DefaultResolverResult<O, R, BSL[number]>;
+
+  /**
+   * Command-level middleware applied to every dispatch through this Command.
+   * Each element must cover every Subject in this Command's BSL — declare its
+   * own BSL as a superset and implement the required resolver methods.
+   *
+   * Array ordering: the first element is outermost (starts first, finishes last).
+   * To share middleware across all Commands in a domain, override this getter
+   * in a shared base class and compose with `[...super.middleware, myMiddleware]`.
+   *
+   * The framework caches the result of this getter on the first dispatch and
+   * reuses it for the lifetime of the instance. Middleware is therefore fixed
+   * after the first `run()` call — mutations to the returned array or replacing
+   * the getter's output after that point have no effect.
+   *
+   * Defaults to `[]`.
+   */
+  get middleware(): MiddlewareElement<B, O, R, BSL>[] {
+    return [];
+  }
 
   /**
    * Processes this command's own middleware chain, then calls `_dispatch`.
@@ -744,7 +744,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
     this: this &
       (
         | CommandSubjectStrategies<Command<B, O, R, BSL>>
-        | { defaultResolver: DefaultResolverResult<O, R, BSL[number]> }
+        | { readonly defaultResolver: DefaultResolverResult<O, R, BSL[number]> }
       ) &
       RequireLiteralResolverNames<BSL>,
     subject: T,

@@ -1130,7 +1130,7 @@ class DogSpecificResult {
 // Command with only defaultResolver — no specific resolver methods
 class DefaultOnlyCommand extends Command<Person, string, string, [Dog, Cat]> {
   readonly commandName = "defaultOnly" as const;
-  defaultResolver = new DefaultOnlyResult();
+  readonly defaultResolver = new DefaultOnlyResult();
 }
 
 // Command with defaultResolver AND a specific resolver — specific takes precedence
@@ -1139,7 +1139,7 @@ class MixedCommand extends Command<Person, string, string, [Dog, Cat]> {
   resolveDog(subject: Dog, object: string) {
     return new DogSpecificResult();
   }
-  defaultResolver = new DefaultOnlyResult();
+  readonly defaultResolver = new DefaultOnlyResult();
 }
 
 describe("§D defaultResolver — catch-all fallback when no specific resolver is defined", () => {
@@ -1161,7 +1161,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     const received: string[] = [];
     class ObservingCommand extends Command<Person, string, string, [Dog]> {
       readonly commandName = "observing" as const;
-      defaultResolver = {
+      readonly defaultResolver = {
         execute: (subject: Dog, object: string): string => {
           received.push(object);
           return `default:${subject.name}`;
@@ -1216,7 +1216,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       override get middleware() {
         return [this.mw];
       }
-      defaultResolver = {
+      readonly defaultResolver = {
         execute: (s: Dog | Cat, _o: string): string => `default:${s.name}`,
       };
     }
@@ -1249,7 +1249,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
           },
         };
       }
-      override defaultResolver = {
+      override readonly defaultResolver = {
         execute: (s: Dog | Cat, o: string, inner?: Runnable<Dog | Cat, string, string>): string => {
           log.push("mw-default-before");
           const r = inner!.run(s, o);

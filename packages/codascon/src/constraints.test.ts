@@ -640,7 +640,7 @@ describe("§14 compile-time constraint tests", () => {
     // satisfies the run() this constraint via the defaultResolver branch of the union.
     class DefaultCmd extends Command<Person, string, string, [Dog, Cat]> {
       readonly commandName = "defaultCmd" as const;
-      defaultResolver = { execute: (s: Dog | Cat, _o: string): string => s.name };
+      readonly defaultResolver = { execute: (s: Dog | Cat, _o: string): string => s.name };
     }
 
     void DefaultCmd;
@@ -670,7 +670,7 @@ describe("§14 compile-time constraint tests", () => {
     class BadDefaultCmd extends Command<Person, string, string, [Dog]> {
       readonly commandName = "badDefault" as const;
       // @ts-expect-error — `string` is not assignable to DefaultResolverResult
-      defaultResolver = "not a template";
+      readonly defaultResolver = "not a template";
     }
     void BadDefaultCmd;
   });
@@ -682,7 +682,7 @@ describe("§14 compile-time constraint tests", () => {
     // the check and make run() callable.
     class DefMw extends MiddlewareCommand<Person, string, string, [Dog]> {
       readonly commandName = "defMw" as const;
-      override defaultResolver = { execute: (_s: Dog, _o: string): string => "" };
+      override readonly defaultResolver = { execute: (_s: Dog, _o: string): string => "" };
     }
     const cmd = new DefMw();
     const _14j5 = () => {
