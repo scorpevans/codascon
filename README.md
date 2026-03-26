@@ -372,30 +372,6 @@ const result = await parkingCmd.run(student, lotA);
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
 
-### Default Resolver
-
-A `Command` can declare `defaultResolver` as a catch-all — it fires for any subject that has no specific resolver method. Declaring it relaxes exhaustiveness: `run()` is callable without a resolver per subject.
-
-```typescript
-class AccessBuildingCommand extends Command<
-  Principal,
-  Building,
-  AccessResult,
-  [Student, Professor]
-> {
-  readonly commandName = "accessBuilding" as const;
-
-  resolveProfessor(_professor: Professor, _building: Building) {
-    return new FullAccess(); // specific resolver — takes precedence for Professor
-  }
-
-  defaultResolver = new BasicAccess(); // catch-all — fires for Student (and any subject with no specific resolver)
-}
-```
-
-- When a specific resolver method exists for a subject, it takes precedence over `defaultResolver`.
-- `defaultResolver` fulfills the exhaustiveness requirement for every subject that has no specific resolver — coverage is maintained, just via the catch-all instead of a per-subject method.
-
 ## Odetovibe — YAML Configuration & Code Generation
 
 Instead of jumping straight into coding, you can focus on architecting your business logic and let **Odetovibe** generate the TypeScript scaffolding:
