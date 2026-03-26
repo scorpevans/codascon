@@ -94,10 +94,10 @@ import { Command } from "codascon";
 class LogCommand extends Command<Person, { message: string }, void, [Student, Professor]> {
   readonly commandName = "log" as const;
   private readonly entry = new LogEntry(); // Strategy — defined below
+  readonly defaultResolver = this.entry; // catch-all — fires for Professor and any other subject with no specific resolver
   resolveStudent(_s: Student) {
     return this.entry;
   }
-  defaultResolver = this.entry; // catch-all — fires for Professor and any other subject with no specific resolver
 }
 ```
 
