@@ -15,9 +15,6 @@
 #   - middleware template                  → MiddlewareTemplateEntry
 #   - middleware strategy                  → MiddlewareStrategyEntry
 #
-# The dispatch key (not subjectUnion) is the authoritative subject
-# list. `subjectUnion` is deprecated and only honoured for backward
-# compatibility when present.
 #
 # Public API exposed to clients:
 #   - parseYaml(yamlPath: string): ConfigIndex
@@ -82,6 +79,11 @@ commands:
     baseType: ConfigEntry
     objectType: ConfigIndex
     returnType: ValidationResult
+    subjectUnion:
+      - AbstractTemplateEntry
+      - StrategyEntry
+      - MiddlewareTemplateEntry
+      - MiddlewareStrategyEntry
     dispatch:
       AbstractTemplateEntry: AbstractTemplateHooksValidatorDefault
       StrategyEntry: StrategyHooksValidatorDefault
@@ -113,6 +115,15 @@ commands:
     baseType: ConfigEntry
     objectType: ConfigIndex
     returnType: ValidationResult
+    subjectUnion:
+      - SubjectTypeEntry
+      - PlainTypeEntry
+      - CommandEntry
+      - AbstractTemplateEntry
+      - StrategyEntry
+      - MiddlewareCommandEntry
+      - MiddlewareTemplateEntry
+      - MiddlewareStrategyEntry
     dispatch:
       SubjectTypeEntry: SubjectTypeValidatorDefault
       PlainTypeEntry: PlainTypeValidatorDefault
@@ -137,8 +148,7 @@ commands:
         strategies:
           PlainTypeValidatorDefault: {}
 
-      # Checks type refs, effective subject list (dispatch keys, or subjectUnion when
-      # present — deprecated), dispatch coverage and targets, middleware refs and coverage
+      # Checks type refs, subjectUnion validity, dispatch coverage and targets, middleware refs and coverage
       CommandValidator:
         isParameterized: false
         subjectSubset: [CommandEntry]
