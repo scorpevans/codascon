@@ -329,6 +329,63 @@ describe("CommandValidator", () => {
     } as any); // templates intentionally absent to trigger the ?? {} path
     expect(rules(validateCmd.run(entry, withTypes))).toContain("dispatch-target-ref");
   });
+
+  // Rule 12: defaultResolver-ref and defaultResolver-coverage
+  it("passes when defaultResolver references a strategy with no subjectSubset (covers full union)", () => {
+    const entry = makeCmd({ defaultResolver: "GrantAccessDefault" });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("[defaultResolver-ref] fails when defaultResolver names a strategy not found in templates", () => {
+    const entry = makeCmd({ defaultResolver: "NoSuchStrategy" });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-ref");
+  });
+
+  it("[defaultResolver-coverage] fails when defaultResolver strategy subjectSubset misses a subject", () => {
+    // Command dispatches both Student and Professor; defaultResolver strategy only covers Student
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      dispatch: { Student: "StudentOnly", Professor: "ProfOnly" },
+      templates: {
+        AccessTemplate: {
+          isParameterized: true,
+          strategies: {
+            StudentOnly: { subjectSubset: ["Student"] },
+            ProfOnly: { subjectSubset: ["Professor"] },
+          },
+        },
+      },
+      defaultResolver: "StudentOnly", // subjectSubset: [Student] — misses Professor
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
+      "defaultResolver-coverage",
+    );
+  });
+
+  it("passes when defaultResolver strategy subjectSubset covers all subjects", () => {
+    // CatchAll strategy explicitly declares both subjects in its subjectSubset
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      dispatch: { Student: "StudentOnly", Professor: "CatchAll" },
+      templates: {
+        AccessTemplate: {
+          isParameterized: true,
+          strategies: {
+            StudentOnly: { subjectSubset: ["Student"] },
+            CatchAll: { subjectSubset: ["Student", "Professor"] }, // covers both
+          },
+        },
+      },
+      defaultResolver: "CatchAll",
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1163,6 +1220,75 @@ describe("MiddlewareCommandValidator", () => {
       middlewareCommands: new Map([["TraceMiddleware", wideTraceMw]]),
     });
     expect(validateCmd.run(cmdEntry, index).valid).toBe(true);
+  });
+
+  // Rule 12: defaultResolver-ref and defaultResolver-coverage on MiddlewareCommand
+  it("passes when middleware defaultResolver references a strategy with no subjectSubset (covers full union)", () => {
+    // Strategy has no subjectSubset; parent template has no subjectSubset →
+    // effectiveStratSubset = full subject union = [Rock] → covers the only subject → passes
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      commandName: "trace",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      dispatch: { Rock: "TraceRockDefault" },
+      templates: {
+        TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
+      },
+      defaultResolver: "TraceRockDefault",
+    });
+    expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+  });
+
+  it("[defaultResolver-ref] fails when middleware defaultResolver names a strategy not found in templates", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      defaultResolver: "NoSuchStrategy",
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-ref");
+  });
+
+  it("[defaultResolver-coverage] fails when middleware defaultResolver strategy subjectSubset misses a subject", () => {
+    // Middleware dispatches both Rock and Gem; defaultResolver strategy only covers Rock
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      commandName: "trace",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      dispatch: { Rock: "RockOnly", Gem: "GemOnly" },
+      templates: {
+        TraceTemplate: {
+          isParameterized: true,
+          strategies: {
+            RockOnly: { subjectSubset: ["Rock"] },
+            GemOnly: { subjectSubset: ["Gem"] },
+          },
+        },
+      },
+      defaultResolver: "RockOnly", // subjectSubset: [Rock] — misses Gem
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-coverage");
+  });
+
+  it("passes when middleware defaultResolver strategy subjectSubset covers all subjects", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      commandName: "trace",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      dispatch: { Rock: "RockOnly", Gem: "CatchAll" },
+      templates: {
+        TraceTemplate: {
+          isParameterized: true,
+          strategies: {
+            RockOnly: { subjectSubset: ["Rock"] },
+            CatchAll: { subjectSubset: ["Rock", "Gem"] },
+          },
+        },
+      },
+      defaultResolver: "CatchAll",
+    });
+    expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
   });
 });
 
