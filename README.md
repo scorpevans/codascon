@@ -359,44 +359,17 @@ checkout.run(new Student("Bob", 1), { name: "Microscope" });
 Set the return type to `Promise<T>`:
 
 ```typescript
-interface Room {
-  name: string;
-}
-interface ReservationResult {
-  confirmed: boolean;
-  room: string;
-}
-
-class ReserveRoomCommand extends Command<
+class AssignParkingCommand extends Command<
   Person,
-  Room,
-  Promise<ReservationResult>,
+  ParkingLot,
+  Promise<ParkingAssignment>,
   [Student, Professor]
 > {
-  readonly commandName = "reserveRoom" as const;
-  resolveStudent() {
-    return new StudentReservation();
-  }
-  resolveProfessor() {
-    return new ProfessorReservation();
-  }
-}
-
-class StudentReservation {
-  async execute(_s: Student, room: Room): Promise<ReservationResult> {
-    return { confirmed: true, room: room.name };
-  }
-}
-
-class ProfessorReservation {
-  async execute(_p: Professor, room: Room): Promise<ReservationResult> {
-    return { confirmed: true, room: room.name };
-  }
+  /* ... */
 }
 
 // Usage
-const result = await reserveRoom.run(new Professor("Prof. Smith", "CS"), { name: "Room 101" });
-// { confirmed: true, room: "Room 101" }
+const result = await parkingCmd.run(student, lotA);
 ```
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
@@ -410,7 +383,6 @@ namespace: campus
 
 domainTypes:
   Person: {}
-  LogPayload: {} # { message: string } — add field in generated interface
   Equipment: {}
   CheckoutResult: {}
   Student:
@@ -431,27 +403,11 @@ middleware:
     templates:
       CheckoutMiddlewareTemplate:
         isParameterized: false
-        commandHooks: [LogCommand]
         strategies:
           StudentPolicy: {}
           ProfessorPolicy: {}
 
 commands:
-  LogCommand:
-    commandName: log
-    baseType: Person
-    objectType: LogPayload
-    returnType: void
-    subjectUnion: [Student, Professor]
-    dispatch:
-      Student: LogEntry
-      Professor: LogEntry
-    templates:
-      LogTemplate:
-        isParameterized: false
-        strategies:
-          LogEntry: {}
-
   CheckoutCommand:
     commandName: checkout
     baseType: Person
@@ -465,7 +421,6 @@ commands:
     templates:
       CheckoutTemplate:
         isParameterized: true
-        commandHooks: [LogCommand]
         strategies:
           StudentCheckout:
             subjectSubset: [Student]

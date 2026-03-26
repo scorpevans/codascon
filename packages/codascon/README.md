@@ -345,44 +345,17 @@ checkout.run(new Student("Bob", 1), { name: "Microscope" });
 Set the return type to `Promise<T>`:
 
 ```typescript
-interface Room {
-  name: string;
-}
-interface ReservationResult {
-  confirmed: boolean;
-  room: string;
-}
-
-class ReserveRoomCommand extends Command<
+class AssignParkingCommand extends Command<
   Person,
-  Room,
-  Promise<ReservationResult>,
+  ParkingLot,
+  Promise<ParkingAssignment>,
   [Student, Professor]
 > {
-  readonly commandName = "reserveRoom" as const;
-  resolveStudent() {
-    return new StudentReservation();
-  }
-  resolveProfessor() {
-    return new ProfessorReservation();
-  }
-}
-
-class StudentReservation {
-  async execute(_s: Student, room: Room): Promise<ReservationResult> {
-    return { confirmed: true, room: room.name };
-  }
-}
-
-class ProfessorReservation {
-  async execute(_p: Professor, room: Room): Promise<ReservationResult> {
-    return { confirmed: true, room: room.name };
-  }
+  /* ... */
 }
 
 // Usage
-const result = await reserveRoom.run(new Professor("Prof. Smith", "CS"), { name: "Room 101" });
-// { confirmed: true, room: "Room 101" }
+const result = await parkingCmd.run(student, lotA);
 ```
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.

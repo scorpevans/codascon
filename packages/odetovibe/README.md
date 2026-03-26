@@ -57,7 +57,6 @@ namespace: campus
 
 domainTypes:
   Person: {}
-  LogPayload: {} # { message: string } — add field in generated interface
   Equipment: {}
   CheckoutResult: {}
   Student:
@@ -78,27 +77,11 @@ middleware:
     templates:
       CheckoutMiddlewareTemplate:
         isParameterized: false
-        commandHooks: [LogCommand]
         strategies:
           StudentPolicy: {}
           ProfessorPolicy: {}
 
 commands:
-  LogCommand:
-    commandName: log
-    baseType: Person
-    objectType: LogPayload
-    returnType: void
-    subjectUnion: [Student, Professor]
-    dispatch:
-      Student: LogEntry
-      Professor: LogEntry
-    templates:
-      LogTemplate:
-        isParameterized: false
-        strategies:
-          LogEntry: {}
-
   CheckoutCommand:
     commandName: checkout
     baseType: Person
@@ -112,7 +95,6 @@ commands:
     templates:
       CheckoutTemplate:
         isParameterized: true
-        commandHooks: [LogCommand]
         strategies:
           StudentCheckout:
             subjectSubset: [Student]
