@@ -68,24 +68,13 @@ pnpm add codascon
 
 ### Define Subjects
 
-A **`Subject`** is an entity in your domain. Each declares a `resolverName` — the method name its `Command`s must implement to handle it.
+A **`Subject`** is an entity in your domain. Codascon enforces that each `Subject` declares a `resolverName` — the method name its `Command`s must implement to handle it.
 
 ```typescript
 import { Subject } from "codascon";
 
 interface Person {
   name: string;
-}
-
-interface Equipment {
-  name: string;
-  days?: number;
-}
-
-interface CheckoutResult {
-  approved: boolean;
-  daysGranted: number;
-  note?: string;
 }
 
 class Student extends Subject implements Person {
@@ -111,7 +100,7 @@ class Professor extends Subject implements Person {
 
 ### Define a Command
 
-A **`Command`** is an operation. Each resolver method accepts a `Subject` and the context object and returns a `Template` to execute.
+A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute.
 
 ```typescript
 import { Command } from "codascon";
@@ -130,12 +119,12 @@ class LogCommand extends Command<Person, { message: string }, void, [Student, Pr
 
 ### Define Templates and their Strategies
 
-A **`Template`** abstract class defines the execution contract. **`Strategy`** classes provide the concrete implementations.
+A **`Template`** abstract class defines the execution contract for a `Command`. It may handle the full `Subject` union or be narrowed to a subset. **`Strategy`** classes provide the concrete implementations.
 
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";
 
-// Non-parameterized template: execute handles the full subject union — no SU generic needed.
+// execute handles the full subject union (Student | Professor) — no subject narrowing needed here.
 // LogEntry is a concrete empty Strategy; both resolvers share one singleton instance (entry).
 abstract class LogTemplate implements Template<LogCommand> {
   execute(subject: CommandSubjectUnion<LogCommand>, entry: { message: string }): void {
@@ -174,9 +163,16 @@ command.run(subject, object)
 A `Template` can carry its subject union as a type parameter — letting each `Strategy` narrow which `Subject`s it handles and access subject-specific fields directly:
 
 ```typescript
-// CheckoutResult.daysGranted is non-optional: middleware (introduced below) always fills
-// Equipment.days before execute is called.
-// The cast `equipment as Equipment & { days: number }` makes that guarantee explicit.
+interface Equipment {
+  name: string;
+  days?: number;
+}
+
+interface CheckoutResult {
+  approved: boolean;
+  daysGranted: number;
+  note?: string;
+}
 
 class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Student, Professor]> {
   readonly commandName = "checkout" as const;
@@ -192,7 +188,7 @@ abstract class CheckoutTemplate<
   SU extends CommandSubjectUnion<CheckoutCommand>,
 > implements Template<CheckoutCommand, [], SU> {
   execute(subject: SU, equipment: Equipment): CheckoutResult {
-    return this.approve(subject, equipment as Equipment & { days: number });
+    return this.approve(subject, equipment as Equipment & { days: number }); // days filled at runtime
   }
   protected abstract approve(subject: SU, equipment: Equipment & { days: number }): CheckoutResult;
 }
@@ -211,8 +207,6 @@ class ProfessorCheckout extends CheckoutTemplate<Professor> {
   }
 }
 ```
-
-This does not break LSP — each Strategy is only returned from the resolver for the matching Subject, so its narrowed `execute` is never called with the wrong type.
 
 ### Command Hooks
 
