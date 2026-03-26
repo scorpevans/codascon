@@ -307,11 +307,11 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
         );
       } else {
         const tplConfig = ownTemplates[owningTplName];
-        const effectiveTplSubset = tplConfig.subjectSubset ?? subjects;
+        const effectiveTplSubset = tplConfig.subjectSubset ?? config.subjectUnion;
         const stratConfig = tplConfig.strategies[stratName];
         const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
         const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of subjects) {
+        for (const subjectRef of config.subjectUnion) {
           if (!stratSubjectSet.has(subjectRef)) {
             errors.push(
               err(
@@ -617,11 +617,11 @@ abstract class MiddlewareCommandValidator implements Template<
         );
       } else {
         const tplConfig = ownTemplates[owningTplName];
-        const effectiveTplSubset = tplConfig.subjectSubset ?? subjects;
+        const effectiveTplSubset = tplConfig.subjectSubset ?? config.subjectUnion;
         const stratConfig = tplConfig.strategies[stratName];
         const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
         const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of subjects) {
+        for (const subjectRef of config.subjectUnion) {
           if (!stratSubjectSet.has(subjectRef)) {
             errors.push(
               err(

@@ -347,6 +347,59 @@ describe("CommandClassEmitter", () => {
     );
   });
 
+  it("emits defaultResolver method returning the named strategy singleton", () => {
+    const drCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "DepartmentMatch", Professor: "DepartmentMatch" },
+      defaultResolver: "CatchAll",
+      templates: {
+        AccessTemplate: {
+          isParameterized: false,
+          strategies: { DepartmentMatch: {}, CatchAll: {} },
+        },
+      },
+    });
+    const project = makeProject();
+    emitCmd.run(drCmd, ctx(withTypes, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    const method = cls.getMethodOrThrow("defaultResolver");
+    expect(method.getParameters()[0].getName()).toBe("subject");
+    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Student");
+    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Professor");
+    expect(method.getReturnTypeNode()?.getText()).toBe("CatchAll");
+    expect(method.getBodyText()).toContain("return this.catchAll");
+    expect(method.getBodyText()).toContain("@odetovibe-generated");
+  });
+
+  it("deduplicates singleton when defaultResolver names a strategy already used in dispatch", () => {
+    const drCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "SharedStrategy", Professor: "SharedStrategy" },
+      defaultResolver: "SharedStrategy",
+      templates: {
+        AccessTemplate: {
+          isParameterized: false,
+          strategies: { SharedStrategy: {} },
+        },
+      },
+    });
+    const project = makeProject();
+    emitCmd.run(drCmd, ctx(withTypes, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    // Only one singleton field despite dispatch + defaultResolver both naming SharedStrategy
+    const singletonProps = cls.getProperties().filter((p) => p.getName() === "sharedStrategy");
+    expect(singletonProps).toHaveLength(1);
+    expect(cls.getMethodOrThrow("defaultResolver").getBodyText()).toContain(
+      "return this.sharedStrategy",
+    );
+  });
+
   it("imports Command as value and Template as type from codascon", () => {
     const project = makeProject();
     emitCmd.run(cmdEntry, ctx(withTypes, project));
@@ -1523,6 +1576,27 @@ describe("MiddlewareCommandClassEmitter", () => {
     expect(cls.getMethodOrThrow("resolveGem").getBodyText()).toContain(
       "return this.traceGemDefault",
     );
+  });
+
+  it("emits defaultResolver method returning the named strategy singleton", () => {
+    const drMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...traceMwEntry.config,
+      defaultResolver: "TraceRockDefault",
+    });
+    const project = makeProject();
+    emitCmd.run(drMwEntry, ctx(withMwCmd, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/trace-middleware.ts")
+      .getClassOrThrow("TraceMiddleware");
+    const method = cls.getMethodOrThrow("defaultResolver");
+    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Rock");
+    expect(method.getParameters()[0].getTypeNode()?.getText()).toContain("Gem");
+    expect(method.getReturnTypeNode()?.getText()).toBe("TraceRockDefault");
+    expect(method.getBodyText()).toContain("return this.traceRockDefault");
+    expect(method.getBodyText()).toContain("@odetovibe-generated");
+    // singleton deduplication: TraceRockDefault already in dispatch — only one field
+    const singletonProps = cls.getProperties().filter((p) => p.getName() === "traceRockDefault");
+    expect(singletonProps).toHaveLength(1);
   });
 });
 

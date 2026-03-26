@@ -348,6 +348,7 @@ describe("CommandValidator", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
+      subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "StudentOnly", Professor: "ProfOnly" },
       templates: {
         AccessTemplate: {
@@ -372,6 +373,7 @@ describe("CommandValidator", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
+      subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "StudentOnly", Professor: "CatchAll" },
       templates: {
         AccessTemplate: {
@@ -1231,6 +1233,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock"],
       dispatch: { Rock: "TraceRockDefault" },
       templates: {
         TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
@@ -1255,6 +1258,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "RockOnly", Gem: "GemOnly" },
       templates: {
         TraceTemplate: {
@@ -1276,6 +1280,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
+      subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "RockOnly", Gem: "CatchAll" },
       templates: {
         TraceTemplate: {
