@@ -373,11 +373,14 @@ class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Studen
 }
 ```
 
-Omitting `inner.run()` short-circuits the chain — the downstream command and strategy do not
-execute. Pass a modified object to `inner.run()` to enrich context downstream. Calling
-`MiddlewareCommand.run()` directly is a compile error — only register middleware via
-`Command.middleware`. To share middleware across all Commands in a domain, override
-`get middleware()` in a shared base class and compose with `[...super.middleware, mw]`.
+- **Declare `inner` as `Runnable<SU, O, R>`**, not as the full Command type.
+- **Omit `inner.run()`** to short-circuit — the downstream command and strategy do not execute.
+- **Object enrichment**: pass `{ ...object, extra }` to `inner.run()` to add context downstream.
+  Declare enrichment fields as optional on `O` so that Strategies that don't use them still typecheck.
+- **`MiddlewareCommand.run()` is a compile error** in well-typed TypeScript — only register
+  middleware via `Command.middleware`.
+- **Domain-wide middleware**: override `get middleware()` in a shared base class; subclasses compose
+  with `[...super.middleware, mw]`.
 
 ## Odetovibe — YAML Configuration & Code Generation
 
