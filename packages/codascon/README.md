@@ -139,13 +139,13 @@ abstract class CheckoutTemplate implements Template<CheckoutCommand> {
 
 class StudentCheckout extends CheckoutTemplate {
   protected computeTerms(_student: Student, equipment: Equipment): CheckoutResult {
-    return { approved: true, daysGranted: equipment.days ?? 7 };
+    return { approved: true, daysGranted: equipment.days };
   }
 }
 
 class ProfessorCheckout extends CheckoutTemplate {
   protected computeTerms(_professor: Professor, equipment: Equipment): CheckoutResult {
-    return { approved: true, daysGranted: equipment.days ?? 14 };
+    return { approved: true, daysGranted: equipment.days };
   }
 }
 ```
