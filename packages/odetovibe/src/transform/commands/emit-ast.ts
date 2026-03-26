@@ -227,14 +227,6 @@ function maybeAsync(typeRef: string, returnAsync: boolean | undefined): string {
   return returnAsync ? `Promise<${typeRef}>` : typeRef;
 }
 
-/**
- * Returns the effective subject list for a Command config.
- * `subjectUnion` is deprecated — derives from `dispatch` keys when absent.
- */
-function effectiveSubjectUnion(config: import("../../schema.js").Command): string[] {
-  return config.subjectUnion ?? Object.keys(config.dispatch);
-}
-
 abstract class SubjectClassEmitter implements Template<EmitAstCommand, [], SubjectTypeEntry> {
   execute(subject: SubjectTypeEntry, object: Readonly<EmitContext>): EmitResult {
     const filePath = domainTypesFilePath(object.configIndex.namespace);
@@ -308,14 +300,13 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }
-    const subjects = effectiveSubjectUnion(config);
-    for (const ref of subjects) {
+    for (const ref of config.subjectUnion) {
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }
 
     const returnType = maybeAsync(config.returnType, config.returnAsync);
-    const subjectTuple = subjects.join(", ");
+    const subjectTuple = config.subjectUnion.join(", ");
     const cls = sf.addClass({
       name: key,
       isExported: true,
@@ -351,7 +342,7 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
     );
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
-    for (const subjectRef of subjects) {
+    for (const subjectRef of config.subjectUnion) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {
@@ -441,9 +432,7 @@ abstract class AbstractTemplateEmitter implements Template<
 
     const cmdEntry = configIndex.commands.get(commandKey)!;
     const isFullUnion = !config.subjectSubset?.length;
-    const subjectSubset = isFullUnion
-      ? effectiveSubjectUnion(cmdEntry.config)
-      : config.subjectSubset!;
+    const subjectSubset = isFullUnion ? cmdEntry.config.subjectUnion : config.subjectSubset!;
     const subsetUnion = subjectSubset.join(" | ");
     const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
 
@@ -588,7 +577,7 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
       ? config.subjectSubset!
       : templateHasSubset
         ? tplEntry.config.subjectSubset!
-        : effectiveSubjectUnion(cmdEntry.config);
+        : cmdEntry.config.subjectUnion;
 
     this.ensureSubjectImports(sf, isFullUnion, subjectSubset, importSrc, dtPath);
 
@@ -714,9 +703,7 @@ abstract class MiddlewareAbstractTemplateEmitter implements Template<
 
     const cmdEntry = configIndex.middlewareCommands.get(commandKey)!;
     const isFullUnion = !config.subjectSubset?.length;
-    const subjectSubset = isFullUnion
-      ? effectiveSubjectUnion(cmdEntry.config)
-      : config.subjectSubset!;
+    const subjectSubset = isFullUnion ? cmdEntry.config.subjectUnion : config.subjectSubset!;
     const subsetUnion = subjectSubset.join(" | ");
     const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
 
@@ -853,7 +840,7 @@ abstract class MiddlewareStrategyClassEmitter implements Template<
       ? config.subjectSubset!
       : templateHasSubset
         ? tplEntry.config.subjectSubset!
-        : effectiveSubjectUnion(cmdEntry.config);
+        : cmdEntry.config.subjectUnion;
 
     this.ensureSubjectImports(sf, isFullUnion, subjectSubset, importSrc, dtPath);
 
@@ -976,8 +963,7 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }
-    const subjects = effectiveSubjectUnion(config);
-    for (const ref of subjects) {
+    for (const ref of config.subjectUnion) {
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }

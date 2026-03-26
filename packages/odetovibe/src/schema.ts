@@ -55,17 +55,15 @@
  *
  * The following constraints should be enforced by tooling consuming this schema:
  *
- * 1. **Dispatch key identity**: Every key in a Command's `dispatch` map must
- *    reference a Subject (a `domainTypes` entry with `resolverName`). The
- *    dispatch keys are the authoritative subject list — `subjectUnion` is
- *    deprecated and derived from them when absent.
+ * 1. **Dispatch coverage**: Every Subject in a Command's `subjectUnion` must
+ *    have exactly one entry in its `dispatch` map.
  *
  * 2. **Dispatch target validity**: All dispatch targets must be plain Strategy
  *    names, looked up across the Templates of the same Command.
  *
  * 3. **Subject identity**: A `domainTypes` entry with a `resolverName` property
- *    is a Subject; without it, a plain type. (The dispatch key constraint is
- *    stated in rule 1; this rule defines the distinction for reference.)
+ *    is a Subject; without it, a plain type. All entries in a Command's
+ *    `subjectUnion` must reference Subjects (types with `resolverName`).
  *
  * 4. **resolverName convention**: By convention, `resolverName` should be prefixed
  *    with `"resolve"` (e.g. `"resolveStudent"`). The resolverName must be unique
@@ -157,6 +155,7 @@
  *     baseType: CampusPerson
  *     objectType: Building
  *     returnType: AccessResult
+ *     subjectUnion: [Student, Professor]
  *     dispatch:
  *       Student: AuditTrace
  *       Professor: AuditTrace
@@ -172,6 +171,7 @@
  *     baseType: CampusPerson
  *     objectType: Building
  *     returnType: AccessResult
+ *     subjectUnion: [Student, Professor]
  *     middleware: [AuditMiddleware]
  *     dispatch:
  *       Student: DepartmentMatch
@@ -267,23 +267,19 @@ export type DomainType = {
  *                            `execute` and `run`. Use `Promise<T>` for
  *                            async Commands.
  *
- * @property subjectUnion   — **Deprecated.** The `CSU` tuple. Previously
- *                            the authoritative list of Subjects handled by
- *                            this Command. Omit it — the same information is
- *                            already encoded in the `dispatch` map's keys,
- *                            and tooling now derives the subject list from
- *                            there. When present, it is still honoured for
- *                            backward compatibility and cross-validated
- *                            against `dispatch` keys.
+ * @property subjectUnion   — The `CSU` tuple. References to domain types
+ *                            that have `resolverName` (i.e. Subjects). Each
+ *                            entry requires a corresponding resolver method
+ *                            on the Command class, enforced at compile time
+ *                            by `CommandSubjectStrategies<C>`.
  *
  * @property dispatch       — Maps each Subject to its resolution target.
- *                            The keys are the authoritative subject list for
- *                            this Command — they define the `CSU` tuple for
- *                            the generated class. Values must be plain
- *                            Strategy names, looked up across the Templates
- *                            of the same Command. The `resolverName` for each
- *                            key is derived from the Subject's `resolverName`
- *                            in `domainTypes`.
+ *                            Keys are Subject type references (must match
+ *                            entries in `subjectUnion`). Values must be
+ *                            plain Strategy names, looked up across the
+ *                            Templates of the same Command.
+ *                            The resolverName for each Subject key is derived
+ *                            from the Subject's `resolverName` in `domainTypes`.
  *
  * @property middleware      — Optional ordered list of middleware to register
  *                            for this Command. Each entry is a key in the
@@ -319,11 +315,7 @@ export type Command = {
   objectType: DomainTypeRef;
   returnType: DomainTypeRef;
   returnAsync?: boolean;
-  /**
-   * @deprecated Derive subjects from the `dispatch` map's keys instead.
-   * When absent, tooling reads `Object.keys(dispatch)` as the subject list.
-   */
-  subjectUnion?: SubjectRef[];
+  subjectUnion: SubjectRef[];
   middleware?: MiddlewareRef[];
   dispatch: {
     [subject: SubjectRef]: StrategyRef;
