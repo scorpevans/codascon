@@ -35,6 +35,9 @@ const fakeConfigIndex: ConfigIndex = {
   commands: new Map([["TestCommand", null as never]]),
   abstractTemplates: new Map(),
   strategies: new Map(),
+  middlewareCommands: new Map(),
+  middlewareTemplates: new Map(),
+  middlewareStrategies: new Map(),
 };
 
 const fakeValidResult: ExtractResult = {

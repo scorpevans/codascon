@@ -18,6 +18,9 @@ import {
   CommandEntry,
   AbstractTemplateEntry,
   StrategyEntry,
+  MiddlewareCommandEntry,
+  MiddlewareTemplateEntry,
+  MiddlewareStrategyEntry,
 } from "../extract/domain-types.js";
 import type { ConfigIndex } from "../extract/domain-types.js";
 import { emitAst, EmitAstCommand } from "./index.js";
@@ -40,6 +43,9 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     commands: new Map(),
     abstractTemplates: new Map(),
     strategies: new Map(),
+    middlewareCommands: new Map(),
+    middlewareTemplates: new Map(),
+    middlewareStrategies: new Map(),
     ...overrides,
   };
 }
@@ -266,6 +272,79 @@ describe("CommandClassEmitter", () => {
     expect(t).toContain("Template<AccessBuildingCommand, [], Student>");
     expect(t).toContain("Template<AccessBuildingCommand, [], Professor>");
     expect(t).toContain("@odetovibe-generated");
+  });
+
+  it("emits a private readonly singleton for a strategy dispatch target", () => {
+    // Use a configIndex with abstractTemplates populated so the filter applies.
+    // Student → "AccessTemplate.DepartmentMatch" — terminal "DepartmentMatch" is NOT in abstractTemplates → singleton
+    // Professor → "GrantAccess" — "AccessBuildingCommand.GrantAccess" IS in abstractTemplates → no singleton
+    const withTemplates = idx({
+      ...withCmd,
+      abstractTemplates: new Map([
+        [
+          "AccessBuildingCommand.GrantAccess",
+          new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+            isParameterized: false,
+            strategies: {},
+          }),
+        ],
+      ]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(withTemplates, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    const dept = cls.getPropertyOrThrow("departmentMatch");
+    expect(dept.isReadonly()).toBe(true);
+    expect(dept.getInitializer()?.getText()).toBe("new DepartmentMatch()");
+    expect(cls.getProperty("grantAccess")).toBeUndefined(); // abstract template → no singleton
+  });
+
+  it("resolver stub returns singleton for strategy target; throws for abstract template target", () => {
+    const withTemplates = idx({
+      ...withCmd,
+      abstractTemplates: new Map([
+        [
+          "AccessBuildingCommand.GrantAccess",
+          new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
+            isParameterized: false,
+            strategies: {},
+          }),
+        ],
+      ]),
+    });
+    const project = makeProject();
+    emitCmd.run(cmdEntry, ctx(withTemplates, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    expect(cls.getMethodOrThrow("resolveStudent").getBodyText()).toContain(
+      "return this.departmentMatch",
+    );
+    expect(cls.getMethodOrThrow("resolveProfessor").getBodyText()).toContain("throw new Error");
+  });
+
+  it("deduplicates singleton fields when multiple subjects share the same dispatch target", () => {
+    const sharedDispatchCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "SharedStrategy", Professor: "SharedStrategy" },
+    });
+    const project = makeProject();
+    emitCmd.run(sharedDispatchCmd, ctx(withTypes, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    // Only one singleton field, not two
+    const singletonProps = cls.getProperties().filter((p) => p.getName() === "sharedStrategy");
+    expect(singletonProps).toHaveLength(1);
+    expect(cls.getMethodOrThrow("resolveStudent").getBodyText()).toContain(
+      "return this.sharedStrategy",
+    );
+    expect(cls.getMethodOrThrow("resolveProfessor").getBodyText()).toContain(
+      "return this.sharedStrategy",
+    );
   });
 
   it("imports Command as value and Template as type from codascon", () => {
@@ -1091,6 +1170,9 @@ describe("StrategyClassEmitter", () => {
       commands: new Map([["AccessBuildingCommand", cmdEntry]]),
       abstractTemplates: new Map([["AccessBuildingCommand.AccessTemplate", abstractTplEntry]]),
       strategies: new Map(),
+      middlewareCommands: new Map(),
+      middlewareTemplates: new Map(),
+      middlewareStrategies: new Map(),
     };
     const project = makeProject();
     emitCmd.run(stratEntry, ctx(index, project));
@@ -1314,5 +1396,386 @@ describe("TypeScript diagnostics (pre-Load AST gate)", () => {
       .filter((d) => d.getCode() !== MODULE_NOT_FOUND);
 
     expect(diagnostics).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Shared middleware fixtures
+// ═══════════════════════════════════════════════════════════════════
+
+const rock = new SubjectTypeEntry("Rock", { resolverName: "resolveRock" });
+const gem = new SubjectTypeEntry("Gem", { resolverName: "resolveGem" });
+const ctxType = new PlainTypeEntry("Ctx", {});
+const resType = new PlainTypeEntry("Res", {});
+
+const withMwTypes = idx({
+  subjectTypes: new Map([
+    ["Rock", rock],
+    ["Gem", gem],
+  ]),
+  plainTypes: new Map([
+    ["Ctx", ctxType],
+    ["Res", resType],
+  ]),
+});
+
+const traceMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
+  commandName: "trace",
+  baseType: "Ctx",
+  objectType: "Ctx",
+  returnType: "Res",
+  subjectUnion: ["Rock", "Gem"],
+  dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+  templates: {
+    TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
+    TraceGem: { isParameterized: false, strategies: { TraceGemDefault: {} } },
+  },
+});
+
+const withMwCmd: ConfigIndex = {
+  ...withMwTypes,
+  middlewareCommands: new Map([["TraceMiddleware", traceMwEntry]]),
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// MiddlewareCommandClassEmitter
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MiddlewareCommandClassEmitter", () => {
+  it("returns targetFile in commands/ matching the middleware key", () => {
+    const project = makeProject();
+    const result = emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    expect(result.targetFile).toBe("commands/trace-middleware.ts");
+  });
+
+  it("emits an exported class extending MiddlewareCommand with generics", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceMiddleware");
+    expect(cls.isExported()).toBe(true);
+    expect(cls.getExtends()?.getText()).toContain("MiddlewareCommand<Ctx, Ctx, Res, [Rock, Gem]>");
+  });
+
+  it("emits readonly commandName with the correct literal", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceMiddleware");
+    const prop = cls.getPropertyOrThrow("commandName");
+    expect(prop.getInitializer()?.getText()).toBe('"trace" as const');
+  });
+
+  it("emits one resolver method per subject with MiddlewareTemplate return type", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceMiddleware");
+    const resolveRock = cls.getMethodOrThrow("resolveRock");
+    expect(resolveRock.getReturnTypeNode()?.getText()).toBe(
+      "MiddlewareTemplate<TraceMiddleware, [], Rock>",
+    );
+    const resolveGem = cls.getMethodOrThrow("resolveGem");
+    expect(resolveGem.getReturnTypeNode()?.getText()).toBe(
+      "MiddlewareTemplate<TraceMiddleware, [], Gem>",
+    );
+  });
+
+  it("imports MiddlewareCommand as value and MiddlewareTemplate as type from codascon", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const valueImport = sf
+      .getImportDeclarations()
+      .find((d) => d.getModuleSpecifierValue() === "codascon" && !d.isTypeOnly());
+    expect(valueImport?.getNamedImports().map((n) => n.getName())).toContain("MiddlewareCommand");
+    const typeImport = sf
+      .getImportDeclarations()
+      .find((d) => d.getModuleSpecifierValue() === "codascon" && d.isTypeOnly());
+    expect(typeImport?.getNamedImports().map((n) => n.getName())).toContain("MiddlewareTemplate");
+  });
+
+  it("emits private readonly singleton fields for each unique dispatch target", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/trace-middleware.ts")
+      .getClassOrThrow("TraceMiddleware");
+    // dispatch: Rock → "TraceRockDefault" → traceRockDefault
+    //           Gem  → "TraceGemDefault"  → traceGemDefault
+    const rockField = cls.getPropertyOrThrow("traceRockDefault");
+    expect(rockField.isReadonly()).toBe(true);
+    expect(rockField.getInitializer()?.getText()).toBe("new TraceRockDefault()");
+    const gemField = cls.getPropertyOrThrow("traceGemDefault");
+    expect(gemField.isReadonly()).toBe(true);
+    expect(gemField.getInitializer()?.getText()).toBe("new TraceGemDefault()");
+  });
+
+  it("resolver stubs return the singleton field instead of throwing", () => {
+    const project = makeProject();
+    emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/trace-middleware.ts")
+      .getClassOrThrow("TraceMiddleware");
+    expect(cls.getMethodOrThrow("resolveRock").getBodyText()).toContain(
+      "return this.traceRockDefault",
+    );
+    expect(cls.getMethodOrThrow("resolveGem").getBodyText()).toContain(
+      "return this.traceGemDefault",
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MiddlewareAbstractTemplateEmitter — isParameterized: true
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MiddlewareAbstractTemplateEmitter — isParameterized: true", () => {
+  const mwTplEntry = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+    isParameterized: true,
+    subjectSubset: ["Rock"],
+    strategies: { TraceRockDefault: {} },
+  });
+
+  const mwTplIndex: ConfigIndex = {
+    ...withMwCmd,
+    middlewareTemplates: new Map([["TraceMiddleware.TraceRock", mwTplEntry]]),
+  };
+
+  it("writes to the same file as the parent middleware command", () => {
+    const project = makeProject();
+    const result = emitCmd.run(mwTplEntry, ctx(mwTplIndex, project));
+    expect(result.targetFile).toBe("commands/trace-middleware.ts");
+  });
+
+  it("emits a non-exported abstract class with a SU type parameter constrained to the subjectSubset", () => {
+    const project = makeProject();
+    emitCmd.run(mwTplEntry, ctx(mwTplIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRock");
+    expect(cls.isExported()).toBe(false);
+    expect(cls.isAbstract()).toBe(true);
+    expect(cls.getTypeParameters()[0].getText()).toBe("SU extends Rock");
+  });
+
+  it("implements MiddlewareTemplate<ParentKey, [], SU> in the parameterized case", () => {
+    const project = makeProject();
+    emitCmd.run(mwTplEntry, ctx(mwTplIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRock");
+    expect(cls.getImplements()[0].getText()).toBe("MiddlewareTemplate<TraceMiddleware, [], SU>");
+  });
+
+  it("emits a 3-arg execute with inner: Runnable<SU, O, R>", () => {
+    const project = makeProject();
+    emitCmd.run(mwTplEntry, ctx(mwTplIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRock");
+    const exec = cls.getMethodOrThrow("execute");
+    const params = exec.getParameters();
+    expect(params[0].getName()).toBe("subject");
+    expect(params[0].getTypeNode()?.getText()).toBe("SU");
+    expect(params[1].getName()).toBe("object");
+    expect(params[2].getName()).toBe("inner");
+    expect(params[2].getTypeNode()?.getText()).toBe("Runnable<SU, Ctx, Res>");
+  });
+
+  it("imports Runnable as type from codascon", () => {
+    const project = makeProject();
+    emitCmd.run(mwTplEntry, ctx(mwTplIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const typeImport = sf
+      .getImportDeclarations()
+      .find((d) => d.getModuleSpecifierValue() === "codascon" && d.isTypeOnly());
+    expect(typeImport?.getNamedImports().map((n) => n.getName())).toContain("Runnable");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MiddlewareAbstractTemplateEmitter — isParameterized: false
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MiddlewareAbstractTemplateEmitter — isParameterized: false", () => {
+  const mwFixedTplEntry = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+    isParameterized: false,
+    subjectSubset: ["Rock"],
+    strategies: { TraceRockDefault: {} },
+  });
+
+  const mwFixedTplIndex: ConfigIndex = {
+    ...withMwCmd,
+    middlewareTemplates: new Map([["TraceMiddleware.TraceRock", mwFixedTplEntry]]),
+  };
+
+  it("has no type parameter when not isParameterized", () => {
+    const project = makeProject();
+    emitCmd.run(mwFixedTplEntry, ctx(mwFixedTplIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRock");
+    expect(cls.getTypeParameters()).toHaveLength(0);
+  });
+
+  it("implements MiddlewareTemplate with the concrete subject union (not SU)", () => {
+    const project = makeProject();
+    emitCmd.run(mwFixedTplEntry, ctx(mwFixedTplIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRock");
+    expect(cls.getImplements()[0].getText()).toBe("MiddlewareTemplate<TraceMiddleware, [], Rock>");
+  });
+
+  it("execute inner parameter uses the concrete SU type, not SU", () => {
+    const project = makeProject();
+    emitCmd.run(mwFixedTplEntry, ctx(mwFixedTplIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRock");
+    const exec = cls.getMethodOrThrow("execute");
+    const innerParam = exec.getParameters()[2];
+    expect(innerParam.getTypeNode()?.getText()).toBe("Runnable<Rock, Ctx, Res>");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MiddlewareStrategyClassEmitter
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MiddlewareStrategyClassEmitter", () => {
+  const mwTplFixed = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+    isParameterized: false,
+    strategies: { TraceRockDefault: {} },
+  });
+  const mwTplParam = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+    isParameterized: true,
+    subjectSubset: ["Rock"],
+    strategies: { TraceRockDefault: {} },
+  });
+
+  it("extends parent template without type arg when parent is not parameterized", () => {
+    const stratEntry = new MiddlewareStrategyEntry(
+      "TraceRockDefault",
+      "TraceRock",
+      "TraceMiddleware",
+      {},
+    );
+    const index: ConfigIndex = {
+      ...withMwCmd,
+      middlewareTemplates: new Map([["TraceMiddleware.TraceRock", mwTplFixed]]),
+      middlewareStrategies: new Map([["TraceMiddleware.TraceRock.TraceRockDefault", stratEntry]]),
+    };
+    const project = makeProject();
+    emitCmd.run(stratEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRockDefault");
+    expect(cls.getExtends()?.getText()).toBe("TraceRock");
+  });
+
+  it("extends parent template with subject type arg when parent is parameterized", () => {
+    const stratEntry = new MiddlewareStrategyEntry(
+      "TraceRockDefault",
+      "TraceRock",
+      "TraceMiddleware",
+      {},
+    );
+    const index: ConfigIndex = {
+      ...withMwCmd,
+      middlewareTemplates: new Map([["TraceMiddleware.TraceRock", mwTplParam]]),
+      middlewareStrategies: new Map([["TraceMiddleware.TraceRock.TraceRockDefault", stratEntry]]),
+    };
+    const project = makeProject();
+    emitCmd.run(stratEntry, ctx(index, project));
+    const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
+    const cls = sf.getClassOrThrow("TraceRockDefault");
+    expect(cls.getExtends()?.getText()).toBe("TraceRock<Rock>");
+  });
+
+  it("writes to the same file as the parent middleware command", () => {
+    const stratEntry = new MiddlewareStrategyEntry(
+      "TraceRockDefault",
+      "TraceRock",
+      "TraceMiddleware",
+      {},
+    );
+    const index: ConfigIndex = {
+      ...withMwCmd,
+      middlewareTemplates: new Map([["TraceMiddleware.TraceRock", mwTplFixed]]),
+      middlewareStrategies: new Map([["TraceMiddleware.TraceRock.TraceRockDefault", stratEntry]]),
+    };
+    const project = makeProject();
+    const result = emitCmd.run(stratEntry, ctx(index, project));
+    expect(result.targetFile).toBe("commands/trace-middleware.ts");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// CommandClassEmitter — middleware getter
+// ═══════════════════════════════════════════════════════════════════
+
+describe("CommandClassEmitter — middleware getter", () => {
+  const mineCmd = new CommandEntry("MineCommand", {
+    commandName: "mine",
+    baseType: "Ctx",
+    objectType: "Ctx",
+    returnType: "Res",
+    subjectUnion: ["Rock"],
+    dispatch: { Rock: "RockMinerDefault" },
+    templates: { RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } } },
+    middleware: ["TraceMiddleware"],
+  });
+
+  const mineIndex: ConfigIndex = {
+    ...withMwTypes,
+    commands: new Map([["MineCommand", mineCmd]]),
+    middlewareCommands: new Map([["TraceMiddleware", traceMwEntry]]),
+  };
+
+  it("emits override get middleware() when config.middleware is set", () => {
+    const project = makeProject();
+    emitCmd.run(mineCmd, ctx(mineIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/mine.ts");
+    const cls = sf.getClassOrThrow("MineCommand");
+    const getter = cls.getGetAccessor("middleware");
+    expect(getter).toBeDefined();
+    expect(getter?.hasModifier("override" as Parameters<typeof getter.hasModifier>[0])).toBe(true);
+  });
+
+  it("middleware getter returns an array of new middleware instances", () => {
+    const project = makeProject();
+    emitCmd.run(mineCmd, ctx(mineIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/mine.ts");
+    const cls = sf.getClassOrThrow("MineCommand");
+    const getter = cls.getGetAccessorOrThrow("middleware");
+    const body = getter.getBodyText();
+    expect(body).toContain("new TraceMiddleware()");
+  });
+
+  it("imports the middleware class as a value import", () => {
+    const project = makeProject();
+    emitCmd.run(mineCmd, ctx(mineIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/mine.ts");
+    const valueImports = sf
+      .getImportDeclarations()
+      .filter((d) => !d.isTypeOnly())
+      .flatMap((d) => d.getNamedImports().map((n) => n.getName()));
+    expect(valueImports).toContain("TraceMiddleware");
+  });
+
+  it("does not emit get middleware() when config.middleware is absent", () => {
+    const noMwCmd = new CommandEntry("MineCommand", {
+      commandName: "mine",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      subjectUnion: ["Rock"],
+      dispatch: { Rock: "RockMinerDefault" },
+      templates: { RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } } },
+    });
+    const noMwIndex: ConfigIndex = {
+      ...withMwTypes,
+      commands: new Map([["MineCommand", noMwCmd]]),
+    };
+    const project = makeProject();
+    emitCmd.run(noMwCmd, ctx(noMwIndex, project));
+    const sf = project.getSourceFileOrThrow("commands/mine.ts");
+    const cls = sf.getClassOrThrow("MineCommand");
+    expect(cls.getGetAccessor("middleware")).toBeUndefined();
   });
 });

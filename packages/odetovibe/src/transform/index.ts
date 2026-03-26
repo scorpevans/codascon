@@ -68,6 +68,20 @@ export function emitAst(configIndex: ConfigIndex, ctx: EmitContext): EmitResult[
   for (const entry of configIndex.commands.values()) {
     results.push(emitCmd.run(entry, ctx));
   }
+  for (const tplEntry of configIndex.middlewareTemplates.values()) {
+    results.push(emitCmd.run(tplEntry, ctx));
+    for (const stratEntry of configIndex.middlewareStrategies.values()) {
+      if (
+        stratEntry.commandKey === tplEntry.commandKey &&
+        stratEntry.templateKey === tplEntry.key
+      ) {
+        results.push(emitCmd.run(stratEntry, ctx));
+      }
+    }
+  }
+  for (const entry of configIndex.middlewareCommands.values()) {
+    results.push(emitCmd.run(entry, ctx));
+  }
 
   return results;
 }

@@ -24,6 +24,14 @@
  * - **Command**: An operation performed on Subjects. Declares its generic
  *   parameters (base type, object type, return type, subject union) and
  *   its dispatch map — which Template or Strategy handles each Subject.
+ *   A Command may also declare an ordered list of middleware to apply.
+ *
+ * - **MiddlewareCommand**: An interceptor for a Command's dispatch. Declared
+ *   in the top-level `middleware` map. Structurally identical to a Command —
+ *   same generic parameters, same dispatch map, same templates — but generates
+ *   a class extending `MiddlewareCommand<B, O, R, BSL>` rather than
+ *   `Command<B, O, R, BSL>`. A middleware's `subjectUnion` must be a superset
+ *   of every Command it is registered in (coverage, not equality).
  *
  * - **Template**: The strategy interface/abstract class. Declares which
  *   Command it serves, its hook dependencies (other Commands invoked during
@@ -71,11 +79,21 @@
  *    `commandHooks` keys. Strategies only override or instantiate hooks
  *    declared by their Template — they do not introduce new hooks.
  *
- * 8. **Template commandHooks values**: Must reference entries in `commands`.
+ * 8. **Template commandHooks values**: Must reference entries in `commands`
+ *    or `middleware`.
  *
  * 9. **Template abstractness**: All Templates generate as abstract classes.
  *    Dispatch must not reference Templates directly — only Strategy names
  *    (from a Template's `strategies` map) are valid dispatch targets.
+ *
+ * 10. **Middleware reference validity**: Every entry in a Command's
+ *     `middleware` list must reference a key in the top-level `middleware`
+ *     map.
+ *
+ * 11. **Middleware coverage**: Each middleware in a Command's `middleware`
+ *     list must declare a `subjectUnion` that is a superset of (or equal to)
+ *     the Command's `subjectUnion`. A middleware covering fewer Subjects than
+ *     the Command would leave some Subjects unintercepted.
  *
  * ## Out of Scope
  *
@@ -100,8 +118,9 @@
  *   Both are valid; the schema declares the hook dependency, not its
  *   lifecycle.
  *
- * - **Run method overrides**: Commands may override `run` for cross-cutting
- *   concerns (auditing, logging, pre/post-processing).
+ * - **Middleware instantiation**: How MiddlewareCommand instances are created
+ *   and passed to the `override get middleware()` getter is a client detail.
+ *   Codegen emits the getter stub; injection strategy is left to the client.
  *
  * ## Example
  *
@@ -127,6 +146,22 @@
  *     granted: boolean
  *     reason: string
  *
+ * middleware:
+ *   AuditMiddleware:
+ *     commandName: auditMiddleware
+ *     baseType: CampusPerson
+ *     objectType: Building
+ *     returnType: AccessResult
+ *     subjectUnion: [Student, Professor]
+ *     dispatch:
+ *       Student: AuditTrace
+ *       Professor: AuditTrace
+ *     templates:
+ *       AuditTemplate:
+ *         isParameterized: false
+ *         strategies:
+ *           AuditTrace: {}
+ *
  * commands:
  *   AccessBuildingCommand:
  *     commandName: accessBuilding
@@ -134,9 +169,10 @@
  *     objectType: Building
  *     returnType: AccessResult
  *     subjectUnion: [Student, Professor]
+ *     middleware: [AuditMiddleware]
  *     dispatch:
  *       Student: DepartmentMatch
- *       Professor: GrantAccess
+ *       Professor: GrantAccessDefault
  *     templates:
  *       AccessTemplate:
  *         isParameterized: true
@@ -152,7 +188,8 @@
  *               audit: StrictAuditCommand
  *       GrantAccess:
  *         isParameterized: false
- *         strategies: {}
+ *         strategies:
+ *           GrantAccessDefault: {}
  * ```
  *
  */
@@ -165,7 +202,7 @@ export type DomainTypeRef = string;
 /** Key in `domainTypes` that must have `resolverName` (a Subject). */
 export type SubjectRef = string;
 
-/** Key in `commands`. */
+/** Key in `commands` or `middleware`. */
 export type CommandRef = string;
 
 /** Unqualified reference to a Template: `"TemplateName"`. */
@@ -173,6 +210,9 @@ export type TemplateRef = string;
 
 /** Unqualified reference to a Strategy: `"StrategyName"`. */
 export type StrategyRef = string;
+
+/** Key in the top-level `middleware` map — a MiddlewareCommand entry. */
+export type MiddlewareRef = string;
 
 // ─── Domain Types ────────────────────────────────────────────────
 
@@ -238,6 +278,18 @@ export type DomainType = {
  *                            The resolverName for each Subject key is derived
  *                            from the Subject's `resolverName` in `domainTypes`.
  *
+ * @property middleware      — Optional ordered list of middleware to register
+ *                            for this Command. Each entry is a key in the
+ *                            top-level `middleware` map. Middleware is applied
+ *                            in list order — the first entry is outermost
+ *                            (runs first, finishes last).
+ *
+ *                            Each listed middleware must cover all Subjects in
+ *                            this Command's `subjectUnion` (middleware BSL ⊇
+ *                            command BSL — coverage, not equality). Codegen
+ *                            emits an `override get middleware()` getter on the
+ *                            Command class returning the registered instances.
+ *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
  *                            declares its subject narrowing, hooks, and
@@ -252,7 +304,7 @@ export type DomainType = {
  *                            Only Strategy names (from this map) are valid
  *                            as dispatch targets.
  */
-/** A Command entry in the YAML config — declares generic params, dispatch map, and templates. */
+/** A Command entry in the YAML config — declares generic params, middleware, dispatch map, and templates. */
 export type Command = {
   commandName: string;
   baseType: DomainTypeRef;
@@ -260,8 +312,9 @@ export type Command = {
   returnType: DomainTypeRef;
   returnAsync?: boolean;
   subjectUnion: SubjectRef[];
+  middleware?: MiddlewareRef[];
   dispatch: {
-    [subject: SubjectRef]: TemplateRef | StrategyRef;
+    [subject: SubjectRef]: StrategyRef;
   };
   templates: {
     [key: string]: Template;
@@ -299,11 +352,12 @@ export type Command = {
  *   subject union or the declared `subjectSubset`). Strategy
  *   `subjectSubset` is ignored in this case.
  *
- * @property commandHooks   — Other Commands that the Template's `execute`
- *                            method may invoke during execution. Keys are
- *                            the property names on the Template class
- *                            (derived from the hook Command's `commandName`).
- *                            Values reference entries in `commands`.
+ * @property commandHooks   — Other Commands (or MiddlewareCommands) that the
+ *                            Template's `execute` method may invoke during
+ *                            execution. Keys are the property names on the
+ *                            Template class (derived from the hook Command's
+ *                            `commandName`). Values reference entries in
+ *                            `commands` or `middleware`.
  *
  *                            In the framework, these become the `H` parameter
  *                            on `Template<C, H, SU>` and are enforced
@@ -376,7 +430,7 @@ export type Template = {
  * @property commandHooks   — Hook overrides. Keys must be a subset of the
  *                            parent Template's `commandHooks` keys —
  *                            Strategies do not introduce new hooks. Values
- *                            reference entries in `commands`.
+ *                            reference entries in `commands` or `middleware`.
  *
  *                            Use this when the Strategy needs a different
  *                            concrete Command for a hook than what the
@@ -428,12 +482,29 @@ export type Strategy = {
  *                            without are plain types (interfaces, result
  *                            types, context objects, base types).
  *
+ * @property middleware      — Optional map of MiddlewareCommands, keyed by
+ *                            class name. Each entry declares a
+ *                            MiddlewareCommand — an interceptor that wraps
+ *                            Command dispatch. Structurally identical to a
+ *                            Command entry (same generic parameters, same
+ *                            dispatch map, same templates), but generates a
+ *                            class extending `MiddlewareCommand<B, O, R, BSL>`
+ *                            rather than `Command<B, O, R, BSL>`.
+ *
+ *                            Middleware is separated from `commands` for
+ *                            semantic clarity — both are operations, but their
+ *                            roles differ: Commands produce results, Middleware
+ *                            intercepts dispatch chains. Having them in distinct
+ *                            maps makes this distinction explicit at the schema
+ *                            level without introducing a different structural
+ *                            type.
+ *
  * @property commands       — All Commands, keyed by class name. Each
  *                            Command declares its generic parameters, its
- *                            dispatch map, and its Templates (with nested
- *                            Strategies).
+ *                            optional middleware list, its dispatch map,
+ *                            and its Templates (with nested Strategies).
  */
-/** Root schema for a codascon domain YAML config — declares namespace, type imports, domain types, and commands. */
+/** Root schema for a codascon domain YAML config — declares namespace, type imports, domain types, middleware, and commands. */
 export interface YamlConfig {
   namespace?: string;
   typeImports?: {
@@ -441,6 +512,9 @@ export interface YamlConfig {
   };
   domainTypes: {
     [key: string]: DomainType;
+  };
+  middleware?: {
+    [key: string]: Command;
   };
   commands: {
     [key: string]: Command;

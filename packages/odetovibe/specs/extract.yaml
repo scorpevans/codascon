@@ -5,11 +5,16 @@
 #   1. Parsing a YAML config file into a typed ConfigIndex (parseYaml)
 #   2. Validating all entries against schema rules (validateYaml)
 #
-# Domain types with `resolverName` are split into SubjectTypeEntry at
-# parse time; types without become PlainTypeEntry. Templates always
-# become AbstractTemplateEntry entries (all templates are abstract).
-# This ensures the ValidateEntryCommand dispatches structurally with
-# no runtime branching.
+# At parse time the domain splits entries into structural categories:
+#   - domainType with `resolverName`       → SubjectTypeEntry
+#   - domainType without `resolverName`    → PlainTypeEntry
+#   - commands entry                       → CommandEntry
+#   - template with non-empty strategies   → AbstractTemplateEntry
+#   - strategy                             → StrategyEntry
+#   - middleware entry                     → MiddlewareCommandEntry
+#   - middleware template                  → MiddlewareTemplateEntry
+#   - middleware strategy                  → MiddlewareStrategyEntry
+#
 #
 # Public API exposed to clients:
 #   - parseYaml(yamlPath: string): ConfigIndex
@@ -38,6 +43,15 @@ domainTypes:
   StrategyEntry:
     resolverName: resolveStrategy
 
+  MiddlewareCommandEntry:
+    resolverName: resolveMiddlewareCommand
+
+  MiddlewareTemplateEntry:
+    resolverName: resolveMiddlewareTemplate
+
+  MiddlewareStrategyEntry:
+    resolverName: resolveMiddlewareStrategy
+
   # ── Object type ─────────────────────────────────────────────────
   ConfigIndex:
 
@@ -50,8 +64,16 @@ domainTypes:
 
 commands:
   # Validates commandHooks entries in a template or strategy config.
-  # Used as a hook in AbstractTemplateValidator and StrategyValidator
-  # to centralise commandHooks validation without duplicating logic.
+  # Used as a hook in AbstractTemplateValidator, StrategyValidator,
+  # MiddlewareTemplateValidator, and MiddlewareStrategyValidator to
+  # centralise commandHooks validation without duplicating logic.
+  #
+  # AbstractTemplateHooksValidator handles both AbstractTemplateEntry
+  # and MiddlewareTemplateEntry — same rules, both look up commands
+  # and middlewareCommands for hook refs.
+  # StrategyHooksValidator handles both StrategyEntry and
+  # MiddlewareStrategyEntry — same rules, both look up parent template
+  # in abstractTemplates and middlewareTemplates.
   ValidateCommandHooksCommand:
     commandName: validateCommandHooks
     baseType: ConfigEntry
@@ -60,22 +82,31 @@ commands:
     subjectUnion:
       - AbstractTemplateEntry
       - StrategyEntry
+      - MiddlewareTemplateEntry
+      - MiddlewareStrategyEntry
     dispatch:
       AbstractTemplateEntry: AbstractTemplateHooksValidatorDefault
       StrategyEntry: StrategyHooksValidatorDefault
+      MiddlewareTemplateEntry: AbstractTemplateHooksValidatorDefault
+      MiddlewareStrategyEntry: StrategyHooksValidatorDefault
     templates:
-      # Checks that commandHooks values reference known Commands
+      # Checks that commandHooks values reference known Commands or
+      # MiddlewareCommands. Handles both AbstractTemplateEntry and
+      # MiddlewareTemplateEntry (same validation logic).
       AbstractTemplateHooksValidator:
         isParameterized: false
-        subjectSubset: [AbstractTemplateEntry]
+        subjectSubset: [AbstractTemplateEntry, MiddlewareTemplateEntry]
         strategies:
           AbstractTemplateHooksValidatorDefault: {}
 
-      # Checks that commandHooks keys are a subset of the parent Template's
-      # commandHooks keys, and that values reference known Commands
+      # Checks that commandHooks keys are a subset of the parent
+      # Template's commandHooks keys, and that values reference known
+      # Commands or MiddlewareCommands. Handles both StrategyEntry and
+      # MiddlewareStrategyEntry — looks up parent in both
+      # abstractTemplates and middlewareTemplates.
       StrategyHooksValidator:
         isParameterized: false
-        subjectSubset: [StrategyEntry]
+        subjectSubset: [StrategyEntry, MiddlewareStrategyEntry]
         strategies:
           StrategyHooksValidatorDefault: {}
 
@@ -90,12 +121,18 @@ commands:
       - CommandEntry
       - AbstractTemplateEntry
       - StrategyEntry
+      - MiddlewareCommandEntry
+      - MiddlewareTemplateEntry
+      - MiddlewareStrategyEntry
     dispatch:
       SubjectTypeEntry: SubjectTypeValidatorDefault
       PlainTypeEntry: PlainTypeValidatorDefault
       CommandEntry: CommandValidatorDefault
       AbstractTemplateEntry: AbstractTemplateValidatorDefault
       StrategyEntry: StrategyValidatorDefault
+      MiddlewareCommandEntry: MiddlewareCommandValidatorDefault
+      MiddlewareTemplateEntry: MiddlewareTemplateValidatorDefault
+      MiddlewareStrategyEntry: MiddlewareStrategyValidatorDefault
     templates:
       # Checks resolverName prefix ("resolve") and uniqueness across subjectTypes
       SubjectTypeValidator:
@@ -111,7 +148,7 @@ commands:
         strategies:
           PlainTypeValidatorDefault: {}
 
-      # Checks type refs, subjectUnion validity, dispatch coverage and targets
+      # Checks type refs, subjectUnion validity, dispatch coverage and targets, middleware refs and coverage
       CommandValidator:
         isParameterized: false
         subjectSubset: [CommandEntry]
@@ -137,3 +174,31 @@ commands:
           validateCommandHooks: ValidateCommandHooksCommand
         strategies:
           StrategyValidatorDefault: {}
+
+      # Same rules as CommandValidator. MiddlewareCommands can also have
+      # their own middleware[] list (chained middleware).
+      MiddlewareCommandValidator:
+        isParameterized: false
+        subjectSubset: [MiddlewareCommandEntry]
+        strategies:
+          MiddlewareCommandValidatorDefault: {}
+
+      # Same rules as AbstractTemplateValidator but looks up parent in
+      # middlewareCommands instead of commands.
+      MiddlewareTemplateValidator:
+        isParameterized: false
+        subjectSubset: [MiddlewareTemplateEntry]
+        commandHooks:
+          validateCommandHooks: ValidateCommandHooksCommand
+        strategies:
+          MiddlewareTemplateValidatorDefault: {}
+
+      # Same rules as StrategyValidator but looks up parent template in
+      # middlewareTemplates and parent command in middlewareCommands.
+      MiddlewareStrategyValidator:
+        isParameterized: false
+        subjectSubset: [MiddlewareStrategyEntry]
+        commandHooks:
+          validateCommandHooks: ValidateCommandHooksCommand
+        strategies:
+          MiddlewareStrategyValidatorDefault: {}

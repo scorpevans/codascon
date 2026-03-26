@@ -23,16 +23,32 @@
  * are typically implemented as abstract classes, with concrete Strategies
  * extending them.
  *
+ * **MiddlewareCommand** — A Command subclass that intercepts dispatch.
+ * Middleware receives the subject, object, and `inner` (the wrapped command —
+ * the next step in the chain), and can run logic before and after calling
+ * `inner.run()`. Registered at the command level via `Command.middleware`:
+ * wraps the full dispatch cycle — resolver method selection and execute —
+ * for every Subject. The first element in the array is the outermost layer.
+ *
  * ## Dispatch Flow
+ *
+ * Every command — middleware or not — follows the same two-phase procedure,
+ * applied recursively through the chain:
  *
  * ```
  * command.run(subject, object)
- *   → subject.getCommandStrategy(command, object)     // Subject initiates double dispatch
- *     → command[subject.resolverName](subject, object)   // Command's resolver method selects strategy
- *       → returns a Template instance                 // The chosen strategy
- *   → template.execute(subject, object)               // Strategy executes
- *   → returns R                                       // Result
+ *   → _runChain: for each command in [command.middleware..., command]:
+ *       → _dispatch: subject.getCommandStrategy(command, object)
+ *           → command[subject.resolverName](subject, object)  // resolver selects strategy
+ *           → returns a Template instance
+ *         → strategy.execute(subject, object)           // regular command
+ *         → strategy.execute(subject, object, inner)    // middleware command
+ *             // inner = continuation: the next step in the enclosing chain
+ *   ← chain unwinds, returns R
  * ```
+ *
+ * Because every step uses `_runChain` / `_dispatch`, middleware registered on
+ * a middleware command are automatically applied — no special casing.
  *
  * ## Type Safety Guarantees
  *
@@ -194,6 +210,9 @@ export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : n
 /** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. Returns `never` if `C` does not extend `Command`. */
 export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : never;
 
+/** Extracts the base type (`B`) from a Command — the shared constraint all Subjects in the union extend. Returns `never` if `C` does not extend `Command`. */
+export type CommandBase<C> = C extends Command<infer B, any, any, any> ? B : never;
+
 // ─── Internal Type Utilities ─────────────────────────────────────
 
 /*
@@ -226,6 +245,46 @@ export type CommandSubjectUnion<C> =
       C extends { _bsl: infer BSL extends any[] }
       ? BSL[number]
       : never;
+
+/*
+ * Extracts the BSL tuple from a Command's `_bsl` phantom property.
+ *
+ * Given `Command<B, O, R, [Student, Professor]>`, produces `[Student, Professor]`.
+ * This is the ordered Subject tuple as declared on the Command — the same type
+ * passed as the `BSL` type argument.
+ *
+ * Companion to `CommandSubjectUnion<C>`, which goes one step further and
+ * produces `BSL[number]` — the union of all Subject types. Use `CommandBSL`
+ * when the tuple structure must be preserved rather than collapsed to a union
+ * (e.g. when passing the ordered Subject tuple as a type argument, or when
+ * working with tuple indices).
+ *
+ * Returns `never` for `any` (IsAny guard) and if `C` does not extend `Command`.
+ */
+/** Extracts the BSL tuple from a Command — the original ordered Subject tuple declared on the Command. Returns `never` for `any` or non-Command types. */
+export type CommandBSL<C> = 0 extends 1 & C
+  ? never
+  : C extends { _bsl: infer BSL extends any[] }
+    ? BSL
+    : never;
+
+/*
+ * The minimal interface required to invoke a middleware continuation.
+ *
+ * Declare `inner` as `Runnable<SU, O, R>` in middleware `execute` methods
+ * rather than as the full Command type. `Runnable` accurately describes
+ * the only safe operation on `inner`: calling `run()`. The framework passes
+ * a `Chain` object (not a real Command instance) as `inner` at runtime;
+ * typing it as the full Command would allow clients to call methods that
+ * do not exist on the Chain, compiling but crashing at runtime.
+ *
+ * @example
+ * execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+ *   return inner.run(subject, object);
+ * }
+ */
+/** Minimal continuation interface for middleware `execute` methods. Declare `inner` as `Runnable<SU, O, R>` rather than the full Command type. */
+export type Runnable<SU, O, R> = { run(subject: SU, object: O): R };
 
 /*
  * Defines the signature of a single resolver method on a Command.
@@ -298,6 +357,37 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  */
 type CommandSubjectStrategies<C extends AnyCommand> = {
   [SU in CommandSubjectUnion<C> as SubjectResolverName<SU>]: Visit<C, SU>[SubjectResolverName<SU>];
+};
+
+/*
+ * Parallel to `Visit<C, BS>` but for `MiddlewareCommand` resolver methods.
+ *
+ * `Visit` requires resolvers to return `Template<C, any[], BS>` — a 2-arg execute.
+ * `MiddlewareVisit` requires resolvers to return `MiddlewareTemplate<C, any[], BS>` —
+ * a 3-arg execute that includes the `inner` continuation. The two types are otherwise
+ * structurally symmetric.
+ */
+type MiddlewareVisit<C extends AnyCommand, BS extends CommandSubjectUnion<C>> = {
+  [K in SubjectResolverName<BS>]: (
+    subject: BS,
+    object: Readonly<CommandObject<C>>,
+  ) => MiddlewareTemplate<C, any[], BS>;
+};
+
+/*
+ * Parallel to `CommandSubjectStrategies<C>` but for `MiddlewareCommand` coverage.
+ *
+ * Iterates over `CommandSubjectUnion<Command<B, O, R, BSL>>` and checks that each
+ * Subject's resolver method is present and returns a `MiddlewareTemplate`-shaped
+ * value. Used as the coverage constraint in `MiddlewareElement` — a
+ * `MiddlewareCommand<B, O, R, SupersetBSL>` with resolver methods for all subjects
+ * in BSL satisfies this type even if its own BSL is wider.
+ */
+type MiddlewareSubjectStrategies<B, O, R, BSL extends (B & Subject)[]> = {
+  [SU in CommandSubjectUnion<Command<B, O, R, BSL>> as SubjectResolverName<SU>]: MiddlewareVisit<
+    Command<B, O, R, BSL>,
+    SU
+  >[SubjectResolverName<SU>];
 };
 
 /*
@@ -386,7 +476,7 @@ export abstract class Subject {
   abstract readonly resolverName: string;
 
   /**
-   * Performs the Subject's half of double dispatch. Called by `Command.run()` —
+   * Performs the Subject's half of double dispatch. Called by `Command._dispatch()` —
    * not intended for direct use by consumers.
    * @internal
    */
@@ -426,13 +516,21 @@ export abstract class Subject {
  *
  * ## The `run` Method
  *
- * `run` orchestrates the full dispatch cycle:
- * 1. Calls `subject.getCommandStrategy(this, object)` — Subject initiates
- *    double dispatch by calling `this[subject.resolverName](subject, object)`
- *    on the Command.
- * 2. The resolver method inspects the Subject and object, selects and returns
- *    a Template (strategy).
- * 3. `run` calls `template.execute(subject, object)` and returns the result.
+ * `run` is the public entry point. Internally it delegates to `_runChain`,
+ * which applies a unified two-phase procedure to every command in the chain:
+ *
+ * 1. **`_runChain`** — processes this command's own registered middleware
+ *    (first element outermost), then calls `_dispatch` as the terminal step.
+ *    Middleware commands are processed identically — their own registered
+ *    middleware are applied recursively before their dispatch phase.
+ *
+ * 2. **`_dispatch`** — calls `subject.getCommandStrategy(this, object)` to
+ *    select the strategy, then calls `strategy.execute(subject, object)` for
+ *    regular commands. `MiddlewareCommand` overrides `_dispatch` to cast the
+ *    strategy to the 3-arg form and forward the continuation as `inner`.
+ *
+ * Because every step uses `_runChain` / `_dispatch`, middleware registered on
+ * a middleware command are automatically applied.
  *
  * The `this` parameter constraint
  * (`this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralResolverNames<BSL>`)
@@ -440,8 +538,8 @@ export abstract class Subject {
  * The error surfaces at the call site when any resolver method is missing or a
  * `resolverName` is non-literal — `run` becomes uncallable.
  *
- * `run` can be overridden by subclasses (e.g. for auditing, logging,
- * pre/post-processing) using `super.run(subject, object)`.
+ * `run` can be overridden by subclasses using `super.run(subject, object)`
+ * to unconditionally wrap the chain entry point.
  *
  * ## Resolver Method Semantics
  *
@@ -469,6 +567,33 @@ export abstract class Subject {
  *
  * const result = accessCmd.run(student, building);
  */
+/*
+ * Element type for `Command.middleware` arrays.
+ *
+ * Enforces two constraints on each middleware entry:
+ *
+ * 1. **Coverage** — checked via `MiddlewareSubjectStrategies`, the middleware
+ *    analog of `CommandSubjectStrategies`. Requires a resolver method for every
+ *    Subject in the host Command's BSL, each returning a value with a 3-arg
+ *    execute (subject, object, inner). A `MiddlewareCommand<B, O, R, SupersetBSL>`
+ *    satisfies this if it has resolver methods for every Subject in BSL — even if
+ *    its own BSL is wider.
+ *
+ * 2. **Callable shape** — exposes `_runChain` with a required continuation so
+ *    `Command._runChain` can thread each step through the chain.
+ *
+ * Not exported — TypeScript inlines type aliases in `.d.ts`; TS4055 only fires
+ * for unexported class/interface names.
+ */
+type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = MiddlewareSubjectStrategies<
+  B,
+  O,
+  R,
+  BSL
+> & {
+  _runChain(subject: BSL[number], object: O, continuation: Runnable<BSL[number], O, R>): R;
+};
+
 /**
  * Abstract base class for Commands. Declare `readonly commandName` as a string literal
  * and implement one resolver method per Subject (named after that Subject's `resolverName`).
@@ -480,13 +605,79 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
   // Must NOT use the JSDoc internal marker — stripInternal would strip it from .d.ts, breaking cross-package consumers.
   declare readonly _bsl: BSL;
 
+  // Lazily populated by `_runChain` on the first dispatch. Caches the result of
+  // `this.middleware` so that override getters returning array literals allocate
+  // exactly once per instance rather than on every `run()` call.
+  // Protected (not private) so that MiddlewareCommand._runChain can access it.
+  protected _mwCache?: MiddlewareElement<B, O, R, BSL>[];
+
+  /**
+   * Command-level middleware applied to every dispatch through this Command.
+   * Each element must cover every Subject in this Command's BSL — declare its
+   * own BSL as a superset and implement the required resolver methods.
+   *
+   * Array ordering: the first element is outermost (starts first, finishes last).
+   * To share middleware across all Commands in a domain, override this getter
+   * in a shared base class and compose with `[...super.middleware, myMiddleware]`.
+   *
+   * The framework caches the result of this getter on the first dispatch and
+   * reuses it for the lifetime of the instance. Middleware is therefore fixed
+   * after the first `run()` call — mutations to the returned array or replacing
+   * the getter's output after that point have no effect.
+   *
+   * Defaults to `[]`.
+   */
+  get middleware(): MiddlewareElement<B, O, R, BSL>[] {
+    return [];
+  }
+
+  /**
+   * Processes this command's own middleware chain, then calls `_dispatch`.
+   * `MiddlewareCommand` overrides both this method and `_dispatch` to thread
+   * a continuation through to `execute`. Do not override in client subclasses
+   * — doing so bypasses the dispatch chain.
+   *
+   * `m._runChain` is callable directly from within this method because
+   * `MiddlewareElement` (the element type of `_mwCache`) declares `_runChain`
+   * as part of its contract. `MiddlewareCommand` satisfies this by overriding
+   * without an access modifier (widening protected → public is permitted).
+   * @internal
+   */
+  protected _runChain(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
+    const mw = this._mwCache ?? (this._mwCache = this.middleware);
+    if (mw.length === 0) return this._dispatch(subject, object);
+    type SU = CommandSubjectUnion<Command<B, O, R, BSL>>;
+    return mw
+      .reduceRight((next, m) => ({ run: (s: SU, o: O): R => m._runChain(s, o, next) }), {
+        run: (s: SU, o: O): R => this._dispatch(s, o),
+      })
+      .run(subject, object);
+  }
+
+  /**
+   * Selects the strategy for the current subject and executes it without a
+   * continuation. Called by `_runChain` as the terminal dispatch step for
+   * regular (non-middleware) commands. `MiddlewareCommand` overrides this to
+   * cast the strategy to `MiddlewareTemplate` and pass the continuation as
+   * `inner`. Do not override in client subclasses — doing so bypasses the
+   * dispatch chain.
+   * @internal
+   */
+  protected _dispatch(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
+    return subject.getCommandStrategy(this, object).execute(subject, object);
+  }
+
+  /**
+   * Dispatches `subject` and `object` through the full middleware chain,
+   * then selects and executes the matching strategy. Requires all resolver
+   * methods to be implemented and all `resolverName` values to be string literals.
+   */
   run<T extends CommandSubjectUnion<Command<B, O, R, BSL>>>(
     this: this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralResolverNames<BSL>,
     subject: T,
     object: O,
   ): R {
-    const strategy = subject.getCommandStrategy(this, object);
-    return strategy.execute(subject, object);
+    return this._runChain(subject, object);
   }
 }
 
@@ -502,9 +693,12 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
  *   resolves to an error string — no value of type `Cmd` can satisfy a string
  *   literal type, so the `implements` check fails at the declaration site.
  *
- * `H extends AnyCommand[]` is the constraint. The hook coverage check uses a
- * structural pattern (`Cmd extends { [K in SubjectResolverName<SU>]: any }`) rather
- * than `CommandSubjectUnion<Cmd>`, so the constraint does not need to be `unknown[]`.
+ * `H extends AnyCommand[]` is the constraint. `SU extends CommandSubjectUnion<H[number]>`
+ * bounds `SU` to subjects covered by at least one hook Command — `H[number]` collapses
+ * the hook tuple to a union before `CommandSubjectUnion` distributes over it.
+ * The hook coverage check inside the mapped type uses a structural pattern
+ * (`Cmd extends { [K in SubjectResolverName<SU>]: any }`) rather than
+ * `CommandSubjectUnion<Cmd>`, so the constraint on `H` does not need to be `unknown[]`.
  *
  * @example
  * // LogCommand handles [Cat, Dog, Bird] — has resolveCat, resolveDog, resolveBird
@@ -515,13 +709,14 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
  * // CommandHooks<[CatOnlyCommand], Cat | Dog>:
  * //   CatOnlyCommand extends { resolveCat: any, resolveDog: any } → false → { catOnly: "Error: ..." }
  */
-type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
+type CommandHooks<H extends AnyCommand[], SU extends CommandSubjectUnion<H[number]>> = {
   [Cmd in H[number] as CommandName<Cmd>]: Cmd extends {
     [K in SubjectResolverName<SU>]: any;
   }
     ? Cmd
     : "Error: hook Command does not declare resolver methods for all subjects in SU";
 };
+
 // ─── Template ────────────────────────────────────────────────────
 
 /*
@@ -631,14 +826,215 @@ type CommandHooks<H extends AnyCommand[], SU extends Subject> = {
  *    satisfy `Template<C, [LogCommand], Cat | Dog>` because it is missing
  *    `resolveDog`.
  */
-/**
- * Strategy interface. Implement `execute(subject, object)` and declare a property
- * for each hook Command in `H` (keyed by `commandName`).
- */
 export type Template<
   C extends AnyCommand,
   H extends AnyCommand[] = [],
   SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
-> = CommandHooks<H, SU> & {
+> = {
   execute<T extends SU>(subject: T, object: CommandObject<C>): CommandReturn<C>;
+} & CommandHooks<H, SU>;
+
+/**
+ * The Template type for `MiddlewareCommand` resolver methods. Use this as the
+ * return type of resolver methods in a `MiddlewareCommand` subclass when you
+ * want to declare the `inner` parameter in `execute`:
+ *
+ * ```ts
+ * class TraceMiddleware extends MiddlewareCommand<object, Ctx, number, [Rock, Gem]> {
+ *   readonly commandName = "trace" as const;
+ *   resolveRock(r: Rock, ctx: Ctx): MiddlewareTemplate<TraceMiddleware, [], Rock> {
+ *     return {
+ *       execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, number>): number {
+ *         console.log("before");
+ *         const result = inner.run(subject, object);
+ *         console.log("after");
+ *         return result;
+ *       },
+ *     };
+ *   }
+ *   resolveGem(g: Gem, ctx: Ctx): MiddlewareTemplate<TraceMiddleware, [], Gem> {
+ *     return {
+ *       execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, number>): number {
+ *         return inner.run(subject, object);
+ *       },
+ *     };
+ *   }
+ * }
+ * ```
+ *
+ * `inner` is the next command in the middleware chain — call `inner.run(subject, object)`
+ * to invoke it, optionally enriching `object` first. `inner` is always defined when
+ * invoked as part of a chain. Invoking a `MiddlewareCommand` directly via `run()` is a
+ * compile error in well-typed TypeScript and throws at runtime when bypassed — always
+ * register middleware via `Command.middleware`.
+ *
+ * **Note:** TypeScript's fewer-params rule means an `execute` that omits `inner` still
+ * satisfies this type — the requirement is not enforced at the implementer's declaration
+ * site, but `MiddlewareCommand._dispatch` always passes it.
+ */
+export type MiddlewareTemplate<
+  C extends AnyCommand,
+  H extends AnyCommand[] = [],
+  SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
+> = Omit<Template<C, H, SU>, "execute"> & {
+  execute<T extends SU>(
+    subject: T,
+    object: CommandObject<C>,
+    inner: Runnable<SU, CommandObject<C>, CommandReturn<C>>,
+  ): CommandReturn<C>;
 };
+
+/*
+ * Abstract base class for middleware Commands.
+ *
+ * A MiddlewareCommand is a Command that intercepts dispatch. It extends
+ * `Command` and follows the same resolver method + Template pattern — each
+ * resolver method returns a `MiddlewareTemplate` whose `execute` accepts an
+ * `inner` continuation representing the next step in the chain.
+ * Calling `inner.run(subject, object)` invokes the continuation:
+ *
+ * ```ts
+ * class LogMiddleware extends MiddlewareCommand<Person, Building, Result, [Student, Professor]> {
+ *   readonly commandName = "log" as const;
+ *   resolveStudent(s: Student, b: Readonly<Building>) { return new LogTemplate(); }
+ *   resolveProfessor(p: Professor, b: Readonly<Building>) { return new LogTemplate(); }
+ * }
+ *
+ * class LogTemplate implements MiddlewareTemplate<LogMiddleware, [], Student | Professor> {
+ *   execute(
+ *     subject: Student | Professor,
+ *     object: Building,
+ *     inner: Runnable<Student | Professor, Building, Result>,
+ *   ): Result {
+ *     console.log("before", subject);
+ *     const result = inner.run(subject, object);
+ *     console.log("after", result);
+ *     return result;
+ *   }
+ * }
+ * ```
+ *
+ * ## Registration
+ *
+ * Override `Command.middleware` to return a list of `MiddlewareCommand` instances.
+ * The middleware wraps every dispatch through the Command — resolver method selection
+ * and execute — for all Subjects.
+ *
+ * ## Ordering
+ *
+ * The first middleware in the array is outermost — starts first, finishes last.
+ * `[auth, log, trace]` means `auth` wraps everything: auth → log → trace → dispatch.
+ *
+ * ## Object enrichment
+ *
+ * Middleware can forward a modified object to the continuation:
+ * ```ts
+ * execute(subject, object, inner) {
+ *   return inner.run(subject, { ...object, timestamp: Date.now() });
+ * }
+ * ```
+ * The subject is fixed across the chain — dispatch routes on subject type,
+ * so passing a different subject to `inner.run()` would re-route to that
+ * subject's resolver in the next chain step, which is rarely intended. Only
+ * the object should be enriched.
+ *
+ * For the spread to typecheck, `O` must declare the enrichment slot as
+ * optional:
+ * ```ts
+ * type Ctx = { factor: number; timestamp?: number };
+ * //                          ^^^^^^^^^^
+ * ```
+ * Strategies that do not use the slot simply ignore it. Enrichment fields
+ * belong in `O` — they are part of the command's contextual contract.
+ *
+ * ## Standalone invocation
+ *
+ * Invoking a `MiddlewareCommand` directly via `run()` is a **compile error**
+ * in well-typed TypeScript: `MiddlewareTemplate`'s 3-arg execute is
+ * incompatible with the 2-arg `Template` that `CommandSubjectStrategies` (the
+ * `run()` this-constraint) requires. If bypassed (JavaScript, `any`-typed
+ * code), a runtime error is also thrown. Always register middleware via
+ * `Command.middleware`.
+ */
+/**
+ * Abstract base class for middleware Commands. Extend this to define
+ * interceptors that wrap dispatch with pre/post logic or object enrichment.
+ *
+ * The type parameters mirror `Command<B, O, R, BSL>` — declare the BSL as a
+ * superset of any Command's BSL you intend to register this middleware in.
+ * The compiler enforces coverage: if a Command requires `[Student, Professor]`
+ * and the middleware only handles `[Student]`, the assignment is rejected.
+ */
+export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> extends Command<
+  B,
+  O,
+  R,
+  BSL
+> {
+  /**
+   * Intentionally public (no `protected` modifier on `override`) — required so
+   * that `Command._runChain` can call `m._runChain(s, o, next)` where `m` is
+   * typed as `MiddlewareElement<...>`. Widening protected to public in an
+   * override is permitted in TypeScript.
+   *
+   * The optional `continuation` allows the same method to serve two call sites:
+   * from `Command._runChain` (chain use, continuation always defined) and
+   * without continuation (guarded below).
+   * @internal
+   */
+  override _runChain(
+    subject: BSL[number],
+    object: O,
+    continuation?: Runnable<BSL[number], O, R>,
+  ): R {
+    // Unreachable in well-typed TypeScript: run() is uncallable on any concrete
+    // MiddlewareCommand because MiddlewareTemplate's 3-arg execute is incompatible
+    // with the 2-arg Template that CommandSubjectStrategies (run()'s this-constraint)
+    // requires. Kept as defense-in-depth for JavaScript callers, any-typed code,
+    // or direct calls to the public _runChain.
+    if (continuation === undefined) {
+      throw new Error(
+        `MiddlewareCommand "${this.commandName}" cannot be invoked directly. ` +
+          `Register it in a Command's middleware array instead.`,
+      );
+    }
+    const mw = this._mwCache ?? (this._mwCache = this.middleware);
+    if (mw.length === 0) return this._dispatch(subject, object, continuation);
+    type SU = BSL[number];
+    return mw
+      .reduceRight((next, m) => ({ run: (s: SU, o: O): R => m._runChain(s, o, next) }), {
+        run: (s: SU, o: O): R => this._dispatch(s, o, continuation),
+      })
+      .run(subject, object);
+  }
+
+  /**
+   * The cast is required because `getCommandStrategy` returns
+   * `Template<C, any[], SU>` (2-arg execute). Casting to
+   * `MiddlewareTemplate<MiddlewareCommand<B, O, R, BSL>, any[], SU>` tells
+   * TypeScript the strategy's execute has the 3-arg form. This is safe because
+   * `MiddlewareSubjectStrategies` (enforced at `Command.middleware` assignment)
+   * guarantees any registered middleware's resolvers return `MiddlewareTemplate`-
+   * compatible values.
+   *
+   * Do not call this method directly. It is only safe when called from
+   * `_runChain`, which guarantees `continuation` is defined. Bypassing
+   * `_runChain` and calling `_dispatch` without a continuation will cause the
+   * `continuation!` non-null assertion to panic at runtime.
+   * @internal
+   */
+  protected override _dispatch(
+    subject: BSL[number],
+    object: O,
+    continuation?: Runnable<BSL[number], O, R>,
+  ): R {
+    type SU = BSL[number];
+    const strategy = subject.getCommandStrategy(this, object) as MiddlewareTemplate<
+      MiddlewareCommand<B, O, R, BSL>,
+      any[],
+      SU
+    >;
+    // continuation is always defined here — _runChain throws if undefined
+    return strategy.execute(subject, object, continuation!);
+  }
+}

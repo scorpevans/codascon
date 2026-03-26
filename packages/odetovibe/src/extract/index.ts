@@ -28,6 +28,9 @@ import {
   CommandEntry,
   AbstractTemplateEntry,
   StrategyEntry,
+  MiddlewareCommandEntry,
+  MiddlewareTemplateEntry,
+  MiddlewareStrategyEntry,
 } from "./domain-types.js";
 import type { ConfigIndex, ExtractResult, ValidationResult } from "./domain-types.js";
 import { ValidateEntryCommand } from "./commands/validate-entry.js";
@@ -39,6 +42,9 @@ export {
   CommandEntry,
   AbstractTemplateEntry,
   StrategyEntry,
+  MiddlewareCommandEntry,
+  MiddlewareTemplateEntry,
+  MiddlewareStrategyEntry,
 } from "./domain-types.js";
 // Re-export interfaces as types only
 export type {
@@ -49,6 +55,7 @@ export type {
   ExtractResult,
 } from "./domain-types.js";
 export { ValidateEntryCommand } from "./commands/validate-entry.js";
+export { ValidateCommandHooksCommand } from "./commands/validate-command-hooks.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // parseYaml
@@ -82,6 +89,9 @@ export function parseYaml(yamlPath: string): ConfigIndex {
   const commands = new Map<string, CommandEntry>();
   const abstractTemplates = new Map<string, AbstractTemplateEntry>();
   const strategies = new Map<string, StrategyEntry>();
+  const middlewareCommands = new Map<string, MiddlewareCommandEntry>();
+  const middlewareTemplates = new Map<string, MiddlewareTemplateEntry>();
+  const middlewareStrategies = new Map<string, MiddlewareStrategyEntry>();
 
   // ── Domain types — split on resolverName ────────────────────────────
 
@@ -114,6 +124,26 @@ export function parseYaml(yamlPath: string): ConfigIndex {
     }
   }
 
+  // ── Middleware commands (with nested templates and strategies) ───────
+
+  for (const [cmdKey, cmdConfig] of Object.entries(parsed.middleware ?? {})) {
+    middlewareCommands.set(cmdKey, new MiddlewareCommandEntry(cmdKey, cmdConfig));
+    for (const [tplKey, tplConfig] of Object.entries(cmdConfig.templates ?? {})) {
+      const qualifiedTplKey = `${cmdKey}.${tplKey}`;
+      middlewareTemplates.set(
+        qualifiedTplKey,
+        new MiddlewareTemplateEntry(tplKey, cmdKey, tplConfig),
+      );
+      for (const [stratKey, stratConfig] of Object.entries(tplConfig.strategies)) {
+        const qualifiedStratKey = `${cmdKey}.${tplKey}.${stratKey}`;
+        middlewareStrategies.set(
+          qualifiedStratKey,
+          new MiddlewareStrategyEntry(stratKey, tplKey, cmdKey, stratConfig),
+        );
+      }
+    }
+  }
+
   return {
     namespace: parsed.namespace,
     typeImports: parsed.typeImports ?? {},
@@ -122,6 +152,9 @@ export function parseYaml(yamlPath: string): ConfigIndex {
     commands,
     abstractTemplates,
     strategies,
+    middlewareCommands,
+    middlewareTemplates,
+    middlewareStrategies,
   };
 }
 
@@ -157,6 +190,15 @@ export function validateYaml(configIndex: ConfigIndex): ExtractResult {
     results.push(validateCmd.run(entry, configIndex));
   }
   for (const entry of configIndex.strategies.values()) {
+    results.push(validateCmd.run(entry, configIndex));
+  }
+  for (const entry of configIndex.middlewareCommands.values()) {
+    results.push(validateCmd.run(entry, configIndex));
+  }
+  for (const entry of configIndex.middlewareTemplates.values()) {
+    results.push(validateCmd.run(entry, configIndex));
+  }
+  for (const entry of configIndex.middlewareStrategies.values()) {
     results.push(validateCmd.run(entry, configIndex));
   }
 

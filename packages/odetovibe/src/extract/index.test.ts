@@ -18,7 +18,11 @@ import {
   CommandEntry,
   AbstractTemplateEntry,
   StrategyEntry,
+  MiddlewareCommandEntry,
+  MiddlewareTemplateEntry,
+  MiddlewareStrategyEntry,
   ValidateEntryCommand,
+  ValidateCommandHooksCommand,
   parseYaml,
   validateYaml,
 } from "./index.js";
@@ -38,6 +42,9 @@ function idx(overrides: Partial<ConfigIndex> = {}): ConfigIndex {
     commands: new Map(),
     abstractTemplates: new Map(),
     strategies: new Map(),
+    middlewareCommands: new Map(),
+    middlewareTemplates: new Map(),
+    middlewareStrategies: new Map(),
     ...overrides,
   };
 }
@@ -896,5 +903,477 @@ describe("validateYaml", () => {
     expect(result.valid).toBe(true);
     // subjectTypes(2) + plainTypes(3) + commands(1) + abstractTemplates(1) + strategies(1) = 8
     expect(result.validationResults).toHaveLength(8);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// parseYaml — middleware section
+// ═══════════════════════════════════════════════════════════════════
+
+describe("parseYaml — middleware section", () => {
+  const middlewareYaml = `
+domainTypes:
+  Base: {}
+  Ctx: {}
+  Res: {}
+  Rock:
+    resolverName: resolveRock
+  Gem:
+    resolverName: resolveGem
+commands:
+  MineCommand:
+    commandName: mine
+    baseType: Base
+    objectType: Ctx
+    returnType: Res
+    dispatch:
+      Rock: RockMinerDefault
+      Gem: GemMinerDefault
+    templates:
+      RockMiner:
+        isParameterized: false
+        strategies:
+          RockMinerDefault: {}
+      GemMiner:
+        isParameterized: false
+        strategies:
+          GemMinerDefault: {}
+middleware:
+  TraceMiddleware:
+    commandName: trace
+    baseType: Base
+    objectType: Ctx
+    returnType: Res
+    dispatch:
+      Rock: TraceRockDefault
+      Gem: TraceGemDefault
+    templates:
+      TraceRock:
+        isParameterized: false
+        strategies:
+          TraceRockDefault: {}
+      TraceGem:
+        isParameterized: false
+        strategies:
+          TraceGemDefault: {}
+`;
+
+  it("populates middlewareCommands with each middleware key", () => {
+    const index = parseYamlString(middlewareYaml);
+    expect(index.middlewareCommands.has("TraceMiddleware")).toBe(true);
+  });
+
+  it("populates middlewareTemplates with qualified keys (MiddlewareName.TemplateName)", () => {
+    const index = parseYamlString(middlewareYaml);
+    expect(index.middlewareTemplates.has("TraceMiddleware.TraceRock")).toBe(true);
+    expect(index.middlewareTemplates.has("TraceMiddleware.TraceGem")).toBe(true);
+  });
+
+  it("populates middlewareStrategies with qualified keys (MiddlewareName.TemplateName.StrategyName)", () => {
+    const index = parseYamlString(middlewareYaml);
+    expect(index.middlewareStrategies.has("TraceMiddleware.TraceRock.TraceRockDefault")).toBe(true);
+    expect(index.middlewareStrategies.has("TraceMiddleware.TraceGem.TraceGemDefault")).toBe(true);
+  });
+
+  it("MiddlewareCommandEntry carries the correct key and config", () => {
+    const index = parseYamlString(middlewareYaml);
+    const entry = index.middlewareCommands.get("TraceMiddleware");
+    expect(entry).toBeInstanceOf(MiddlewareCommandEntry);
+    expect(entry?.config.commandName).toBe("trace");
+  });
+
+  it("MiddlewareTemplateEntry carries commandKey pointing to parent middleware", () => {
+    const index = parseYamlString(middlewareYaml);
+    const entry = index.middlewareTemplates.get("TraceMiddleware.TraceRock");
+    expect(entry).toBeInstanceOf(MiddlewareTemplateEntry);
+    expect(entry?.commandKey).toBe("TraceMiddleware");
+  });
+
+  it("MiddlewareStrategyEntry carries templateKey and commandKey", () => {
+    const index = parseYamlString(middlewareYaml);
+    const entry = index.middlewareStrategies.get("TraceMiddleware.TraceRock.TraceRockDefault");
+    expect(entry).toBeInstanceOf(MiddlewareStrategyEntry);
+    expect(entry?.templateKey).toBe("TraceRock");
+    expect(entry?.commandKey).toBe("TraceMiddleware");
+  });
+
+  it("leaves middlewareCommands/Templates/Strategies empty when no middleware section", () => {
+    const index = parseYamlString(`domainTypes: {}\ncommands: {}\n`);
+    expect(index.middlewareCommands.size).toBe(0);
+    expect(index.middlewareTemplates.size).toBe(0);
+    expect(index.middlewareStrategies.size).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MiddlewareCommandValidator
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MiddlewareCommandValidator", () => {
+  const rock = new SubjectTypeEntry("Rock", { resolverName: "resolveRock" });
+  const gem = new SubjectTypeEntry("Gem", { resolverName: "resolveGem" });
+  const ctx = new PlainTypeEntry("Ctx", {});
+  const res = new PlainTypeEntry("Res", {});
+
+  const validMwConfig = {
+    commandName: "trace",
+    baseType: "Ctx",
+    objectType: "Ctx",
+    returnType: "Res",
+    subjectUnion: ["Rock", "Gem"],
+    dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+    templates: {
+      TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
+      TraceGem: { isParameterized: false, strategies: { TraceGemDefault: {} } },
+    },
+  };
+
+  function mwIdx(mw: MiddlewareCommandEntry) {
+    return idx({
+      subjectTypes: new Map([
+        ["Rock", rock],
+        ["Gem", gem],
+      ]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      middlewareCommands: new Map([["TraceMiddleware", mw]]),
+    });
+  }
+
+  it("passes for a valid middleware command", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", validMwConfig);
+    expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+  });
+
+  it("[baseType-ref] fails when baseType is not a known domain type", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      baseType: "Unknown",
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("baseType-ref");
+  });
+
+  it("[dispatch-target-ref] fails when dispatch names a strategy not found in templates", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      dispatch: { Rock: "NoSuchStrategy", Gem: "TraceGemDefault" },
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-target-ref");
+  });
+
+  // Rule 10: middleware-ref
+  it("[middleware-ref] fails when Command.middleware[] references a key not in middlewareCommands", () => {
+    const cmdEntry = new CommandEntry("MineCommand", {
+      commandName: "mine",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      subjectUnion: ["Rock", "Gem"],
+      dispatch: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
+      templates: {
+        RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
+        GemMiner: { isParameterized: false, strategies: { GemMinerDefault: {} } },
+      },
+      middleware: ["NonExistentMiddleware"],
+    });
+    const index = idx({
+      subjectTypes: new Map([
+        ["Rock", rock],
+        ["Gem", gem],
+      ]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      commands: new Map([["MineCommand", cmdEntry]]),
+      middlewareCommands: new Map(), // NonExistentMiddleware absent
+    });
+    expect(rules(validateCmd.run(cmdEntry, index))).toContain("middleware-ref");
+  });
+
+  // Rule 11: middleware-coverage
+  it("[middleware-coverage] fails when middleware dispatch keys don't cover all command subjects", () => {
+    // TraceMiddleware only covers Rock, not Gem — but MineCommand needs both
+    const rockOnlyMw = new MiddlewareCommandEntry("TraceMiddleware", {
+      commandName: "trace",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      subjectUnion: ["Rock"],
+      dispatch: { Rock: "TraceRockDefault" }, // Gem missing
+      templates: {
+        TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
+      },
+    });
+    const cmdEntry = new CommandEntry("MineCommand", {
+      commandName: "mine",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      subjectUnion: ["Rock", "Gem"],
+      dispatch: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
+      templates: {
+        RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
+        GemMiner: { isParameterized: false, strategies: { GemMinerDefault: {} } },
+      },
+      middleware: ["TraceMiddleware"],
+    });
+    const index = idx({
+      subjectTypes: new Map([
+        ["Rock", rock],
+        ["Gem", gem],
+      ]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      commands: new Map([["MineCommand", cmdEntry]]),
+      middlewareCommands: new Map([["TraceMiddleware", rockOnlyMw]]),
+    });
+    expect(rules(validateCmd.run(cmdEntry, index))).toContain("middleware-coverage");
+  });
+
+  it("passes rule 11 when middleware covers all command subjects (superset)", () => {
+    // TraceMiddleware covers Rock + Gem + an extra subject — superset is fine
+    const wideTraceMw = new MiddlewareCommandEntry("TraceMiddleware", validMwConfig);
+    const cmdEntry = new CommandEntry("MineCommand", {
+      commandName: "mine",
+      baseType: "Ctx",
+      objectType: "Ctx",
+      returnType: "Res",
+      subjectUnion: ["Rock"],
+      dispatch: { Rock: "RockMinerDefault" }, // only Rock
+      templates: {
+        RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
+      },
+      middleware: ["TraceMiddleware"],
+    });
+    const index = idx({
+      subjectTypes: new Map([
+        ["Rock", rock],
+        ["Gem", gem],
+      ]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      commands: new Map([["MineCommand", cmdEntry]]),
+      middlewareCommands: new Map([["TraceMiddleware", wideTraceMw]]),
+    });
+    expect(validateCmd.run(cmdEntry, index).valid).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MiddlewareTemplateValidator
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MiddlewareTemplateValidator", () => {
+  const rock = new SubjectTypeEntry("Rock", { resolverName: "resolveRock" });
+  const ctx = new PlainTypeEntry("Ctx", {});
+  const res = new PlainTypeEntry("Res", {});
+
+  const mwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
+    commandName: "trace",
+    baseType: "Ctx",
+    objectType: "Ctx",
+    returnType: "Res",
+    subjectUnion: ["Rock"],
+    dispatch: { Rock: "TraceRockDefault" },
+    templates: {
+      TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
+    },
+  });
+
+  function baseIdx(): ConfigIndex {
+    return idx({
+      subjectTypes: new Map([["Rock", rock]]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      middlewareCommands: new Map([["TraceMiddleware", mwEntry]]),
+    });
+  }
+
+  it("passes for a valid middleware template", () => {
+    const tpl = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+      isParameterized: false,
+      strategies: { TraceRockDefault: {} },
+    });
+    expect(validateCmd.run(tpl, baseIdx()).valid).toBe(true);
+  });
+
+  it("[parent-command] fails when parent middleware command is not in middlewareCommands", () => {
+    const tpl = new MiddlewareTemplateEntry("TraceRock", "NoSuchMiddleware", {
+      isParameterized: false,
+      strategies: {},
+    });
+    expect(rules(validateCmd.run(tpl, baseIdx()))).toContain("parent-command");
+  });
+
+  it("[subjectSubset] fails when subjectSubset references a subject outside parent's union", () => {
+    const gem = new SubjectTypeEntry("Gem", { resolverName: "resolveGem" });
+    const tpl = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+      isParameterized: true,
+      subjectSubset: ["Gem"], // Gem is not in TraceMiddleware's dispatch
+      strategies: {},
+    });
+    const index = idx({
+      subjectTypes: new Map([
+        ["Rock", rock],
+        ["Gem", gem],
+      ]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      middlewareCommands: new Map([["TraceMiddleware", mwEntry]]),
+    });
+    expect(rules(validateCmd.run(tpl, index))).toContain("subjectSubset");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// MiddlewareStrategyValidator
+// ═══════════════════════════════════════════════════════════════════
+
+describe("MiddlewareStrategyValidator", () => {
+  const rock = new SubjectTypeEntry("Rock", { resolverName: "resolveRock" });
+  const ctx = new PlainTypeEntry("Ctx", {});
+  const res = new PlainTypeEntry("Res", {});
+
+  const mwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
+    commandName: "trace",
+    baseType: "Ctx",
+    objectType: "Ctx",
+    returnType: "Res",
+    subjectUnion: ["Rock"],
+    dispatch: { Rock: "TraceRockDefault" },
+    templates: {
+      TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
+    },
+  });
+
+  const tplEntry = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+    isParameterized: false,
+    strategies: { TraceRockDefault: {} },
+  });
+
+  function baseIdx(): ConfigIndex {
+    return idx({
+      subjectTypes: new Map([["Rock", rock]]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      middlewareCommands: new Map([["TraceMiddleware", mwEntry]]),
+      middlewareTemplates: new Map([["TraceMiddleware.TraceRock", tplEntry]]),
+    });
+  }
+
+  it("passes for a valid middleware strategy", () => {
+    const strat = new MiddlewareStrategyEntry(
+      "TraceRockDefault",
+      "TraceRock",
+      "TraceMiddleware",
+      {},
+    );
+    expect(validateCmd.run(strat, baseIdx()).valid).toBe(true);
+  });
+
+  it("[parent-template] fails when parent template is not in middlewareTemplates", () => {
+    const strat = new MiddlewareStrategyEntry(
+      "TraceRockDefault",
+      "NoSuchTemplate",
+      "TraceMiddleware",
+      {},
+    );
+    expect(rules(validateCmd.run(strat, baseIdx()))).toContain("parent-template");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ValidateCommandHooksCommand — middleware routing
+// ═══════════════════════════════════════════════════════════════════
+
+describe("ValidateCommandHooksCommand — MiddlewareTemplateEntry and MiddlewareStrategyEntry routing", () => {
+  const hooksCmd = new ValidateCommandHooksCommand();
+
+  const rock = new SubjectTypeEntry("Rock", { resolverName: "resolveRock" });
+  const ctx = new PlainTypeEntry("Ctx", {});
+  const res = new PlainTypeEntry("Res", {});
+
+  const auditMwEntry = new MiddlewareCommandEntry("AuditMiddleware", {
+    commandName: "audit",
+    baseType: "Ctx",
+    objectType: "Ctx",
+    returnType: "Res",
+    subjectUnion: ["Rock"],
+    dispatch: { Rock: "AuditRockDefault" },
+    templates: { AuditRock: { isParameterized: false, strategies: { AuditRockDefault: {} } } },
+  });
+
+  function baseIdx(): ConfigIndex {
+    return idx({
+      subjectTypes: new Map([["Rock", rock]]),
+      plainTypes: new Map([
+        ["Ctx", ctx],
+        ["Res", res],
+      ]),
+      middlewareCommands: new Map([["AuditMiddleware", auditMwEntry]]),
+    });
+  }
+
+  it("passes when MiddlewareTemplateEntry commandHooks references a known middlewareCommand", () => {
+    const tpl = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+      isParameterized: false,
+      commandHooks: { audit: "AuditMiddleware" },
+      strategies: {},
+    });
+    expect(hooksCmd.run(tpl, baseIdx()).valid).toBe(true);
+  });
+
+  it("[commandHook-ref] fires for MiddlewareTemplateEntry when commandHooks references unknown command", () => {
+    const tpl = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+      isParameterized: false,
+      commandHooks: { audit: "NonExistentMiddleware" },
+      strategies: {},
+    });
+    expect(rules(hooksCmd.run(tpl, baseIdx()))).toContain("commandHook-ref");
+  });
+
+  it("passes when MiddlewareStrategyEntry commandHooks is a subset of parent template's keys", () => {
+    const tplEntry = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+      isParameterized: false,
+      commandHooks: { audit: "AuditMiddleware" },
+      strategies: {},
+    });
+    const strat = new MiddlewareStrategyEntry("TraceRockDefault", "TraceRock", "TraceMiddleware", {
+      commandHooks: { audit: "AuditMiddleware" },
+    });
+    const index = idx({
+      ...baseIdx(),
+      middlewareTemplates: new Map([["TraceMiddleware.TraceRock", tplEntry]]),
+    });
+    expect(hooksCmd.run(strat, index).valid).toBe(true);
+  });
+
+  it("[commandHook-key] fires for MiddlewareStrategyEntry when hook key not in parent template", () => {
+    const tplEntry = new MiddlewareTemplateEntry("TraceRock", "TraceMiddleware", {
+      isParameterized: false,
+      commandHooks: {}, // no hooks declared
+      strategies: {},
+    });
+    const strat = new MiddlewareStrategyEntry("TraceRockDefault", "TraceRock", "TraceMiddleware", {
+      commandHooks: { audit: "AuditMiddleware" }, // "audit" not in parent
+    });
+    const index = idx({
+      ...baseIdx(),
+      middlewareTemplates: new Map([["TraceMiddleware.TraceRock", tplEntry]]),
+    });
+    expect(rules(hooksCmd.run(strat, index))).toContain("commandHook-key");
   });
 });

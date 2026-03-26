@@ -21,8 +21,11 @@
  *     when generated as false (strategies, commands, subjects), client's choice is preserved.
  *   - Class implements → union-merge by base name: codegen entries win per
  *     base name; user-added entries (not in generated) are preserved.
- *   - Class properties → odetovibe owns; always updated.
- *   - Class constructors → odetovibe owns; always updated.
+ *   - Class properties (existing in file) → odetovibe owns; always updated.
+ *   - Class properties (absent from file) → injected only when no associated resolver method
+ *     already has a non-empty body.  A non-empty body means implementation ownership belongs
+ *     to the developer; injecting the property would produce an orphan.
+ *   - Class constructors → user owns; preserved unconditionally (codegen never emits constructors).
  *   - Class method signatures → odetovibe owns; always updated.
  *   - Class method bodies → user owns; always preserved regardless of content.
  *   - User-added class members (absent from generated) → preserved.
@@ -36,14 +39,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { format as prettierFormat, resolveConfig as prettierResolveConfig } from "prettier";
-import { Project, IndentationText } from "ts-morph";
+import { Project, IndentationText, SyntaxKind } from "ts-morph";
 import type {
   SourceFile,
   ClassDeclaration,
   MethodDeclaration,
   MethodDeclarationStructure,
-  ConstructorDeclaration,
-  ConstructorDeclarationStructure,
   PropertyDeclaration,
   ImportSpecifier,
 } from "ts-morph";
@@ -76,6 +77,12 @@ const GENERATED_HEADER = "/* @odetovibe-generated */\n";
  * TS2583 — "Cannot find name X. Do you need to change your target library?" —
  *   fires for names like `Set`, `Map`, `Promise` that live in ES2015+ libs.
  *   Same lib-version mismatch; not a codegen error.
+ *
+ * TS4112 — "This member cannot have an 'override' modifier because its containing
+ *   class does not extend another class." — fires when the base class (e.g.
+ *   `Command` from codascon) can't be resolved in the isolated FS, causing
+ *   TypeScript to treat the class as not extending anything. Valid in real
+ *   projects where codascon resolves correctly.
  */
 // Codes suppressed in the in-memory fallback (no tsconfig found, e.g. test tmp dirs).
 // These are all environment false-positives from the isolated ES3 in-memory project,
@@ -86,6 +93,7 @@ const FALLBACK_FILTERED_CODES = new Set([
   2552, // TS2552: Cannot find name — ES3 lib missing ES2015+ globals (ReadonlyMap etc.)
   2583, // TS2583: Cannot find name 'Set' — ES3 lib missing Set/Map constructors
   2705, // TS2705: Async requires Promise — ES3 lib has no Promise
+  4112, // TS4112: override modifier invalid — base class unresolvable in isolated FS
 ]);
 
 // ═══════════════════════════════════════════════════════════════════
@@ -313,7 +321,9 @@ function implBaseName(text: string): string {
  * - `implements` → union-merge by base name: codegen entries replace any
  *   existing entry with the same base name; user-added entries (base names
  *   absent from generated) are preserved.
- * - Properties and constructors → codegen owns; always updated.
+ * - Properties (existing) → codegen owns; always updated.
+ * - Properties (new) → injected only when no associated resolver already has a non-empty body.
+ * - Constructors → user owns; not touched (codegen never emits constructors).
  * - Methods → merged via mergeMethod (signature updated, body preserved).
  * - Members present in existing but absent from generated → preserved.
  */
@@ -383,15 +393,29 @@ function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): vo
         docs: existingProp.getJsDocs().map((d) => d.getStructure()),
       });
     } else {
-      existing.addProperty(genProp.getStructure());
-    }
-  }
-
-  if (generated.getConstructors().length > 0) {
-    for (const ctor of existing.getConstructors()) ctor.remove();
-    for (const genCtor of generated.getConstructors()) {
-      // Generated code never uses constructor overloads — cast is safe.
-      existing.addConstructor(genCtor.getStructure() as ConstructorDeclarationStructure);
+      // Only inject a property absent from the existing class when there is no
+      // associated method that already has a non-empty body.  A non-empty body
+      // means implementation ownership belongs to the developer; injecting the
+      // property would produce an orphan the developer never asked for.
+      const propName = genProp.getName();
+      const referencingMethods = generated
+        .getMethods()
+        .filter((m) =>
+          m
+            .getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)
+            .some(
+              (pae) =>
+                pae.getExpression().getKind() === SyntaxKind.ThisKeyword &&
+                pae.getName() === propName,
+            ),
+        );
+      const shouldAdd =
+        referencingMethods.length === 0 ||
+        referencingMethods.every((genMethod) => {
+          const existingMethod = existing.getMethod(genMethod.getName());
+          return !existingMethod || (existingMethod.getBodyText() ?? "").length === 0;
+        });
+      if (shouldAdd) existing.addProperty(genProp.getStructure());
     }
   }
 
@@ -463,14 +487,6 @@ function propSignature(p: PropertyDeclaration): string {
   const typePart = type ? `: ${type}` : "";
   const initPart = init ? ` = ${init}` : "";
   return `${mods} ${p.getName()}${typePart}${initPart}`.trim();
-}
-
-/** Canonical parameter list text for a constructor. */
-function ctorParamSignature(ctor: ConstructorDeclaration): string {
-  return ctor
-    .getParameters()
-    .map((p) => p.getText())
-    .join(", ");
 }
 
 /** Canonical signature text for a method (no body, no JSDoc).
@@ -547,22 +563,6 @@ function hasConflict(generatedText: string, existingContent: string): boolean {
       if (!existingProp) continue; // new property — not a conflict
       if (normalizeWs(propSignature(genProp)) !== normalizeWs(propSignature(existingProp)))
         return true;
-    }
-
-    // constructors — codegen owns completely when it declares any
-    const genCtors = genCls.getConstructors();
-    if (genCtors.length > 0) {
-      const existingCtors = existingCls.getConstructors();
-      if (existingCtors.length > 0) {
-        if (genCtors.length !== existingCtors.length) return true;
-        for (let i = 0; i < genCtors.length; i++) {
-          if (
-            normalizeWs(ctorParamSignature(genCtors[i])) !==
-            normalizeWs(ctorParamSignature(existingCtors[i]))
-          )
-            return true;
-        }
-      }
     }
 
     // method signatures

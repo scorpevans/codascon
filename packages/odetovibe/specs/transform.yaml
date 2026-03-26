@@ -5,22 +5,26 @@
 # code using ts-morph. Each Subject type dispatches to a distinct
 # emitter — no runtime branching in resolver methods.
 #
-# The split made in the Extract domain (SubjectTypeEntry vs PlainTypeEntry)
-# and the invariant that all templates become AbstractTemplateEntry entries
-# ensure that EmitAstCommand's dispatch is fully structural.
+# The structural split made in the Extract domain ensures that
+# EmitAstCommand's dispatch is fully exhaustive: every entry type
+# maps to exactly one emitter family.
 #
 # Subjects are the ConfigEntry types produced by Extract.
 # They are imported from the extract domain — codegen should import,
 # not re-emit these classes.
 #
 # File placement (computed by each emitter using EmitContext):
-#   SubjectTypeEntry / PlainTypeEntry  →  domain-types.ts  (root output dir)
-#   CommandEntry                       →  <namespace>/commands/<cmd-name>.ts
-#   AbstractTemplateEntry              →  <namespace>/commands/<parent-cmd-name>.ts
-#   StrategyEntry                      →  <namespace>/commands/<grandparent-cmd-name>.ts
+#   SubjectTypeEntry / PlainTypeEntry      →  domain-types.ts  (root output dir)
+#   CommandEntry                           →  <namespace>/commands/<cmd-name>.ts
+#   AbstractTemplateEntry                  →  same file as parent CommandEntry
+#   StrategyEntry                          →  same file as grandparent CommandEntry
+#   MiddlewareCommandEntry                 →  <namespace>/commands/<mw-name>.ts
+#   MiddlewareTemplateEntry                →  same file as parent MiddlewareCommandEntry
+#   MiddlewareStrategyEntry                →  same file as grandparent MiddlewareCommandEntry
 #
 # Command file names are kebab-case of the command key with the
 # "Command" suffix dropped: AccessBuildingCommand → access-building.ts
+#
 #
 # Public API exposed to clients:
 #   - emitAst(configIndex: ConfigIndex, context: EmitContext): void
@@ -37,6 +41,9 @@ typeImports:
     - CommandEntry
     - AbstractTemplateEntry
     - StrategyEntry
+    - MiddlewareCommandEntry
+    - MiddlewareTemplateEntry
+    - MiddlewareStrategyEntry
 
 domainTypes:
   # ── Object type ─────────────────────────────────────────────────
@@ -57,12 +64,18 @@ commands:
       - CommandEntry
       - AbstractTemplateEntry
       - StrategyEntry
+      - MiddlewareCommandEntry
+      - MiddlewareTemplateEntry
+      - MiddlewareStrategyEntry
     dispatch:
       SubjectTypeEntry: SubjectClassEmitterDefault
       PlainTypeEntry: InterfaceEmitterDefault
       CommandEntry: CommandClassEmitterDefault
       AbstractTemplateEntry: FixedTemplateEmitter
       StrategyEntry: FixedParentStrategyEmitter
+      MiddlewareCommandEntry: MiddlewareCommandClassEmitterDefault
+      MiddlewareTemplateEntry: MiddlewareFixedTemplateEmitter
+      MiddlewareStrategyEntry: MiddlewareFixedParentStrategyEmitter
     templates:
       # Emits: class Foo extends Subject { readonly resolverName = "resolveFoo" as const; ... }
       # Target: domain-types.ts
@@ -82,6 +95,7 @@ commands:
 
       # Emits: class FooCommand extends Command<B, O, R, [S1, S2]> {
       #          readonly commandName = "foo" as const;
+      #          override get middleware() { return [...]; }  // when config.middleware is set
       #          resolveS1(...): Template { ... }   /* @odetovibe-generated */
       #          resolveS2(...): Template { ... }   /* @odetovibe-generated */
       #        }
@@ -129,3 +143,49 @@ commands:
         strategies:
           ParameterizedParentStrategyEmitter: {}
           FixedParentStrategyEmitter: {}
+
+      # Emits: class AuditMiddleware extends MiddlewareCommand<B, O, R, [S1, S2]> {
+      #          readonly commandName = "audit" as const;
+      #          resolveS1(...): MiddlewareTemplate<AuditMiddleware, [], S1> { ... }
+      #        }
+      # Target: commands/<mw-name>.ts
+      MiddlewareCommandClassEmitter:
+        isParameterized: false
+        subjectSubset: [MiddlewareCommandEntry]
+        strategies:
+          MiddlewareCommandClassEmitterDefault: {}
+
+      # Emits an abstract class implementing MiddlewareTemplate (3-arg execute with
+      # `inner: Runnable<SU, O, R>`). Two strategies handle the isParameterized split:
+      #
+      # MiddlewareParameterizedTemplateEmitter (isParameterized: true):
+      #   abstract class FooTemplate<SU extends CommandSubjectUnion<FooMiddleware>>
+      #     implements MiddlewareTemplate<FooMiddleware, [HookCmd], SU> {
+      #     execute(subject: SU, object: Readonly<O>, inner: Runnable<SU, O, R>): R { ... }
+      #   }
+      #
+      # MiddlewareFixedTemplateEmitter (isParameterized: false):
+      #   abstract class FooTemplate
+      #     implements MiddlewareTemplate<FooMiddleware, [HookCmd], S1 | S2> {
+      #     execute(subject: S1 | S2, object: Readonly<O>, inner: Runnable<S1 | S2, O, R>): R { ... }
+      #   }
+      #
+      # Target: commands/<parent-mw-name>.ts (same file as MiddlewareCommandClassEmitter)
+      MiddlewareAbstractTemplateEmitter:
+        isParameterized: false
+        subjectSubset: [MiddlewareTemplateEntry]
+        strategies:
+          MiddlewareParameterizedTemplateEmitter: {}
+          MiddlewareFixedTemplateEmitter: {}
+
+      # Emits a strategy class extending its parent MiddlewareTemplate. Same
+      # isParameterized logic as StrategyClassEmitter but looks up parent in
+      # middlewareTemplates and parent command in middlewareCommands.
+      #
+      # Target: commands/<grandparent-mw-name>.ts
+      MiddlewareStrategyClassEmitter:
+        isParameterized: false
+        subjectSubset: [MiddlewareStrategyEntry]
+        strategies:
+          MiddlewareParameterizedParentStrategyEmitter: {}
+          MiddlewareFixedParentStrategyEmitter: {}

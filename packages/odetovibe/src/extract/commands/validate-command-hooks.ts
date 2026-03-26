@@ -20,6 +20,8 @@ import type {
   ValidationError,
   AbstractTemplateEntry,
   StrategyEntry,
+  MiddlewareTemplateEntry,
+  MiddlewareStrategyEntry,
 } from "../domain-types.js";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -47,14 +49,17 @@ function err(entryKey: string, rule: string, message: string): ValidationError {
 abstract class AbstractTemplateHooksValidator implements Template<
   ValidateCommandHooksCommand,
   [],
-  AbstractTemplateEntry
+  AbstractTemplateEntry | MiddlewareTemplateEntry
 > {
-  execute(subject: AbstractTemplateEntry, object: Readonly<ConfigIndex>): ValidationResult {
+  execute(
+    subject: AbstractTemplateEntry | MiddlewareTemplateEntry,
+    object: Readonly<ConfigIndex>,
+  ): ValidationResult {
     const { key, config } = subject;
     if (!config.commandHooks) return ok();
     const errors: ValidationError[] = [];
     for (const [propName, cmdRef] of Object.entries(config.commandHooks)) {
-      if (!object.commands.has(cmdRef)) {
+      if (!object.commands.has(cmdRef) && !object.middlewareCommands.has(cmdRef)) {
         errors.push(
           err(
             key,
@@ -80,12 +85,17 @@ class AbstractTemplateHooksValidatorDefault extends AbstractTemplateHooksValidat
 abstract class StrategyHooksValidator implements Template<
   ValidateCommandHooksCommand,
   [],
-  StrategyEntry
+  StrategyEntry | MiddlewareStrategyEntry
 > {
-  execute(subject: StrategyEntry, object: Readonly<ConfigIndex>): ValidationResult {
+  execute(
+    subject: StrategyEntry | MiddlewareStrategyEntry,
+    object: Readonly<ConfigIndex>,
+  ): ValidationResult {
     const { key, templateKey, commandKey, config } = subject;
     if (!config.commandHooks) return ok();
-    const tpl = object.abstractTemplates.get(`${commandKey}.${templateKey}`);
+    const tpl =
+      object.abstractTemplates.get(`${commandKey}.${templateKey}`) ??
+      object.middlewareTemplates.get(`${commandKey}.${templateKey}`);
     if (!tpl) return ok(); // parent-template error is already reported by StrategyValidator
     const parentHookKeys = new Set(Object.keys(tpl.config.commandHooks ?? {}));
     const errors: ValidationError[] = [];
@@ -99,7 +109,7 @@ abstract class StrategyHooksValidator implements Template<
           ),
         );
       }
-      if (!object.commands.has(cmdRef)) {
+      if (!object.commands.has(cmdRef) && !object.middlewareCommands.has(cmdRef)) {
         errors.push(
           err(
             key,
@@ -122,12 +132,12 @@ class StrategyHooksValidatorDefault extends StrategyHooksValidator {}
 const abstractTemplateHooksValidator = new AbstractTemplateHooksValidatorDefault();
 const strategyHooksValidator = new StrategyHooksValidatorDefault();
 
-/** Validates `commandHooks` entries in an AbstractTemplateEntry or StrategyEntry. */
+/** Validates `commandHooks` entries in an AbstractTemplateEntry, StrategyEntry, MiddlewareTemplateEntry, or MiddlewareStrategyEntry. */
 export class ValidateCommandHooksCommand extends Command<
   ConfigEntry,
   ConfigIndex,
   ValidationResult,
-  [AbstractTemplateEntry, StrategyEntry]
+  [AbstractTemplateEntry, StrategyEntry, MiddlewareTemplateEntry, MiddlewareStrategyEntry]
 > {
   readonly commandName = "validateCommandHooks" as const;
 
@@ -142,6 +152,20 @@ export class ValidateCommandHooksCommand extends Command<
     subject: StrategyEntry,
     object: Readonly<ConfigIndex>,
   ): Template<ValidateCommandHooksCommand, [], StrategyEntry> {
+    return strategyHooksValidator;
+  }
+
+  resolveMiddlewareTemplate(
+    subject: MiddlewareTemplateEntry,
+    object: Readonly<ConfigIndex>,
+  ): Template<ValidateCommandHooksCommand, [], MiddlewareTemplateEntry> {
+    return abstractTemplateHooksValidator;
+  }
+
+  resolveMiddlewareStrategy(
+    subject: MiddlewareStrategyEntry,
+    object: Readonly<ConfigIndex>,
+  ): Template<ValidateCommandHooksCommand, [], MiddlewareStrategyEntry> {
     return strategyHooksValidator;
   }
 }

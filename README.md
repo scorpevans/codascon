@@ -239,6 +239,91 @@ const result = await parkingCmd.run(student, lotA);
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
 
+### Middleware
+
+A `MiddlewareCommand` intercepts every dispatch through a `Command` — wrapping resolver selection
+and strategy execution for every Subject. Resolver methods return `MiddlewareTemplate` instead of
+`Template`, with a third `inner` continuation argument in `execute`:
+
+```typescript
+// Templates — MiddlewareTemplate contract; execute is concrete, strategies are empty
+abstract class LoggingTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
+  LogMiddleware,
+  [],
+  SU
+> {
+  execute(subject: SU, b: Building, inner: Runnable<SU, Building, AccessResult>) {
+    console.log(`Attempting access to ${b.name}`);
+    const result = inner.run(subject, b);
+    console.log(`Access ${result.granted ? "granted" : "denied"}`);
+    return result;
+  }
+}
+
+abstract class PassthroughTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
+  LogMiddleware,
+  [],
+  SU
+> {
+  execute(subject: SU, b: Building, inner: Runnable<SU, Building, AccessResult>) {
+    return inner.run(subject, b);
+  }
+}
+
+// Strategies — empty; behavior lives entirely in the Template
+class LogStudentAccess extends LoggingTemplate<Student> {}
+class LogProfessorAccess extends PassthroughTemplate<Professor> {}
+
+// MiddlewareCommand — resolver methods return Template instances
+class LogMiddleware extends MiddlewareCommand<
+  Principal, // base type — must match the Command's
+  Building,
+  AccessResult,
+  [Student, Professor] // must cover all Subjects in any Command it wraps
+> {
+  readonly commandName = "log" as const;
+  private readonly logStudentAccess = new LogStudentAccess();
+  private readonly logProfessorAccess = new LogProfessorAccess();
+
+  resolveStudent(_s: Student, _b: Building): MiddlewareTemplate<LogMiddleware, [], Student> {
+    return this.logStudentAccess;
+  }
+  resolveProfessor(_p: Professor, _b: Building): MiddlewareTemplate<LogMiddleware, [], Professor> {
+    return this.logProfessorAccess;
+  }
+}
+```
+
+Register middleware by overriding `get middleware()` on the Command — first element is outermost:
+
+```typescript
+class AccessBuildingCommand extends Command<
+  Principal,
+  Building,
+  AccessResult,
+  [Student, Professor]
+> {
+  readonly commandName = "accessBuilding" as const;
+
+  override get middleware() {
+    return [new LogMiddleware()]; // [auth, log] → auth wraps log wraps dispatch
+  }
+
+  resolveStudent(_s: Student, _b: Building) {
+    return new BasicAccess();
+  }
+  resolveProfessor(_p: Professor, _b: Building) {
+    return new FullAccess();
+  }
+}
+```
+
+Omitting `inner.run()` short-circuits the chain — the downstream command and strategy do not
+execute. Pass a modified object to `inner.run()` to enrich context downstream. Calling
+`MiddlewareCommand.run()` directly is a compile error — only register middleware via
+`Command.middleware`. To share middleware across all Commands in a domain, override
+`get middleware()` in a shared base class and compose with `[...super.middleware, mw]`.
+
 ## Odetovibe — YAML Configuration & Code Generation
 
 Instead of jumping straight into coding, you can focus on architecting your business logic and let **Odetovibe** generate the TypeScript scaffolding:
@@ -383,6 +468,7 @@ Additional implementation rules:
 - Apply the template method pattern in `execute`: extract variable behaviour into `protected abstract` methods or fields that Strategies implement
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
 - Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
+- Use middleware for cross-cutting concerns such as logging, auditing, timing, and default enrichments — prefer a middleware Command over duplicating the same logic in individual Templates or Strategies
 
 ### Step 4: Implement This Domain
 

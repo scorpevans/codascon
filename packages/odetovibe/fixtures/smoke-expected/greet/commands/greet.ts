@@ -10,12 +10,13 @@ export class GreetCommand extends Command<
   [User]
 > {
   readonly commandName = "greet" as const;
+  private readonly userGreeterDefault = new UserGreeterDefault();
 
   resolveUser(
     subject: User,
     object: Readonly<Greeting>,
   ): Template<GreetCommand, [], User> {
-    throw new Error("Not implemented"); // @odetovibe-generated
+    return this.userGreeterDefault; // @odetovibe-generated
   }
 }
 

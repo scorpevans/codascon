@@ -536,6 +536,46 @@ describe("§14 compile-time constraint tests", () => {
     // Template works fine at runtime when it doesn't invoke the mismatched hook
     const cmd = new HookedDogCmd(new CatOnlyCommand());
     strictEqual(cmd.run(new Dog("Rex", "Lab"), "test"), 3);
+
+    // Multi-subject variant: hook covers Dog and Cat but not Bird.
+    // FeedCommand's full SU = Dog | Cat | Bird. CommandHooks checks for
+    // resolveDog, resolveCat, resolveBird — the hook is missing resolveBird,
+    // so the property resolves to the error string even though two of the
+    // three subjects are covered.
+    class DogCatHook extends Command<Person, { action: string }, LogEntry, [Dog, Cat]> {
+      readonly commandName = "dogCatHook" as const;
+      resolveDog() {
+        return {
+          execute: (s: Dog, o: { action: string }): LogEntry => ({
+            action: o.action,
+            subject: s.name,
+          }),
+        };
+      }
+      resolveCat() {
+        return {
+          execute: (s: Cat, o: { action: string }): LogEntry => ({
+            action: o.action,
+            subject: s.name,
+          }),
+        };
+      }
+      // resolveBird intentionally omitted
+    }
+
+    class MissingBirdHookTemplate implements Template<FeedCommand, [DogCatHook]> {
+      // @ts-expect-error — DogCatHook is missing resolveBird; CommandHooks resolves
+      // dogCatHook to "Error: hook Command does not declare resolver methods for all subjects in SU"
+      dogCatHook: DogCatHook;
+      constructor(h: DogCatHook) {
+        this.dogCatHook = h;
+      }
+      execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult {
+        return { fed: true, food: "seed", amount: 1 };
+      }
+    }
+
+    void MissingBirdHookTemplate;
   });
 
   it("14e: non-literal resolverName — run() rejected at call site", () => void 0);
