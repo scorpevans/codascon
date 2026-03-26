@@ -56,46 +56,50 @@ Define your domain declaratively:
 namespace: campus
 
 domainTypes:
-  Principal: {}
+  Person: {}
+  Equipment: {}
+  CheckoutResult: {}
   Student:
     resolverName: resolveStudent
   Professor:
     resolverName: resolveProfessor
-  Building: {}
-  AccessResult: {}
 
 # Optional: cross-cutting concerns registered on Commands via middleware: [...]
 middleware:
-  LogMiddleware:
-    commandName: log
-    baseType: Principal
-    objectType: Building
-    returnType: AccessResult
+  CheckoutMiddleware:
+    commandName: checkoutPolicy
+    baseType: Person
+    objectType: Equipment
+    returnType: CheckoutResult
     dispatch:
-      Student: LogTemplate
-      Professor: LogTemplate
+      Student: StudentPolicy
+      Professor: ProfessorPolicy
     templates:
-      LogTemplate:
-        isParameterized: false
-        strategies: {}
-
-commands:
-  AccessBuildingCommand:
-    commandName: accessBuilding
-    baseType: Principal
-    objectType: Building
-    returnType: AccessResult
-    subjectUnion: [Student, Professor]
-    middleware: [LogMiddleware] # first is outermost; applied to every dispatch
-    dispatch:
-      Student: BasicAccess
-      Professor: FullAccess
-    templates:
-      AccessTemplate:
+      CheckoutMiddlewareTemplate:
         isParameterized: false
         strategies:
-          BasicAccess: {}
-          FullAccess: {}
+          StudentPolicy: {}
+          ProfessorPolicy: {}
+
+commands:
+  CheckoutCommand:
+    commandName: checkout
+    baseType: Person
+    objectType: Equipment
+    returnType: CheckoutResult
+    subjectUnion: [Student, Professor]
+    middleware: [CheckoutMiddleware] # first is outermost; applied to every dispatch
+    dispatch:
+      Student: StudentCheckout
+      Professor: ProfessorCheckout
+    templates:
+      CheckoutTemplate:
+        isParameterized: true
+        strategies:
+          StudentCheckout:
+            subjectSubset: [Student]
+          ProfessorCheckout:
+            subjectSubset: [Professor]
 ```
 
 **Key rules:**

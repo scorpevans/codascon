@@ -685,36 +685,36 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
  * Maps a tuple of hook Commands to an object type keyed by their `commandName`,
  * enforcing that each hook Command has a resolver method for every Subject in `SU`.
  *
- * For each hook Command `Cmd` in `H`:
- * - If `Cmd` declares a resolver method for every Subject in `SU`
- *   (i.e. has a property matching each `SubjectResolverName<SU>` key),
- *   the property resolves to `Cmd` — the implementing class satisfies it normally.
- * - If the hook is missing any resolver method required by `SU`, the property
- *   resolves to an error string — no value of type `Cmd` can satisfy a string
- *   literal type, so the `implements` check fails at the declaration site.
+ * For each hook Command `Cmd` in `H`, the property type is the intersection
+ * `Cmd & { [K in SU["resolverName"] & string]: any }`:
+ * - If `Cmd` has all required resolver methods, the intersection is satisfiable
+ *   and the implementing class can assign `new Cmd()` normally.
+ * - If `Cmd` is missing any resolver method for a Subject in `SU`, the intersection
+ *   is unsatisfiable — the `implements` check fails at the declaration site with
+ *   a TS2416 error on the hook property.
+ *
+ * **Why intersection, not conditional:** A conditional type
+ * `Cmd extends { [K in SU["resolverName"]]: any } ? Cmd : "Error"` is deferred
+ * by TypeScript when `SU` is a free type parameter (as in abstract parameterized
+ * templates). The intersection avoids deferral: `SU["resolverName"]` is an indexed
+ * access type, which TypeScript evaluates using `SU`'s constraint — giving a
+ * concrete key union even when `SU` is free.
  *
  * `H extends AnyCommand[]` is the constraint. `SU extends CommandSubjectUnion<H[number]>`
  * bounds `SU` to subjects covered by at least one hook Command — `H[number]` collapses
  * the hook tuple to a union before `CommandSubjectUnion` distributes over it.
- * The hook coverage check inside the mapped type uses a structural pattern
- * (`Cmd extends { [K in SubjectResolverName<SU>]: any }`) rather than
- * `CommandSubjectUnion<Cmd>`, so the constraint on `H` does not need to be `unknown[]`.
  *
  * @example
  * // LogCommand handles [Cat, Dog, Bird] — has resolveCat, resolveDog, resolveBird
  * // CommandHooks<[LogCommand], Cat | Dog>:
- * //   LogCommand extends { resolveCat: any, resolveDog: any } → true → { log: LogCommand }
+ * //   LogCommand & { resolveCat: any; resolveDog: any } — satisfied → { log: LogCommand }
  *
  * // CatOnlyCommand handles [Cat] — has resolveCat only
  * // CommandHooks<[CatOnlyCommand], Cat | Dog>:
- * //   CatOnlyCommand extends { resolveCat: any, resolveDog: any } → false → { catOnly: "Error: ..." }
+ * //   CatOnlyCommand & { resolveCat: any; resolveDog: any } — missing resolveDog → TS2416
  */
 type CommandHooks<H extends AnyCommand[], SU extends CommandSubjectUnion<H[number]>> = {
-  [Cmd in H[number] as CommandName<Cmd>]: Cmd extends {
-    [K in SubjectResolverName<SU>]: any;
-  }
-    ? Cmd
-    : "Error: hook Command does not declare resolver methods for all subjects in SU";
+  [Cmd in H[number] as CommandName<Cmd>]: Cmd & { [K in SU["resolverName"] & string]: any };
 };
 
 // ─── Template ────────────────────────────────────────────────────
@@ -819,12 +819,11 @@ type CommandHooks<H extends AnyCommand[], SU extends CommandSubjectUnion<H[numbe
  *    `commandName`. Missing a hook property is a compile error.
  *
  * 2. **Subject coverage** — each hook Command must declare resolver methods for
- *    every Subject in `SU` (checked via `SubjectResolverName<SU>` key presence).
- *    If a hook is missing any required resolver method, its property type resolves
- *    to an error string, making the `implements` check fail. For example, a
- *    `LogCommand` that only handles `Cat` (declaring only `resolveCat`) cannot
- *    satisfy `Template<C, [LogCommand], Cat | Dog>` because it is missing
- *    `resolveDog`.
+ *    every Subject in `SU`. The property type is `Cmd & { [K in SU["resolverName"] & string]: any }`;
+ *    if `Cmd` is missing any required resolver method, the intersection is unsatisfiable
+ *    and the `implements` check fails with TS2416 on the hook property. For example, a
+ *    `LogCommand` that only handles `Cat` (declaring only `resolveCat`) cannot satisfy
+ *    `Template<C, [LogCommand], Cat | Dog>` because it is missing `resolveDog`.
  */
 export type Template<
   C extends AnyCommand,
