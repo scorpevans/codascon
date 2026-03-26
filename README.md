@@ -246,6 +246,35 @@ and strategy execution for every Subject. Resolver methods return `MiddlewareTem
 `Template`, with a third `inner` continuation argument in `execute`:
 
 ```typescript
+// Templates — MiddlewareTemplate contract; execute is concrete, strategies are empty
+abstract class LoggingTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
+  LogMiddleware,
+  [],
+  SU
+> {
+  execute(subject: SU, b: Building, inner: Runnable<SU, Building, AccessResult>) {
+    console.log(`Attempting access to ${b.name}`);
+    const result = inner.run(subject, b);
+    console.log(`Access ${result.granted ? "granted" : "denied"}`);
+    return result;
+  }
+}
+
+abstract class PassthroughTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
+  LogMiddleware,
+  [],
+  SU
+> {
+  execute(subject: SU, b: Building, inner: Runnable<SU, Building, AccessResult>) {
+    return inner.run(subject, b);
+  }
+}
+
+// Strategies — empty; behavior lives entirely in the Template
+class LogStudentAccess extends LoggingTemplate<Student> {}
+class LogProfessorAccess extends PassthroughTemplate<Professor> {}
+
+// MiddlewareCommand — resolver methods return Template instances
 class LogMiddleware extends MiddlewareCommand<
   Principal, // base type — must match the Command's
   Building,
@@ -253,20 +282,14 @@ class LogMiddleware extends MiddlewareCommand<
   [Student, Professor] // must cover all Subjects in any Command it wraps
 > {
   readonly commandName = "log" as const;
+  private readonly logStudentAccess = new LogStudentAccess();
+  private readonly logProfessorAccess = new LogProfessorAccess();
 
   resolveStudent(_s: Student, _b: Building): MiddlewareTemplate<LogMiddleware, [], Student> {
-    return {
-      execute(s: Student, b: Building, inner: Runnable<Student, Building, AccessResult>) {
-        console.log(`Attempting access to ${b.name}`);
-        const result = inner.run(s, b); // invoke the next step in the chain
-        console.log(`Access ${result.granted ? "granted" : "denied"}`);
-        return result;
-      },
-    };
+    return this.logStudentAccess;
   }
-
   resolveProfessor(_p: Professor, _b: Building): MiddlewareTemplate<LogMiddleware, [], Professor> {
-    return { execute: (s, b, inner) => inner.run(s, b) }; // passthrough
+    return this.logProfessorAccess;
   }
 }
 ```
