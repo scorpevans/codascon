@@ -25,8 +25,6 @@
 # Command file names are kebab-case of the command key with the
 # "Command" suffix dropped: AccessBuildingCommand → access-building.ts
 #
-# `subjectUnion` is deprecated — the dispatch map's keys are the
-# authoritative subject list. It is still honoured for backward compat.
 #
 # Public API exposed to clients:
 #   - emitAst(configIndex: ConfigIndex, context: EmitContext): void
@@ -60,6 +58,15 @@ commands:
     baseType: ConfigEntry
     objectType: EmitContext
     returnType: EmitResult
+    subjectUnion:
+      - SubjectTypeEntry
+      - PlainTypeEntry
+      - CommandEntry
+      - AbstractTemplateEntry
+      - StrategyEntry
+      - MiddlewareCommandEntry
+      - MiddlewareTemplateEntry
+      - MiddlewareStrategyEntry
     dispatch:
       SubjectTypeEntry: SubjectClassEmitterDefault
       PlainTypeEntry: InterfaceEmitterDefault
