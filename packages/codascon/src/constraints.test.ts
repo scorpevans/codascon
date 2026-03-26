@@ -485,6 +485,30 @@ describe("§11 type-level assertions", () => {
   };
 }
 
+// ── §14l proof — regression guard for CommandHooks with free SU ─────────────────────────────────
+//
+// Abstract parameterized template with hook declared at the abstract level (free SU).
+// If CommandHooks is changed back to a conditional type, this class produces TS2416 at
+// `readonly log = new LogCommand()` and breaks the build — making the regression visible.
+// LogCommand covers all of FeedCommand's subjects [Dog, Cat, Bird], so the intersection
+// `LogCommand & { resolveDog:any; resolveCat:any; resolveBird:any }` is satisfied.
+abstract class FeedTemplateWithHook<
+  SU extends CommandSubjectUnion<FeedCommand>,
+> implements Template<FeedCommand, [LogCommand], SU> {
+  readonly log = new LogCommand();
+  abstract execute(subject: SU, object: { time: string }): FeedResult;
+}
+
+class DogFeedWithHook
+  extends FeedTemplateWithHook<Dog>
+  implements Template<FeedCommand, [LogCommand], Dog>
+{
+  execute(subject: Dog, object: { time: string }): FeedResult {
+    this.log.run(subject, { action: "feed" });
+    return { fed: true, food: "kibble", amount: 1 };
+  }
+}
+
 describe("§14 compile-time constraint tests", () => {
   // All constraints are verified at compile time by tsc --build (which includes
   // constraints.test.ts via tsconfig.json include: ["src"]). Each @ts-expect-error
@@ -632,5 +656,43 @@ describe("§14 compile-time constraint tests", () => {
     }
 
     void BrokenHookTemplate;
+  });
+
+  // ── §14l — proof class at module scope (compiled by tsc, no runtime logic needed) ──
+  //
+  // Abstract parameterized template with a hook and free SU.
+  // Previously, `CommandHooks<[LogCommand], SU>` was a deferred conditional when SU was
+  // free — `readonly log = new LogCommand()` produced TS2416 because TypeScript could not
+  // resolve `LogCommand extends { [K in SU["resolverName"]]: any } ? LogCommand : "Error"`.
+  // The intersection approach (`Cmd & { [K in SU["resolverName"] & string]: any }`) evaluates
+  // using SU's constraint and correctly accepts LogCommand. This class is the regression guard.
+  it("14l: hook on abstract parameterized template with free SU compiles", () => void 0);
+
+  it("14m: under-coverage hook on abstract parameterized template rejected at implements", () => {
+    // PartialHookCommand only handles [Cat] (no resolveDog, no resolveBird).
+    // When used as a hook for Template<FeedCommand, [PartialHookCommand], SU> where
+    // SU extends Dog|Cat|Bird, the intersection approach evaluates SU["resolverName"]
+    // using SU's constraint = "resolveDog"|"resolveCat"|"resolveBird".
+    // Required type: PartialHookCommand & { resolveDog:any; resolveCat:any; resolveBird:any }.
+    // PartialHookCommand lacks resolveDog and resolveBird → TS2416 on the hook property.
+    class PartialHookCommand extends Command<Person, string, string, [Cat]> {
+      readonly commandName = "partialHook" as const;
+      resolveCat() {
+        return { execute: (_s: Cat, _o: string): string => "cat" };
+      }
+    }
+
+    abstract class AbstractMiswiredTemplate<
+      SU extends CommandSubjectUnion<FeedCommand>,
+    > implements Template<FeedCommand, [PartialHookCommand], SU> {
+      // @ts-expect-error — PartialHookCommand covers only [Cat]; SU's constraint
+      // (Dog|Cat|Bird) requires resolveDog and resolveBird too. The intersection
+      // PartialHookCommand & { resolveDog:any; resolveCat:any; resolveBird:any }
+      // is not satisfied by PartialHookCommand → TS2416.
+      readonly partialHook = new PartialHookCommand();
+      abstract execute(subject: SU, object: { time: string }): FeedResult;
+    }
+
+    void AbstractMiswiredTemplate;
   });
 });

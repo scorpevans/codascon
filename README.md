@@ -68,13 +68,24 @@ pnpm add codascon
 
 ### Define Subjects
 
-A **`Subject`** is an entity (`Student`, `Professor`). Codascon enforces that each `Subject` declares a `resolverName` — the name of the resolver method it expects its `Command`s to implement.
+A **`Subject`** is an entity in your domain. Each declares a `resolverName` — the method name its `Command`s must implement to handle it.
 
 ```typescript
 import { Subject } from "codascon";
 
 interface Person {
   name: string;
+}
+
+interface Equipment {
+  name: string;
+  days?: number;
+}
+
+interface CheckoutResult {
+  approved: boolean;
+  daysGranted: number;
+  note?: string;
 }
 
 class Student extends Subject implements Person {
@@ -100,160 +111,253 @@ class Professor extends Subject implements Person {
 
 ### Define a Command
 
-A **`Command`** is an operation (`CheckoutCommand`). Codascon enforces (at the call site) that a `Command` implements the resolver method per `Subject` that it operates on — the resolver method inspects the `Subject` and the context, then returns a **`Template`** to execute.
+A **`Command`** is an operation. Each resolver method accepts a `Subject` and the context object and returns a `Template` to execute.
 
 ```typescript
 import { Command } from "codascon";
 
-interface Equipment {
-  name: string;
-  days?: number;
-}
-
-interface CheckoutResult {
-  approved: boolean;
-  daysGranted?: number;
-  reason?: string;
-}
-
-class CheckoutCommand extends Command<
-  Person, // base type — all Subjects must extend it
-  Equipment, // object type — context passed to every resolver and execute
-  CheckoutResult, // return type
-  [Student, Professor] // subject union
-> {
-  readonly commandName = "checkout" as const;
-
-  resolveStudent(_student: Student, _equipment: Equipment) {
-    return new StudentCheckout(); // Strategy — defined below
+class LogCommand extends Command<Person, { message: string }, void, [Student, Professor]> {
+  readonly commandName = "log" as const;
+  private readonly entry = new LogEntry(); // Strategy — defined below
+  resolveStudent(_s: Student) {
+    return this.entry;
   }
-
-  resolveProfessor(_professor: Professor, _equipment: Equipment) {
-    return new ProfessorCheckout(); // Strategy — defined below
+  resolveProfessor(_p: Professor) {
+    return this.entry;
   }
 }
 ```
 
 ### Define Templates and their Strategies
 
-A `Template` abstract class implements how a `Command` is executed. It may be configured to handle only a subset of the `Command`'s `Subject` union and may declare **hooks** — references to other `Command`s it invokes during execution (see Advanced Patterns below). `Strategy` classes extend those implementations.
+A **`Template`** abstract class defines the execution contract. **`Strategy`** classes provide the concrete implementations.
 
 ```typescript
 import { type Template, type CommandSubjectUnion } from "codascon";
 
-abstract class CheckoutTemplate implements Template<CheckoutCommand> {
-  execute(subject: CommandSubjectUnion<CheckoutCommand>, equipment: Equipment): CheckoutResult {
-    return this.computeTerms(subject, equipment);
-  }
-  protected abstract computeTerms(
-    subject: CommandSubjectUnion<CheckoutCommand>,
-    equipment: Equipment,
-  ): CheckoutResult;
-}
-
-class StudentCheckout extends CheckoutTemplate {
-  protected computeTerms(_student: Student, equipment: Equipment): CheckoutResult {
-    return { approved: true, daysGranted: equipment.days };
+// Non-parameterized template: execute handles the full subject union — no SU generic needed.
+// LogEntry is a concrete empty Strategy; both resolvers share one singleton instance (entry).
+abstract class LogTemplate implements Template<LogCommand> {
+  execute(subject: CommandSubjectUnion<LogCommand>, entry: { message: string }): void {
+    console.log(`[${subject.name}] ${entry.message}`);
   }
 }
 
-class ProfessorCheckout extends CheckoutTemplate {
-  protected computeTerms(_professor: Professor, equipment: Equipment): CheckoutResult {
-    return { approved: true, daysGranted: equipment.days };
-  }
-}
+class LogEntry extends LogTemplate {}
 ```
 
 ### Run
 
 ```typescript
-const checkout = new CheckoutCommand();
-const result = checkout.run(new Professor("Prof. Smith", "CS"), { name: "Projector", days: 7 });
-// { approved: true, daysGranted: 7 }
+const log = new LogCommand();
+
+log.run(new Student("Alice", 3), { message: "library card issued" });
+// [Alice] library card issued
+
+log.run(new Professor("Prof. Smith", "Physics"), { message: "lab access granted" });
+// [Prof. Smith] lab access granted
 ```
 
 ```
 command.run(subject, object)
-  → subject.getCommandStrategy(command, object)     // double dispatch
-    → command[subject.resolverName](subject, object)   // resolver method selects strategy
-      → returns a Template                          // the chosen strategy
-  → template.execute(subject, object)               // strategy executes
+  → subject.getCommandStrategy(command, object)       // double dispatch
+    → command[subject.resolverName](subject, object)  // resolver selects a Template
+      → returns a Template
+  → template.execute(subject, object)                 // Template executes
   → returns result
 ```
 
 ## Advanced Patterns
 
-### Command Hooks
+### Parameterized Templates
 
-`Template`s can declare dependencies on other `Command`s via the `H` parameter. Hook properties are named after the Command's `commandName` and instantiated on the Template — shared across all Strategies:
+A `Template` can carry its subject union as a type parameter — letting each `Strategy` narrow which `Subject`s it handles and access subject-specific fields directly:
 
 ```typescript
-// A log command — used as a hook in CheckoutTemplate
-class LogCommand extends Command<Person, { action: string }, void, [Student, Professor]> {
-  readonly commandName = "log" as const;
-  resolveStudent() {
-    return new LogActivity();
-  }
-  resolveProfessor() {
-    return new LogActivity();
-  }
-}
+// CheckoutResult.daysGranted is non-optional: middleware (introduced below) always fills
+// Equipment.days before execute is called.
+// The cast `equipment as Equipment & { days: number }` makes that guarantee explicit.
 
-class LogActivity {
-  execute(subject: Student | Professor, entry: { action: string }): void {
-    console.log(`[${subject.name}] ${entry.action}`);
+class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Student, Professor]> {
+  readonly commandName = "checkout" as const;
+  resolveStudent(_s: Student, _e: Equipment) {
+    return new StudentCheckout();
+  }
+  resolveProfessor(_p: Professor, _e: Equipment) {
+    return new ProfessorCheckout();
   }
 }
 
-// CheckoutTemplate declares LogCommand as a hook — property named after commandName ("log")
-abstract class CheckoutTemplate implements Template<CheckoutCommand, [LogCommand]> {
-  readonly log = new LogCommand(); // instantiated on the Template — shared across all Strategies
-
-  execute(subject: CommandSubjectUnion<CheckoutCommand>, equipment: Equipment): CheckoutResult {
-    this.log.run(subject, { action: `checkout "${equipment.name}"` });
-    return this.computeTerms(subject, equipment);
+abstract class CheckoutTemplate<
+  SU extends CommandSubjectUnion<CheckoutCommand>,
+> implements Template<CheckoutCommand, [], SU> {
+  execute(subject: SU, equipment: Equipment): CheckoutResult {
+    return this.approve(subject, equipment as Equipment & { days: number });
   }
+  protected abstract approve(subject: SU, equipment: Equipment & { days: number }): CheckoutResult;
+}
 
-  protected abstract computeTerms(
-    subject: CommandSubjectUnion<CheckoutCommand>,
-    equipment: Equipment,
-  ): CheckoutResult;
+// SU = Student — typed access to student.year
+class StudentCheckout extends CheckoutTemplate<Student> {
+  protected approve(student: Student, equipment: Equipment & { days: number }): CheckoutResult {
+    return { approved: true, daysGranted: equipment.days, note: `year ${student.year}` };
+  }
+}
+
+// SU = Professor — typed access to professor.department
+class ProfessorCheckout extends CheckoutTemplate<Professor> {
+  protected approve(professor: Professor, equipment: Equipment & { days: number }): CheckoutResult {
+    return { approved: true, daysGranted: equipment.days, note: professor.department };
+  }
 }
 ```
 
-Hook properties can also be `abstract` — requiring each Strategy to provide its own instance instead of sharing the Template's.
+This does not break LSP — each Strategy is only returned from the resolver for the matching Subject, so its narrowed `execute` is never called with the wrong type.
 
-### Parameterized Templates
+### Command Hooks
 
-A `Template` can leave its subject union as a type parameter, letting `Strategy` classes narrow which `Subject`s they handle:
+`Template`s declare dependencies on other `Command`s via the `H` parameter. Hook properties are named after the Command's `commandName` — the compiler enforces both presence and subject coverage at the `implements` site.
+
+Building on the previous section, add `LogCommand` (from Quick Start) as a hook:
 
 ```typescript
-// SU lets each Strategy declare exactly which Subjects it handles
 abstract class CheckoutTemplate<
   SU extends CommandSubjectUnion<CheckoutCommand>,
 > implements Template<CheckoutCommand, [LogCommand], SU> {
-  readonly log = new LogCommand();
+  // [LogCommand] added
+  readonly log = new LogCommand(); // hook — shared across all Strategies
 
   execute(subject: SU, equipment: Equipment): CheckoutResult {
-    this.log.run(subject, { action: `checkout "${equipment.name}" for ${equipment.days} days` });
-    return this.computeTerms(subject, equipment);
+    this.log.run(subject, {
+      message: `checking out "${equipment.name}" for ${equipment.days} days`,
+    });
+    return this.approve(subject, equipment as Equipment & { days: number });
   }
 
-  protected abstract computeTerms(subject: SU, equipment: Equipment): CheckoutResult;
+  protected abstract approve(subject: SU, equipment: Equipment & { days: number }): CheckoutResult;
+}
+```
+
+- Hook properties can also be `abstract` — requiring each Strategy to provide its own instance
+- Hooks can be injected via the resolver method when constructing the Strategy
+- The compiler rejects a hook whose subject union does not cover the Template's `SU`
+
+### Middleware
+
+A `MiddlewareCommand` intercepts every dispatch through a `Command` — before resolver selection and after strategy execution. Resolver methods return `MiddlewareTemplate` instead of `Template`, with a third `inner` continuation argument in `execute`:
+
+```typescript
+import { MiddlewareCommand, type MiddlewareTemplate, type Runnable } from "codascon";
+
+// Clamps days per subject and logs timing. Non-parameterized — clamp() doesn't need
+// the subject type, so Student | Professor is used directly.
+//   Student:   default 7 days, max 14
+//   Professor: default 14 days, max 30
+abstract class CheckoutMiddlewareTemplate implements MiddlewareTemplate<
+  CheckoutMiddleware,
+  [LogCommand],
+  Student | Professor
+> {
+  readonly log = new LogCommand();
+
+  execute(
+    subject: Student | Professor,
+    eq: Equipment,
+    inner: Runnable<Student | Professor, Equipment, CheckoutResult>,
+  ): CheckoutResult {
+    const start = Date.now();
+    const result = inner.run(subject, { ...eq, days: this.clamp(eq.days) });
+    this.log.run(subject, { message: `checkout completed in ${Date.now() - start}ms` });
+    return result;
+  }
+
+  protected abstract clamp(days: number | undefined): number;
 }
 
-// Each Strategy narrows SU to its specific Subject
-class StudentCheckout extends CheckoutTemplate<Student> {
-  protected computeTerms(_student: Student, equipment: Equipment): CheckoutResult {
-    return { approved: true, daysGranted: equipment.days };
+class StudentPolicy extends CheckoutMiddlewareTemplate {
+  protected clamp(days: number | undefined): number {
+    return Math.min(days ?? 7, 14);
   }
 }
 
-class ProfessorCheckout extends CheckoutTemplate<Professor> {
-  protected computeTerms(_professor: Professor, equipment: Equipment): CheckoutResult {
-    return { approved: true, daysGranted: equipment.days };
+class ProfessorPolicy extends CheckoutMiddlewareTemplate {
+  protected clamp(days: number | undefined): number {
+    return Math.min(days ?? 14, 30);
   }
 }
+
+class CheckoutMiddleware extends MiddlewareCommand<
+  Person,
+  Equipment,
+  CheckoutResult,
+  [Student, Professor]
+> {
+  readonly commandName = "checkoutPolicy" as const;
+  private readonly forStudent = new StudentPolicy();
+  private readonly forProfessor = new ProfessorPolicy();
+
+  resolveStudent(
+    _s: Student,
+    _e: Equipment,
+  ): MiddlewareTemplate<CheckoutMiddleware, [LogCommand], Student> {
+    return this.forStudent;
+  }
+  resolveProfessor(
+    _p: Professor,
+    _e: Equipment,
+  ): MiddlewareTemplate<CheckoutMiddleware, [LogCommand], Professor> {
+    return this.forProfessor;
+  }
+}
+```
+
+Register middleware by overriding `get middleware()` on the Command — first element is outermost:
+
+```typescript
+class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Student, Professor]> {
+  readonly commandName = "checkout" as const;
+
+  override get middleware() {
+    return [new CheckoutMiddleware()];
+  }
+
+  resolveStudent(_s: Student, _e: Equipment) {
+    return new StudentCheckout();
+  }
+  resolveProfessor(_p: Professor, _e: Equipment) {
+    return new ProfessorCheckout();
+  }
+}
+```
+
+- **Declare `inner` as `Runnable<SU, O, R>`**, not as the full Command type.
+- **Omit `inner.run()`** to short-circuit — the downstream command and strategy do not execute.
+- **Object enrichment**: pass `{ ...object, extra }` to `inner.run()` to add context downstream.
+  Declare enrichment fields as optional on `O` so that Strategies that don't use them still typecheck.
+- **`MiddlewareCommand.run()` is a compile error** in well-typed TypeScript — only register
+  middleware via `Command.middleware`.
+- **Domain-wide middleware**: override `get middleware()` in a shared base class; subclasses compose
+  with `[...super.middleware, mw]`.
+
+### Run
+
+```typescript
+const checkout = new CheckoutCommand();
+
+checkout.run(new Student("Alice", 3), { name: "Oscilloscope", days: 45 });
+// [Alice] checking out "Oscilloscope" for 14 days   (clamped from 45)
+// [Alice] checkout completed in 0ms
+// → { approved: true, daysGranted: 14, note: "year 3" }
+
+checkout.run(new Professor("Prof. Smith", "Physics"), { name: "Spectrometer" });
+// [Prof. Smith] checking out "Spectrometer" for 14 days   (Professor default)
+// [Prof. Smith] checkout completed in 0ms
+// → { approved: true, daysGranted: 14, note: "Physics" }
+
+checkout.run(new Student("Bob", 1), { name: "Microscope" });
+// [Bob] checking out "Microscope" for 7 days   (Student default)
+// [Bob] checkout completed in 0ms
+// → { approved: true, daysGranted: 7, note: "year 1" }
 ```
 
 ### Async Commands
@@ -302,85 +406,6 @@ const result = await reserveRoom.run(new Professor("Prof. Smith", "CS"), { name:
 ```
 
 Resolver methods (strategy selection) remain synchronous. Only `execute` returns the `Promise`.
-
-### Middleware
-
-A `MiddlewareCommand` intercepts every dispatch through a `Command` — wrapping resolver selection
-and strategy execution for every Subject. Resolver methods return `MiddlewareTemplate` instead of
-`Template`, with a third `inner` continuation argument in `execute`:
-
-```typescript
-// Template — validates loan period, sets default, and logs timing; strategies are empty
-abstract class LoanCheckTemplate<SU extends Student | Professor> implements MiddlewareTemplate<
-  LoanCheckMiddleware,
-  [],
-  SU
-> {
-  execute(subject: SU, eq: Equipment, inner: Runnable<SU, Equipment, CheckoutResult>) {
-    if ((eq.days ?? 7) >= 30) {
-      return { approved: false, reason: "Loan period must be less than 30 days" };
-    }
-    const start = Date.now();
-    const result = inner.run(subject, { ...eq, days: eq.days ?? 7 });
-    console.log(`CheckoutCommand: ${Date.now() - start}ms`);
-    return result;
-  }
-}
-
-// Strategies — empty; behavior lives entirely in the Template
-class StudentLoanCheck extends LoanCheckTemplate<Student> {}
-class ProfessorLoanCheck extends LoanCheckTemplate<Professor> {}
-
-// MiddlewareCommand — resolver methods return MiddlewareTemplate instances
-class LoanCheckMiddleware extends MiddlewareCommand<
-  Person, // base type — must match the Command's
-  Equipment,
-  CheckoutResult,
-  [Student, Professor] // must cover all Subjects in any Command it wraps
-> {
-  readonly commandName = "loanCheck" as const;
-  private readonly forStudent = new StudentLoanCheck();
-  private readonly forProfessor = new ProfessorLoanCheck();
-
-  resolveStudent(_s: Student, _e: Equipment): MiddlewareTemplate<LoanCheckMiddleware, [], Student> {
-    return this.forStudent;
-  }
-  resolveProfessor(
-    _p: Professor,
-    _e: Equipment,
-  ): MiddlewareTemplate<LoanCheckMiddleware, [], Professor> {
-    return this.forProfessor;
-  }
-}
-```
-
-Register middleware by overriding `get middleware()` on the Command — first element is outermost:
-
-```typescript
-class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Student, Professor]> {
-  readonly commandName = "checkout" as const;
-
-  override get middleware() {
-    return [new LoanCheckMiddleware()];
-  }
-
-  resolveStudent(_s: Student, _e: Equipment) {
-    return studentCheckout;
-  }
-  resolveProfessor(_p: Professor, _e: Equipment) {
-    return professorCheckout;
-  }
-}
-```
-
-- **Declare `inner` as `Runnable<SU, O, R>`**, not as the full Command type.
-- **Omit `inner.run()`** to short-circuit — the downstream command and strategy do not execute.
-- **Object enrichment**: pass `{ ...object, extra }` to `inner.run()` to add context downstream.
-  Declare enrichment fields as optional on `O` so that Strategies that don't use them still typecheck.
-- **`MiddlewareCommand.run()` is a compile error** in well-typed TypeScript — only register
-  middleware via `Command.middleware`.
-- **Domain-wide middleware**: override `get middleware()` in a shared base class; subclasses compose
-  with `[...super.middleware, mw]`.
 
 ## Odetovibe — YAML Configuration & Code Generation
 
