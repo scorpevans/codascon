@@ -95,6 +95,13 @@
  *     the Command's `subjectUnion`. A middleware covering fewer Subjects than
  *     the Command would leave some Subjects unintercepted.
  *
+ * 12. **defaultResolver strategy validity**: When `defaultResolver` is
+ *     present, the named Strategy must exist within the Command's templates.
+ *     Its effective `subjectSubset` — the Strategy's own `subjectSubset` if
+ *     declared, otherwise the parent Template's `subjectSubset`, otherwise
+ *     the full command subject union — must cover every subject in the
+ *     Command's dispatch map.
+ *
  * ## Out of Scope
  *
  * The following are client implementation details not captured by this schema:
@@ -290,6 +297,22 @@ export type DomainType = {
  *                            emits an `override get middleware()` getter on the
  *                            Command class returning the registered instances.
  *
+ * @property defaultResolver — Optional catch-all resolver. When present,
+ *                            subjects without a specific resolver method fall
+ *                            back to `defaultResolver` instead of throwing.
+ *                            Codegen emits a `defaultResolver` method on the
+ *                            Command class returning an instance of the
+ *                            referenced Strategy.
+ *
+ *                            The referenced Strategy must exist within this
+ *                            Command's templates and its effective
+ *                            `subjectSubset` — the Strategy's own
+ *                            `subjectSubset` if declared, otherwise the parent
+ *                            Template's `subjectSubset`, otherwise the full
+ *                            command subject union — must cover every subject
+ *                            in the Command's `dispatch` map (validation
+ *                            rule 12).
+ *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
  *                            declares its subject narrowing, hooks, and
@@ -313,6 +336,7 @@ export type Command = {
   returnAsync?: boolean;
   subjectUnion: SubjectRef[];
   middleware?: MiddlewareRef[];
+  defaultResolver?: StrategyRef;
   dispatch: {
     [subject: SubjectRef]: StrategyRef;
   };

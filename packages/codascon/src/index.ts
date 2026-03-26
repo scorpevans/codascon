@@ -39,7 +39,8 @@
  * command.run(subject, object)
  *   → _runChain: for each command in [command.middleware..., command]:
  *       → _dispatch: subject.getCommandStrategy(command, object)
- *           → command[subject.resolverName](subject, object)  // resolver selects strategy
+ *           → command[subject.resolverName](subject, object)  // specific resolver, or
+ *           → command.defaultResolver(subject, object)         //   defaultResolver fallback
  *           → returns a Template instance
  *         → strategy.execute(subject, object)           // regular command
  *         → strategy.execute(subject, object, inner)    // middleware command
@@ -56,6 +57,11 @@
  *   constrained by `CommandSubjectStrategies<C>`, which maps each Subject's
  *   `resolverName` to its required resolver method signature. If any resolver method is
  *   missing, `run` becomes uncallable at the call site.
+ *
+ * - **`defaultResolver` opt-out**: If a Command defines `defaultResolver`, the
+ *   exhaustiveness constraint is relaxed — specific resolver methods become optional.
+ *   `defaultResolver` handles every Subject in the union not covered by a specific
+ *   resolver method.
  *
  * - **Subject union enforcement**: `run` only accepts Subjects that are in the
  *   Command's declared subject union (`BSL`). Passing an unsupported Subject is
@@ -418,6 +424,21 @@ type RequireLiteralResolverNames<BSL extends unknown[]> = UnionToIntersection<
   }[number]
 >;
 
+/*
+ * Minimal structural type for the value returned by `Command.defaultResolver?`.
+ *
+ * Declares only the `execute` method using the raw `O` and `R` type params of the
+ * declaring `Command`. Deliberately avoids `Template<Command<B,O,R,BSL>, any[], SU>`
+ * (which internally uses `CommandObject<C>` / `CommandReturn<C>`) because those helpers
+ * use `C extends Command<any, infer O, any, any>`, which triggers structural inspection
+ * of `Command<B,O,R,BSL>`'s members — including `defaultResolver?` itself — creating a
+ * circular evaluation chain that overflows the TypeScript type-checker.
+ *
+ * Structurally equivalent to `Template<Command<B,O,R,BSL>, [], BSL[number]>` — any
+ * `Template` implementation satisfies it.
+ */
+type DefaultResolverResult<O, R, SU> = { execute<T extends SU>(subject: T, object: O): R };
+
 // ─── Core Classes ────────────────────────────────────────────────
 
 /*
@@ -449,11 +470,14 @@ type RequireLiteralResolverNames<BSL extends unknown[]> = UnionToIntersection<
  * This method performs the Subject's half of double dispatch. When
  * `command.run(subject, object)` is called, it delegates to
  * `subject.getCommandStrategy(command, object)`, which looks up
- * `command[this.resolverName]` and invokes it with `(this, object)`.
+ * `command[this.resolverName]` and invokes it. If the specific resolver
+ * method is absent (the Command defines `defaultResolver` instead),
+ * `defaultResolver(this, object)` is invoked as the fallback.
  *
- * The method call `command[methodName](this, object)` preserves `this`
- * binding on the Command, allowing resolver methods to access Command
- * instance state via `this`.
+ * Both call forms — `command[methodName](this, object)` for a specific
+ * resolver and `command.defaultResolver(this, object)` for the fallback —
+ * preserve the `this` binding on the Command, allowing resolver methods to
+ * access Command instance state via `this`.
  *
  * The `this` parameter constraint (`this & BS`) ensures the Subject
  * is part of the Command's subject union. This is automatically satisfied
@@ -478,15 +502,36 @@ export abstract class Subject {
   /**
    * Performs the Subject's half of double dispatch. Called by `Command._dispatch()` —
    * not intended for direct use by consumers.
+   *
+   * Looks up `command[this.resolverName]` and invokes it. If the specific resolver
+   * method is absent (the Command defines `defaultResolver` instead),
+   * falls back to `command.defaultResolver(this, object)`.
    * @internal
    */
   getCommandStrategy<C extends AnyCommand, BS extends CommandSubjectUnion<C>>(
     this: this & BS,
-    command: Visit<C, this & BS>,
+    command:
+      | Visit<C, this & BS>
+      | {
+          defaultResolver: (
+            subject: CommandSubjectUnion<C>,
+            object: CommandObject<C>,
+          ) => Template<C, any[], CommandSubjectUnion<C>>;
+        },
     object: CommandObject<C>,
   ): Template<C, any[], this & BS> {
-    const methodName = this.resolverName as SubjectResolverName<this & BS>;
-    return command[methodName](this, object);
+    const specificResolver = this.resolverName as SubjectResolverName<this & BS>;
+    if (specificResolver in command) {
+      return command[specificResolver](this, object);
+    }
+    if ("defaultResolver" in command) {
+      return command.defaultResolver(this, object);
+    }
+
+    throw new Error(
+      `No resolver for "${this.resolverName}" on command "${(command as any).commandName ?? "(unknown)"}". ` +
+        `Either implement a resolver method named "${this.resolverName}" or declare defaultResolver.`,
+    );
   }
 }
 
@@ -497,9 +542,10 @@ export abstract class Subject {
  * Subclasses must:
  *
  * 1. Declare `readonly commandName` as a string literal (used for hook keying).
- * 2. Implement one resolver method per Subject in `BSL`, named after that Subject's
- *    `resolverName`. Each resolver method receives the Subject and the object, and
- *    returns a Template (strategy) to execute.
+ * 2. Either implement one resolver method per Subject in `BSL` (named after that
+ *    Subject's `resolverName`, receiving the Subject and the object, and returning a
+ *    Template to execute), or declare `defaultResolver` as a catch-all fallback that
+ *    handles every Subject not covered by a specific resolver method.
  *
  * ## Generic Parameters
  *
@@ -532,11 +578,9 @@ export abstract class Subject {
  * Because every step uses `_runChain` / `_dispatch`, middleware registered on
  * a middleware command are automatically applied.
  *
- * The `this` parameter constraint
- * (`this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralResolverNames<BSL>`)
- * ensures all resolver methods are present and all `resolverName`s are literals.
- * The error surfaces at the call site when any resolver method is missing or a
- * `resolverName` is non-literal — `run` becomes uncallable.
+ * The `this` parameter constraint is a union: `this` must satisfy either
+ * `CommandSubjectStrategies<...>` (all resolver methods present) OR declare
+ * `defaultResolver`. In both cases, all `resolverName`s must be literals.
  *
  * `run` can be overridden by subclasses using `super.run(subject, object)`
  * to unconditionally wrap the chain entry point.
@@ -632,6 +676,20 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
   }
 
   /**
+   * Optional catch-all resolver. When defined, subjects without a specific resolver
+   * method fall through to `defaultResolver` instead of causing a runtime failure.
+   *
+   * Declaring `defaultResolver` relaxes the exhaustiveness constraint on `run()`:
+   * specific resolver methods for subjects in `BSL` may be omitted. `defaultResolver`
+   * receives the full subject union (`BSL[number]`) and must return a value with an
+   * `execute` method that accepts any subject in that union.
+   *
+   * Specific resolver methods take precedence — `defaultResolver` is only invoked
+   * when no matching resolver method is found for the dispatched subject's `resolverName`.
+   */
+  defaultResolver?(subject: BSL[number], object: O): DefaultResolverResult<O, R, BSL[number]>;
+
+  /**
    * Processes this command's own middleware chain, then calls `_dispatch`.
    * `MiddlewareCommand` overrides both this method and `_dispatch` to thread
    * a continuation through to `execute`. Do not override in client subclasses
@@ -664,20 +722,35 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
    * @internal
    */
   protected _dispatch(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
-    return subject.getCommandStrategy(this, object).execute(subject, object);
+    // Cast is required: Command<B,O,R,BSL> (abstract base) structurally lacks both resolver methods
+    // and a concrete defaultResolver. Safety is guaranteed by run()'s this constraint, which enforces
+    // that the concrete instance satisfies one of the two arms before _dispatch is ever reached.
+    type Shape =
+      | Visit<Command<B, O, R, BSL>, CommandSubjectUnion<Command<B, O, R, BSL>>>
+      | { defaultResolver: (...args: any[]) => any };
+    return subject.getCommandStrategy(this as unknown as Shape, object).execute(subject, object);
   }
 
   /**
    * Dispatches `subject` and `object` through the full middleware chain,
-   * then selects and executes the matching strategy. Requires all resolver
-   * methods to be implemented and all `resolverName` values to be string literals.
+   * then selects and executes the matching strategy. Requires either all resolver
+   * methods to be implemented or `defaultResolver` to be declared, and all
+   * `resolverName` values to be string literals.
    */
   run<T extends CommandSubjectUnion<Command<B, O, R, BSL>>>(
-    this: this & CommandSubjectStrategies<Command<B, O, R, BSL>> & RequireLiteralResolverNames<BSL>,
+    this: this &
+      (
+        | CommandSubjectStrategies<Command<B, O, R, BSL>>
+        | { defaultResolver: (...args: any[]) => any }
+      ) &
+      RequireLiteralResolverNames<BSL>,
     subject: T,
     object: O,
   ): R {
-    return this._runChain(subject, object);
+    // Cast to the base class to access protected _runChain — safe because this is always
+    // an instance of Command<B,O,R,BSL>. The cast is needed because the this & (A | B)
+    // union in the this constraint causes TypeScript to lose class-identity for protected access.
+    return (this as Command<B, O, R, BSL>)._runChain(subject, object);
   }
 }
 
@@ -1029,11 +1102,14 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
     continuation?: Runnable<BSL[number], O, R>,
   ): R {
     type SU = BSL[number];
-    const strategy = subject.getCommandStrategy(this, object) as MiddlewareTemplate<
-      MiddlewareCommand<B, O, R, BSL>,
-      any[],
-      SU
-    >;
+    // Same cast rationale as Command._dispatch — see comment there.
+    type Shape =
+      | Visit<MiddlewareCommand<B, O, R, BSL>, SU>
+      | { defaultResolver: (...args: any[]) => any };
+    const strategy = subject.getCommandStrategy(
+      this as unknown as Shape,
+      object,
+    ) as MiddlewareTemplate<MiddlewareCommand<B, O, R, BSL>, any[], SU>;
     // continuation is always defined here — _runChain throws if undefined
     return strategy.execute(subject, object, continuation!);
   }

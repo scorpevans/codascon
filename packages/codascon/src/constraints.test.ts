@@ -609,6 +609,37 @@ describe("§14 compile-time constraint tests", () => {
     void WrongSUCommand;
   });
 
+  it("14j2: defaultResolver present — run() callable without specific resolver methods", () => {
+    // A Command that declares defaultResolver but no specific resolver methods
+    // satisfies the run() this constraint via the defaultResolver branch of the union.
+    class DefaultCmd extends Command<Person, string, string, [Dog, Cat]> {
+      readonly commandName = "defaultCmd" as const;
+      defaultResolver(subject: Dog | Cat, object: string) {
+        return { execute: (s: Dog | Cat, o: string): string => s.name };
+      }
+    }
+
+    void DefaultCmd;
+    // If the above compiles without @ts-expect-error, the test passes.
+    // The compile-time proof is that new DefaultCmd().run(new Dog(...), "") is typeable.
+    const cmd = new DefaultCmd();
+    cmd.run(new Dog("Rex", "Lab"), ""); // must compile
+  });
+
+  it("14j3: no resolver methods AND no defaultResolver — run() uncallable", () => {
+    class EmptyCmd extends Command<Person, string, string, [Dog]> {
+      readonly commandName = "emptyCmd" as const;
+      // No resolveDog, no defaultResolver
+    }
+
+    const cmd = new EmptyCmd();
+    const _14j3 = () => {
+      // @ts-expect-error — neither CommandSubjectStrategies nor defaultResolver is satisfied
+      cmd.run(new Dog("Rex", "Lab"), "");
+    };
+    void _14j3;
+  });
+
   it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {
     // When a hook Command declares commandName as the wide `string` type,
     // CommandName<Cmd> returns the WidenedCommandNameError string rather than `never`.
