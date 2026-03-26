@@ -409,30 +409,68 @@ Instead of jumping straight into coding, you can focus on architecting your busi
 namespace: campus
 
 domainTypes:
-  Principal: {}
+  Person: {}
+  LogPayload: {} # { message: string } — add field in generated interface
+  Equipment: {}
+  CheckoutResult: {}
   Student:
     resolverName: resolveStudent
   Professor:
     resolverName: resolveProfessor
-  Building: {}
-  AccessResult: {}
+
+# Optional: cross-cutting concerns registered on Commands via middleware: [...]
+middleware:
+  CheckoutMiddleware:
+    commandName: checkoutPolicy
+    baseType: Person
+    objectType: Equipment
+    returnType: CheckoutResult
+    dispatch:
+      Student: StudentPolicy
+      Professor: ProfessorPolicy
+    templates:
+      CheckoutMiddlewareTemplate:
+        isParameterized: false
+        commandHooks: [LogCommand]
+        strategies:
+          StudentPolicy: {}
+          ProfessorPolicy: {}
 
 commands:
-  AccessBuildingCommand:
-    commandName: accessBuilding
-    baseType: Principal
-    objectType: Building
-    returnType: AccessResult
+  LogCommand:
+    commandName: log
+    baseType: Person
+    objectType: LogPayload
+    returnType: void
     subjectUnion: [Student, Professor]
     dispatch:
-      Student: BasicAccess
-      Professor: FullAccess
+      Student: LogEntry
+      Professor: LogEntry
     templates:
-      AccessTemplate:
+      LogTemplate:
         isParameterized: false
         strategies:
-          BasicAccess: {}
-          FullAccess: {}
+          LogEntry: {}
+
+  CheckoutCommand:
+    commandName: checkout
+    baseType: Person
+    objectType: Equipment
+    returnType: CheckoutResult
+    subjectUnion: [Student, Professor]
+    middleware: [CheckoutMiddleware]
+    dispatch:
+      Student: StudentCheckout
+      Professor: ProfessorCheckout
+    templates:
+      CheckoutTemplate:
+        isParameterized: true
+        commandHooks: [LogCommand]
+        strategies:
+          StudentCheckout:
+            subjectSubset: [Student]
+          ProfessorCheckout:
+            subjectSubset: [Professor]
 ```
 
 ### Translate YAML architecture to Code
