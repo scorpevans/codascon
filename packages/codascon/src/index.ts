@@ -70,7 +70,7 @@
  * - **Literal resolverName**: `SubjectResolverName<S>` returns `never` for non-literal
  *   `string` resolverNames. When `never` is a mapped type key the entry is dropped,
  *   so resolver method requirements for Subjects with non-literal resolverNames are
- *   omitted from `CommandSubjectStrategies` — and `RequireLiteralResolverNames`
+ *   omitted from `CommandSubjectStrategies` — and `ValidResolverNames`
  *   makes `run` uncallable with a descriptive error property name.
  *
  * - **Duplicate resolverName detection**: If two Subjects in the same Command's
@@ -146,6 +146,9 @@
  */
 type WidenedResolverNameError =
   "resolverName must be a literal. Fix: readonly resolverName = 'resolveFoo' as const";
+
+type ReservedResolverNameError =
+  "resolverName cannot be 'defaultResolver'. Fix: rename it to a unique non-reserved value";
 
 /** Extracts the `resolverName` string literal type from a Subject. Returns `never` for non-literal `resolverName` or `any`. */
 export type SubjectResolverName<S> =
@@ -330,9 +333,9 @@ type Visit<C extends AnyCommand, BS extends CommandSubjectUnion<C>> = {
 /*
  * Converts a union type to an intersection type.
  *
- * Used by `RequireLiteralResolverNames` to merge per-element checks into a single
- * type. If any element produces `{ [WidenedResolverNameError]: never }`, the
- * intersection carries that property, making `run()` uncallable.
+ * Used by `ValidResolverNames` to merge per-element checks into a single
+ * type. If any element produces an unsatisfiable error-keyed property, the
+ * intersection carries it, making `run()` uncallable.
  */
 type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (k: infer I) => void
   ? I
@@ -397,29 +400,33 @@ type MiddlewareSubjectStrategies<B, O, R, BSL extends (B & Subject)[]> = {
 };
 
 /*
- * Enforces that every Subject in `BSL` declares a literal `resolverName`.
+ * Enforces that every Subject in `BSL` declares a valid `resolverName`.
  *
  * Intersected into `run()`'s `this` parameter. It takes `BSL` directly from the
  * Command class's own generic (not a free type variable inside `run`), so it is
  * evaluated at each concrete call site with the specific tuple bound at subclass
  * definition time.
  *
- * If any element of `BSL` has a non-literal `resolverName` (i.e. typed as the wide
- * `string`), the result includes `{ [WidenedResolverNameError]: never }` — an
- * unsatisfiable structural requirement that makes `run` uncallable with a
- * descriptive property name explaining the issue.
+ * Two validations are applied per element:
+ * 1. Non-literal `resolverName` (wide `string`): produces `{ [WidenedResolverNameError]: never }`
+ * 2. Reserved `resolverName = "defaultResolver"`: produces `{ [ReservedResolverNameError]: never }`
+ *
+ * Either result is an unsatisfiable structural requirement that makes `run` uncallable
+ * with a descriptive property name explaining the issue.
  *
  * The IsAny guard (`0 extends 1 & BSL[K]`) prevents false positives when `BSL`
  * contains `any`.
  */
-type RequireLiteralResolverNames<BSL extends unknown[]> = UnionToIntersection<
+type ValidResolverNames<BSL extends unknown[]> = UnionToIntersection<
   {
     [K in keyof BSL]: 0 extends 1 & BSL[K]
       ? unknown
       : BSL[K] extends { resolverName: infer V extends string }
         ? string extends V
           ? { readonly [key in WidenedResolverNameError]: never }
-          : unknown
+          : V extends "defaultResolver"
+            ? { readonly [key in ReservedResolverNameError]: never }
+            : unknown
         : unknown;
   }[number]
 >;
@@ -437,7 +444,32 @@ type RequireLiteralResolverNames<BSL extends unknown[]> = UnionToIntersection<
  * Structurally equivalent to `Template<Command<B,O,R,BSL>, [], BSL[number]>` — any
  * `Template` implementation satisfies it.
  */
-type DefaultResolverResult<O, R, SU> = { execute<T extends SU>(subject: T, object: O): R };
+type DefaultResolverTemplate<O, R, SU> = { execute<T extends SU>(subject: T, object: O): R };
+
+/*
+ * Middleware variant of `DefaultResolverTemplate` for `MiddlewareCommand.defaultResolver?`.
+ *
+ * Requires `execute` to accept the `inner` continuation as a required third argument.
+ * When dispatched, `MiddlewareCommand._dispatch` passes the continuation to `execute`,
+ * so `inner` is always defined — no non-null assertion needed.
+ *
+ * A value satisfying `MiddlewareDefaultResolverTemplate` is assignable to
+ * `DefaultResolverTemplate` via method bivariance, so `getCommandStrategy` needs no
+ * separate overload for the middleware case.
+ *
+ * `inner` is declared optional (`inner?`) so that `MiddlewareDefaultResolverTemplate`
+ * remains a structural subtype of `DefaultResolverTemplate` (a required `inner` would
+ * break the subtype relationship — a 3-arg-required function is not assignable to a
+ * 2-arg function). At runtime `inner` is always defined when dispatched via the chain;
+ * the optionality is a type-system concession, not a runtime reality.
+ *
+ * **Responsibility**: the implementation must call `inner!.run(subject, object)` to
+ * forward control down the chain. TypeScript cannot guarantee `inner` is called, but
+ * the signature makes the requirement explicit.
+ */
+type MiddlewareDefaultResolverTemplate<O, R, SU> = {
+  execute<T extends SU>(subject: T, object: O, inner?: Runnable<SU, O, R>): R;
+};
 
 // ─── Core Classes ────────────────────────────────────────────────
 
@@ -459,7 +491,7 @@ type DefaultResolverResult<O, R, SU> = { execute<T extends SU>(subject: T, objec
  * - A string literal type (not the wide `string` type) — enforced by
  *   `SubjectResolverName<S>` which returns `never` for non-literals, silently
  *   dropping the resolver method requirement from `CommandSubjectStrategies`.
- *   `RequireLiteralResolverNames` separately makes `run` uncallable with a
+ *   `ValidResolverNames` separately makes `run` uncallable with a
  *   descriptive error.
  * - Unique across all Subjects used within the same Command's subject union —
  *   duplicates cause `CommandSubjectStrategies` to intersect the conflicting
@@ -512,7 +544,7 @@ export abstract class Subject {
     command:
       | Visit<C, this & BS>
       | {
-          readonly defaultResolver: DefaultResolverResult<
+          readonly defaultResolver: DefaultResolverTemplate<
             CommandObject<C>,
             CommandReturn<C>,
             CommandSubjectUnion<C>
@@ -522,7 +554,7 @@ export abstract class Subject {
   ): Template<C, any[], this & BS> {
     const specificResolver = this.resolverName as SubjectResolverName<this & BS>;
     if (specificResolver in command) {
-      return command[specificResolver](this, object);
+      return (command as Visit<C, this & BS>)[specificResolver](this, object);
     }
     if ("defaultResolver" in command) {
       return command.defaultResolver as unknown as Template<C, any[], this & BS>;
@@ -630,7 +662,7 @@ export abstract class Subject {
  */
 type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
   | MiddlewareSubjectStrategies<B, O, R, BSL>
-  | { readonly defaultResolver: DefaultResolverResult<O, R, BSL[number]> }
+  | { readonly defaultResolver: MiddlewareDefaultResolverTemplate<O, R, BSL[number]> }
 ) & {
   _runChain(subject: BSL[number], object: O, continuation: Runnable<BSL[number], O, R>): R;
 };
@@ -670,13 +702,12 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
    * declarations are checked. Treat specific resolvers as purely additive when
    * `defaultResolver` is also declared.
    *
-   * **MiddlewareCommand note**: when used in a `MiddlewareCommand` subclass, assign
-   * a `MiddlewareTemplate`-compatible value whose `execute` accepts an `inner`
-   * continuation and calls `inner.run(subject, object)` to forward control down the
-   * chain. The base `DefaultResolverResult` type does not enforce this — it is the
-   * caller's responsibility to assign a correctly typed `MiddlewareTemplate`.
+   * **MiddlewareCommand note**: `MiddlewareCommand` narrows this field to
+   * `MiddlewareDefaultResolverTemplate`, which requires `execute` to accept an `inner`
+   * continuation as a required third argument. The implementation must call
+   * `inner.run(subject, object)` to forward control down the chain.
    */
-  declare readonly defaultResolver?: DefaultResolverResult<O, R, BSL[number]>;
+  declare readonly defaultResolver?: DefaultResolverTemplate<O, R, BSL[number]>;
 
   /**
    * Command-level middleware applied to every dispatch through this Command.
@@ -744,9 +775,9 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
     this: this &
       (
         | CommandSubjectStrategies<Command<B, O, R, BSL>>
-        | { readonly defaultResolver: DefaultResolverResult<O, R, BSL[number]> }
+        | { readonly defaultResolver: DefaultResolverTemplate<O, R, BSL[number]> }
       ) &
-      RequireLiteralResolverNames<BSL>,
+      ValidResolverNames<BSL>,
     subject: T,
     object: O,
   ): R {
@@ -1047,13 +1078,23 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
   BSL
 > {
   /**
+   * Narrows `Command.defaultResolver?` to `MiddlewareDefaultResolverTemplate`, surfacing
+   * the `inner` continuation in the `execute` signature. `inner` is typed as optional to
+   * preserve the subtype relationship with `DefaultResolverTemplate` — at runtime it is
+   * always defined when dispatched via the middleware chain.
+   *
+   * The implementation must call `inner!.run(subject, object)` to forward control down
+   * the chain. The signature makes this requirement explicit; TypeScript cannot enforce it.
+   */
+  declare readonly defaultResolver?: MiddlewareDefaultResolverTemplate<O, R, BSL[number]>;
+
+  /**
    * Direct invocation of `MiddlewareCommand` via `run()` is always a compile error.
    * Register it in a `Command`'s `middleware` array — never call `run()` directly.
    *
    * The `this: never` constraint makes `run()` uncallable on any `MiddlewareCommand`
-   * instance, including those that also declare `defaultResolver`. This is intentional:
-   * `MiddlewareCommand._runChain` requires a `continuation` argument that `run()` cannot
-   * supply — calling it directly would throw at runtime regardless.
+   * instance. `MiddlewareCommand._runChain` requires a `continuation` argument that
+   * `run()` cannot supply — calling it directly would throw at runtime regardless.
    * @internal
    */
   override run(

@@ -675,21 +675,71 @@ describe("§14 compile-time constraint tests", () => {
     void BadDefaultCmd;
   });
 
-  it("14j5: MiddlewareCommand with defaultResolver — run() still uncallable (this: never)", () => {
-    // The override run(this: never) on MiddlewareCommand ensures direct invocation
-    // remains a compile error even when defaultResolver is declared. Without this fix,
-    // the | { defaultResolver: ... } branch of run()'s this constraint would satisfy
-    // the check and make run() callable.
-    class DefMw extends MiddlewareCommand<Person, string, string, [Dog]> {
-      readonly commandName = "defMw" as const;
-      override readonly defaultResolver = { execute: (_s: Dog, _o: string): string => "" };
+  it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () => {
+    // run(this: never) applies regardless of whether resolver methods or defaultResolver
+    // are present. A fully covered MiddlewareCommand is still uncallable via run().
+    class CoveredMw extends MiddlewareCommand<Person, string, string, [Dog]> {
+      readonly commandName = "coveredMw" as const;
+      resolveDog(_d: Dog) {
+        return {
+          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+            inner.run(s, o),
+        };
+      }
     }
-    const cmd = new DefMw();
+    const cmd = new CoveredMw();
     const _14j5 = () => {
       // @ts-expect-error — MiddlewareCommand.run() is always uncallable (this: never)
       cmd.run(new Dog("Rex", "Lab"), "");
     };
     void _14j5;
+  });
+
+  it("14j6: MiddlewareCommand.defaultResolver accepts MiddlewareDefaultResolverTemplate (inner surfaced)", () => {
+    // MiddlewareCommand narrows defaultResolver? to MiddlewareDefaultResolverTemplate,
+    // which surfaces inner as a third argument in the execute signature. inner is typed as
+    // optional (inner?) so MiddlewareDefaultResolverTemplate remains a subtype of
+    // DefaultResolverTemplate — a required-inner function is not assignable to a 2-arg
+    // function. At runtime inner is always supplied by _dispatch.
+    //
+    // The inner! assertion is still needed in the implementation body because the type
+    // declares inner as optional (the type-system concession). TypeScript cannot prevent
+    // an implementation from ignoring inner — the type makes the requirement visible.
+    class DefMw extends MiddlewareCommand<Person, string, string, [Dog]> {
+      readonly commandName = "defMw" as const;
+      resolveDog(_d: Dog) {
+        return {
+          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+            inner.run(s, o),
+        };
+      }
+      override readonly defaultResolver = {
+        execute: (s: Dog, o: string, inner?: Runnable<Dog, string, string>): string =>
+          inner!.run(s, o),
+      };
+    }
+    void DefMw;
+  });
+
+  it("14j7: resolverName 'defaultResolver' is reserved — run() uncallable", () => {
+    // ValidResolverNames produces ReservedResolverNameError for any Subject whose
+    // resolverName is "defaultResolver", making run() uncallable at the call site.
+    class ReservedSubject extends Subject {
+      readonly resolverName = "defaultResolver" as const;
+      constructor() {
+        super();
+      }
+    }
+    class ReservedCmd extends Command<Subject, string, string, [ReservedSubject]> {
+      readonly commandName = "reservedCmd" as const;
+    }
+    const cmd = new ReservedCmd();
+    const _14j7 = () => {
+      // @ts-expect-error — resolverName 'defaultResolver' is reserved;
+      // ValidResolverNames produces ReservedResolverNameError making run() uncallable.
+      cmd.run(new ReservedSubject(), "");
+    };
+    void _14j7;
   });
 
   it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {
