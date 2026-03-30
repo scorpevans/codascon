@@ -1090,8 +1090,8 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
    * Register it in a `Command`'s `middleware` array — never call `run()` directly.
    *
    * The `this: never` constraint makes `run()` uncallable on any `MiddlewareCommand`
-   * instance. `MiddlewareCommand._runChain` requires a `continuation` argument that
-   * `run()` cannot supply — calling it directly would throw at runtime regardless.
+   * instance from well-typed TypeScript. The runtime guard below catches JavaScript
+   * callers or any-typed bypasses and throws an informative error.
    * @internal
    */
   override run(
@@ -1100,8 +1100,12 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
     object: O,
   ): R {
     // Body is unreachable in well-typed TypeScript (this: never).
-    // Defense-in-depth for JavaScript callers or any-typed bypasses — throws at runtime.
-    return (this as unknown as MiddlewareCommand<B, O, R, BSL>)._runChain(subject, object);
+    // Defense-in-depth for JavaScript callers or any-typed bypasses.
+    const self = this as unknown as MiddlewareCommand<B, O, R, BSL>;
+    throw new Error(
+      `MiddlewareCommand "${self.commandName}" cannot be invoked directly. ` +
+        `Register it in a Command's middleware array instead.`,
+    );
   }
 
   /**
@@ -1110,9 +1114,10 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
    * typed as `MiddlewareElement<...>`. Widening protected to public in an
    * override is permitted in TypeScript.
    *
-   * The optional `continuation` allows the same method to serve two call sites:
-   * from `Command._runChain` (chain use, continuation always defined) and
-   * without continuation (guarded below).
+   * `continuation` is declared optional only for TypeScript override compatibility
+   * with `Command._runChain` (2-arg base). At runtime, `continuation` is always
+   * defined — `Command._runChain` is the sole legitimate caller and always passes
+   * a `Runnable` (MiddlewareElement contract).
    * @internal
    */
   override _runChain(
@@ -1120,17 +1125,6 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
     object: O,
     continuation?: Runnable<BSL[number], O, R>,
   ): R {
-    // Unreachable in well-typed TypeScript: MiddlewareCommand.run() carries a
-    // `this: never` constraint — no value can satisfy `never`, so `run()` is always
-    // uncallable at the call site regardless of whether `defaultResolver` is declared.
-    // Kept as defense-in-depth for JavaScript callers, any-typed code, or direct
-    // calls to the public _runChain.
-    if (continuation === undefined) {
-      throw new Error(
-        `MiddlewareCommand "${this.commandName}" cannot be invoked directly. ` +
-          `Register it in a Command's middleware array instead.`,
-      );
-    }
     const mw = this._mwCache ?? (this._mwCache = this.middleware);
     if (mw.length === 0) return this._dispatch(subject, object, continuation);
     type SU = BSL[number];
@@ -1151,8 +1145,8 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
    * compatible values.
    *
    * Do not call this method directly. It is only safe when called from
-   * `_runChain`, which guarantees `continuation` is defined. Bypassing
-   * `_runChain` and calling `_dispatch` without a continuation will cause the
+   * `_runChain`, which always passes `continuation`. Bypassing `_runChain`
+   * and calling `_dispatch` without a continuation will cause the
    * `continuation!` non-null assertion to panic at runtime.
    * @internal
    */
@@ -1167,7 +1161,8 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
       any[],
       SU
     >;
-    // continuation is always defined here — _runChain throws if undefined
+    // continuation is always defined here — _runChain always passes a Runnable
+    // (MiddlewareElement contract).
     return strategy.execute(subject, object, continuation!);
   }
 }
