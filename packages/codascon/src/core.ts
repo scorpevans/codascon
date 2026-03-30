@@ -797,12 +797,22 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
  *   is unsatisfiable — the `implements` check fails at the declaration site with
  *   a TS2416 error on the hook property.
  *
- * **Why intersection, not conditional:** A conditional type
+ * **Coverage check — intersection, not conditional (on `SU`):** A conditional type
  * `Cmd extends { [K in SU["resolverName"]]: any } ? Cmd : "Error"` is deferred
  * by TypeScript when `SU` is a free type parameter (as in abstract parameterized
  * templates). The intersection avoids deferral: `SU["resolverName"]` is an indexed
  * access type, which TypeScript evaluates using `SU`'s constraint — giving a
  * concrete key union even when `SU` is free.
+ *
+ * **`defaultResolver` opt-out:** A hook Command that declares `defaultResolver` as a
+ * required property handles every Subject at runtime regardless of which resolver methods
+ * are explicitly declared. For such Commands the intersection check is bypassed entirely
+ * via a conditional on `Cmd` (not on `SU`). Because the extends-clause references only
+ * `Cmd` — the mapped-type iteration variable, which is always concrete for a concrete `H`
+ * tuple — this conditional is evaluated eagerly and does not defer even when `SU` is free.
+ * Optional `defaultResolver?` (inherited from the base `Command` class without override)
+ * does NOT satisfy `{ readonly defaultResolver: any }`, so Commands that do not explicitly
+ * set it still require full resolver-method coverage.
  *
  * `H extends AnyCommand[]` is the constraint. `SU extends CommandSubjectUnion<H[number]>`
  * bounds `SU` to subjects covered by at least one hook Command — `H[number]` collapses
@@ -816,9 +826,15 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
  * // CatOnlyCommand handles [Cat] — has resolveCat only
  * // CommandHooks<[CatOnlyCommand], Cat | Dog>:
  * //   CatOnlyCommand & { resolveCat: any; resolveDog: any } — missing resolveDog → TS2416
+ *
+ * // LogCommand with `readonly defaultResolver = entry` — handles any Subject at runtime
+ * // CommandHooks<[LogCommand], Student | Professor>:
+ * //   LogCommand (no coverage check) — satisfied even without resolveStudent/resolveProfessor
  */
 type CommandHooks<H extends AnyCommand[], SU extends CommandSubjectUnion<H[number]>> = {
-  [Cmd in H[number] as CommandName<Cmd>]: Cmd & { [K in SU["resolverName"] & string]: any };
+  [Cmd in H[number] as CommandName<Cmd>]: Cmd extends { readonly defaultResolver: any }
+    ? Cmd
+    : Cmd & { [K in SU["resolverName"] & string]: any };
 };
 
 // ─── Template ────────────────────────────────────────────────────

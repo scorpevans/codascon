@@ -593,6 +593,54 @@ class DogFeedWithHook
   }
 }
 
+// ── §14n proof — regression guard for CommandHooks with defaultResolver + free SU ──────────────────
+//
+// A hook Command that declares `defaultResolver` as a required property (not merely inheriting
+// the optional base-class field) bypasses the CommandHooks coverage check even when SU is free.
+// If the `Cmd extends { readonly defaultResolver: any }` conditional is removed from CommandHooks,
+// this class produces TS2416 at `readonly sparseLog = new SparseCoverageLogCommand()` and breaks
+// the build — making the regression visible.
+//
+// SparseCoverageLogCommand handles [Dog, Cat, Bird] but only declares resolveDog explicitly.
+// resolveCat and resolveBird fall through to defaultResolver at runtime.
+
+class SparseCoverageLogCommand extends Command<
+  Person,
+  { action: string },
+  LogEntry,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "sparseCoverageLog" as const;
+  private readonly entry = {
+    execute: (s: Dog | Cat | Bird, o: { action: string }): LogEntry => ({
+      action: o.action,
+      subject: s.name,
+    }),
+  };
+  readonly defaultResolver = this.entry;
+  resolveDog() {
+    return this.entry;
+  }
+  // resolveCat and resolveBird intentionally absent — defaultResolver handles them
+}
+
+abstract class FeedTemplateWithSparseHook<
+  SU extends CommandSubjectUnion<FeedCommand>,
+> implements Template<FeedCommand, [SparseCoverageLogCommand], SU> {
+  readonly sparseCoverageLog = new SparseCoverageLogCommand(); // no TS2416 — defaultResolver opt-out
+  abstract execute(subject: SU, object: { time: string }): FeedResult;
+}
+
+class DogFeedWithSparseHook
+  extends FeedTemplateWithSparseHook<Dog>
+  implements Template<FeedCommand, [SparseCoverageLogCommand], Dog>
+{
+  execute(subject: Dog, object: { time: string }): FeedResult {
+    this.sparseCoverageLog.run(subject, { action: "feed" });
+    return { fed: true, food: "kibble", amount: 1 };
+  }
+}
+
 describe("§14 compile-time constraint tests", () => {
   // All constraints are verified at compile time by tsc --build (which includes
   // core.test.ts via tsconfig.json include: ["src"]). Each @ts-expect-error
@@ -779,6 +827,16 @@ describe("§14 compile-time constraint tests", () => {
 
     void AbstractMiswiredTemplate;
   });
+
+  // ── §14n — proof classes at module scope (compiled by tsc, no runtime logic needed) ──
+  //
+  // Hook Command with required `defaultResolver` and partial explicit resolver coverage.
+  // If the `Cmd extends { readonly defaultResolver: any }` conditional is removed from
+  // CommandHooks, FeedTemplateWithSparseHook produces TS2416 at `sparseCoverageLog` and
+  // breaks the build. Optional `defaultResolver?` (base-class inherited) does NOT trigger
+  // the opt-out — only an explicitly required declaration does.
+  it("14n: hook with required defaultResolver bypasses coverage check in parameterized template", () =>
+    void 0);
 });
 
 // ═══════════════════════════════════════════════════════════════════

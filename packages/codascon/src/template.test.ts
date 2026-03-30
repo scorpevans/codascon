@@ -216,6 +216,96 @@ describe("§8 template with command hooks", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// §8b · TEMPLATE WITH DEFAULTRESOLVER HOOK
+//
+//   §8 exercises a hook Command with full explicit resolver coverage.
+//   This section proves that a hook Command with `defaultResolver` (and
+//   only partial explicit resolver coverage) works correctly at runtime:
+//   subjects with an explicit resolver use it; subjects without one fall
+//   through to defaultResolver. The food value encodes the dispatch path
+//   ("explicit:" vs "default:") making assertions sensitive to which path ran.
+// ═══════════════════════════════════════════════════════════════════
+
+// Hook Command: only resolveDog is explicit; resolveCat and resolveBird fall to defaultResolver
+class SparseLogCommand extends Command<Person, { action: string }, LogEntry, [Dog, Cat, Bird]> {
+  readonly commandName = "sparseLog" as const;
+  private readonly fallbackEntry = {
+    execute: (s: Dog | Cat | Bird, o: { action: string }): LogEntry => ({
+      action: `default:${o.action}`,
+      subject: s.name,
+    }),
+  };
+  readonly defaultResolver = this.fallbackEntry;
+  resolveDog() {
+    return {
+      execute: (s: Dog, o: { action: string }): LogEntry => ({
+        action: `explicit:${o.action}`,
+        subject: s.name,
+      }),
+    };
+  }
+  // resolveCat and resolveBird intentionally absent — defaultResolver handles them
+}
+
+class SparseHookFeedStrategy implements Template<FeedCommand, [SparseLogCommand]> {
+  sparseLog: SparseLogCommand;
+  constructor(log: SparseLogCommand) {
+    this.sparseLog = log;
+  }
+  execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult {
+    const entry = this.sparseLog.run(subject, { action: "feed" });
+    return {
+      fed: true,
+      food: `${entry.action}:${entry.subject}`,
+      amount: 1,
+    };
+  }
+}
+
+class SparseHookFeedCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "sparseHookFeed" as const;
+  private logCmd: SparseLogCommand;
+  constructor(logCmd: SparseLogCommand) {
+    super();
+    this.logCmd = logCmd;
+  }
+  resolveDog() {
+    return new SparseHookFeedStrategy(this.logCmd);
+  }
+  resolveCat() {
+    return new SparseHookFeedStrategy(this.logCmd);
+  }
+  resolveBird() {
+    return new SparseHookFeedStrategy(this.logCmd);
+  }
+}
+
+describe("§8b template with defaultResolver hook", () => {
+  it("explicit resolver method used for covered subject", () => {
+    const cmd = new SparseHookFeedCommand(new SparseLogCommand());
+
+    const result = cmd.run(new Dog("Rex", "Lab"), { time: "am" });
+
+    strictEqual(result.food, "explicit:feed:Rex");
+  });
+
+  it("defaultResolver used for subjects without explicit resolver method", () => {
+    const cmd = new SparseHookFeedCommand(new SparseLogCommand());
+
+    const catResult = cmd.run(new Cat("Mimi", true), { time: "am" });
+    const birdResult = cmd.run(new Bird("Tweety", true), { time: "am" });
+
+    strictEqual(catResult.food, "default:feed:Mimi");
+    strictEqual(birdResult.food, "default:feed:Tweety");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // §15 · NESTED COMMAND HOOKS — end-to-end runtime
 // ═══════════════════════════════════════════════════════════════════
 
