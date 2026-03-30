@@ -54,7 +54,9 @@
  * The following constraints should be enforced by tooling consuming this schema:
  *
  * 1. **Dispatch coverage**: Every Subject in a Command's `subjectUnion` must
- *    have exactly one entry in its `dispatch` map.
+ *    have an entry in its `dispatch` map, unless `defaultResolver` is declared —
+ *    in which case subjects absent from `dispatch` are valid and will be routed
+ *    to `defaultResolver` at runtime.
  *
  * 2. **Dispatch target validity**: All dispatch targets must be plain Strategy
  *    names, looked up across the Templates of the same Command.
@@ -94,6 +96,13 @@
  *     list must declare a `subjectUnion` that is a superset of (or equal to)
  *     the Command's `subjectUnion`. A middleware covering fewer Subjects than
  *     the Command would leave some Subjects unintercepted.
+ *
+ * 12. **defaultResolver strategy validity**: When `defaultResolver` is
+ *     present, the named Strategy must exist within the Command's templates.
+ *     Its effective `subjectSubset` — the Strategy's own `subjectSubset` if
+ *     declared, otherwise the parent Template's `subjectSubset`, otherwise
+ *     the full command subject union — must cover every subject in the
+ *     Command's `subjectUnion`.
  *
  * ## Out of Scope
  *
@@ -290,6 +299,29 @@ export type DomainType = {
  *                            emits an `override get middleware()` getter on the
  *                            Command class returning the registered instances.
  *
+ * @property defaultResolver — Optional catch-all resolver. When present,
+ *                            subjects absent from `dispatch` are valid and
+ *                            will be routed to `defaultResolver` at runtime
+ *                            (validation rule 1 is relaxed). Subjects that
+ *                            do appear in `dispatch` retain their specific
+ *                            resolver stubs, which take precedence.
+ *
+ *                            Codegen emits a `defaultResolver` method on the
+ *                            Command class returning an instance of the
+ *                            referenced Strategy. Resolver stubs are only
+ *                            generated for subjects present in `dispatch` —
+ *                            subjects absent from `dispatch` route to
+ *                            `defaultResolver` via the runtime fallback.
+ *
+ *                            The referenced Strategy must exist within this
+ *                            Command's templates and its effective
+ *                            `subjectSubset` — the Strategy's own
+ *                            `subjectSubset` if declared, otherwise the parent
+ *                            Template's `subjectSubset`, otherwise the full
+ *                            command subject union — must cover every subject
+ *                            in the Command's `subjectUnion` (validation
+ *                            rule 12).
+ *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
  *                            declares its subject narrowing, hooks, and
@@ -313,6 +345,7 @@ export type Command = {
   returnAsync?: boolean;
   subjectUnion: SubjectRef[];
   middleware?: MiddlewareRef[];
+  defaultResolver?: StrategyRef;
   dispatch: {
     [subject: SubjectRef]: StrategyRef;
   };

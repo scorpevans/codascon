@@ -1,6 +1,7 @@
 import { describe, it } from "vitest";
 import {
   Command,
+  MiddlewareCommand,
   Subject,
   type Template,
   type CommandObject,
@@ -8,6 +9,7 @@ import {
   type CommandName,
   type SubjectResolverName,
   type CommandSubjectUnion,
+  type Runnable,
 } from "./index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
@@ -399,7 +401,7 @@ describe("§11 type-level assertions", () => {
   const _cmd = new DynamicCommand();
   const _14e = () => {
     // @ts-expect-error — DynamicResolverName.resolverName is 'string' not a literal;
-    // WithLiteralResolverNames<[DynamicResolverName]> resolves to { "Error: ...": never }
+    // ValidResolverNames<[DynamicResolverName]> produces { [WidenedResolverNameError]: never } — run() uncallable
     _cmd.run(new DynamicResolverName("x"), "test");
   };
 }
@@ -631,6 +633,135 @@ describe("§14 compile-time constraint tests", () => {
     }
 
     void WrongSUCommand;
+  });
+
+  it("14j2: defaultResolver present — run() callable without specific resolver methods", () => {
+    // A Command that declares defaultResolver but no specific resolver methods
+    // satisfies the run() this constraint via the defaultResolver branch of the union.
+    class DefaultCmd extends Command<Person, string, string, [Dog, Cat]> {
+      readonly commandName = "defaultCmd" as const;
+      readonly defaultResolver = { execute: (s: Dog | Cat, _o: string): string => s.name };
+    }
+
+    void DefaultCmd;
+    // If the above compiles without @ts-expect-error, the test passes.
+    // The compile-time proof is that new DefaultCmd().run(new Dog(...), "") is typeable.
+    const cmd = new DefaultCmd();
+    cmd.run(new Dog("Rex", "Lab"), ""); // must compile
+  });
+
+  it("14j3: no resolver methods AND no defaultResolver — run() uncallable", () => {
+    class EmptyCmd extends Command<Person, string, string, [Dog]> {
+      readonly commandName = "emptyCmd" as const;
+      // No resolveDog, no defaultResolver
+    }
+
+    const cmd = new EmptyCmd();
+    const _14j3 = () => {
+      // @ts-expect-error — neither CommandSubjectStrategies nor defaultResolver is satisfied
+      cmd.run(new Dog("Rex", "Lab"), "");
+    };
+    void _14j3;
+  });
+
+  it("14j4: defaultResolver with wrong return type — compile error at implementation site", () => {
+    // DefaultResolverResult requires { execute(subject, object): R }.
+    // Returning a plain string (no execute method) must be rejected.
+    class BadDefaultCmd extends Command<Person, string, string, [Dog]> {
+      readonly commandName = "badDefault" as const;
+      // @ts-expect-error — `string` is not assignable to DefaultResolverResult
+      readonly defaultResolver = "not a template";
+    }
+    void BadDefaultCmd;
+  });
+
+  it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () => {
+    // run(this: never) applies regardless of whether resolver methods or defaultResolver
+    // are present. A fully covered MiddlewareCommand is still uncallable via run().
+    class CoveredMw extends MiddlewareCommand<Person, string, string, [Dog]> {
+      readonly commandName = "coveredMw" as const;
+      resolveDog(_d: Dog) {
+        return {
+          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+            inner.run(s, o),
+        };
+      }
+    }
+    const cmd = new CoveredMw();
+    const _14j5 = () => {
+      // @ts-expect-error — MiddlewareCommand.run() is always uncallable (this: never)
+      cmd.run(new Dog("Rex", "Lab"), "");
+    };
+    void _14j5;
+  });
+
+  it("14j6: MiddlewareCommand.defaultResolver accepts MiddlewareDefaultResolverTemplate (inner surfaced)", () => {
+    // MiddlewareCommand narrows defaultResolver? to MiddlewareDefaultResolverTemplate,
+    // which surfaces inner as a third argument in the execute signature. inner is typed as
+    // optional (inner?) so MiddlewareDefaultResolverTemplate remains a subtype of
+    // DefaultResolverTemplate — a required-inner function is not assignable to a 2-arg
+    // function. At runtime inner is always supplied by _dispatch.
+    //
+    // The inner! assertion is still needed in the implementation body because the type
+    // declares inner as optional (the type-system concession). TypeScript cannot prevent
+    // an implementation from ignoring inner — the type makes the requirement visible.
+    class DefMw extends MiddlewareCommand<Person, string, string, [Dog]> {
+      readonly commandName = "defMw" as const;
+      resolveDog(_d: Dog) {
+        return {
+          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+            inner.run(s, o),
+        };
+      }
+      override readonly defaultResolver = {
+        execute: (s: Dog, o: string, inner?: Runnable<Dog, string, string>): string =>
+          inner!.run(s, o),
+      };
+    }
+    void DefMw;
+  });
+
+  it("14j7: resolverName 'defaultResolver' is reserved — run() uncallable", () => {
+    // ValidResolverNames produces ReservedResolverNameError for any Subject whose
+    // resolverName is "defaultResolver", making run() uncallable at the call site.
+    class ReservedSubject extends Subject {
+      readonly resolverName = "defaultResolver" as const;
+      constructor() {
+        super();
+      }
+    }
+    class ReservedCmd extends Command<Subject, string, string, [ReservedSubject]> {
+      readonly commandName = "reservedCmd" as const;
+    }
+    const cmd = new ReservedCmd();
+    const _14j7 = () => {
+      // @ts-expect-error — resolverName 'defaultResolver' is reserved;
+      // ValidResolverNames produces ReservedResolverNameError making run() uncallable.
+      cmd.run(new ReservedSubject(), "");
+    };
+    void _14j7;
+  });
+
+  it("14j8: defaultResolver + wrong-typed resolver → run() uncallable", () => {
+    // Partial<CommandSubjectStrategies> in the defaultResolver branch ensures any
+    // specific resolver methods present on the class are still type-checked, even
+    // when defaultResolver is declared. Without this intersection, the defaultResolver
+    // branch would bypass all per-resolver type checking.
+    class BadResolverCmd extends Command<Subject, string, string, [Dog, Cat]> {
+      readonly commandName = "badResolverCmd" as const;
+      readonly defaultResolver = { execute: (_s: Dog | Cat, _o: string): string => "" };
+      resolveDog(_d: Dog) {
+        // Returns wrong shape — missing execute method; run() must be uncallable.
+        return { notATemplate: true };
+      }
+    }
+    const cmd = new BadResolverCmd();
+    const _14j8 = () => {
+      // @ts-expect-error — resolveDog returns wrong type; even with defaultResolver,
+      // Partial<CommandSubjectStrategies> requires any present resolver to be correctly typed.
+      cmd.run(new Dog("Rex", "Lab"), "");
+    };
+    void _14j8;
   });
 
   it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {

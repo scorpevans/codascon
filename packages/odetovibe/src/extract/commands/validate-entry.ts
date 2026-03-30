@@ -184,12 +184,13 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // dispatch coverage: exactly one entry per subjectUnion member
+    // dispatch coverage: every subject in subjectUnion must have a dispatch entry,
+    // unless defaultResolver is declared (which acts as the catch-all for uncovered subjects).
     const dispatchKeys = new Set(Object.keys(config.dispatch));
     const unionSet = new Set(config.subjectUnion);
 
     for (const subjectRef of config.subjectUnion) {
-      if (!dispatchKeys.has(subjectRef)) {
+      if (!dispatchKeys.has(subjectRef) && !config.defaultResolver) {
         errors.push(
           err(
             key,
@@ -286,6 +287,38 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
                 key,
                 "middleware-coverage",
                 `middleware "${mwRef}" does not cover subject "${subjectRef}" — its dispatch keys must be a superset of "${key}"'s`,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    // Rule 12: defaultResolver must reference a known strategy and cover all subjects
+    if (config.defaultResolver !== undefined) {
+      const stratName = config.defaultResolver;
+      const owningTplName = stratNameToTpl.get(stratName);
+      if (owningTplName === undefined) {
+        errors.push(
+          err(
+            key,
+            "defaultResolver-ref",
+            `defaultResolver "${stratName}" not found — expected a strategy name within "${key}"'s templates`,
+          ),
+        );
+      } else {
+        const tplConfig = ownTemplates[owningTplName];
+        const effectiveTplSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+        const stratConfig = tplConfig.strategies[stratName];
+        const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
+        const stratSubjectSet = new Set(effectiveStratSubset);
+        for (const subjectRef of config.subjectUnion) {
+          if (!stratSubjectSet.has(subjectRef)) {
+            errors.push(
+              err(
+                key,
+                "defaultResolver-coverage",
+                `defaultResolver strategy "${stratName}" does not cover subject "${subjectRef}" — its effective subjectSubset must cover all subjects in "${key}"`,
               ),
             );
           }
@@ -492,12 +525,13 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    // cross-validation: when subjectUnion is present, it must match dispatch keys exactly
+    // dispatch coverage: every subject in subjectUnion must have a dispatch entry,
+    // unless defaultResolver is declared (which acts as the catch-all for uncovered subjects).
     const dispatchKeys = new Set(Object.keys(config.dispatch));
     const unionSet = new Set(config.subjectUnion);
 
     for (const subjectRef of config.subjectUnion) {
-      if (!dispatchKeys.has(subjectRef)) {
+      if (!dispatchKeys.has(subjectRef) && !config.defaultResolver) {
         errors.push(
           err(
             key,
@@ -568,6 +602,38 @@ abstract class MiddlewareCommandValidator implements Template<
             `middleware "${key}" and "${otherKey}" both normalize to file name "${ownNorm}.ts"`,
           ),
         );
+      }
+    }
+
+    // Rule 12: defaultResolver must reference a known strategy and cover all subjects
+    if (config.defaultResolver !== undefined) {
+      const stratName = config.defaultResolver;
+      const owningTplName = stratNameToTpl.get(stratName);
+      if (owningTplName === undefined) {
+        errors.push(
+          err(
+            key,
+            "defaultResolver-ref",
+            `defaultResolver "${stratName}" not found — expected a strategy name within "${key}"'s templates`,
+          ),
+        );
+      } else {
+        const tplConfig = ownTemplates[owningTplName];
+        const effectiveTplSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+        const stratConfig = tplConfig.strategies[stratName];
+        const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
+        const stratSubjectSet = new Set(effectiveStratSubset);
+        for (const subjectRef of config.subjectUnion) {
+          if (!stratSubjectSet.has(subjectRef)) {
+            errors.push(
+              err(
+                key,
+                "defaultResolver-coverage",
+                `defaultResolver strategy "${stratName}" does not cover subject "${subjectRef}" — its effective subjectSubset must cover all subjects in "${key}"`,
+              ),
+            );
+          }
+        }
       }
     }
 

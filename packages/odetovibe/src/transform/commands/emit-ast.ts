@@ -333,6 +333,7 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
     // Only emit singletons for subjects that will receive a resolver stub:
     //   - exclude abstract template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
+    // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
     const concreteDispatch = Object.fromEntries(
       Object.entries(config.dispatch).filter(
         ([subjectRef, v]) =>
@@ -340,9 +341,16 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
           configIndex.subjectTypes.has(subjectRef),
       ),
     );
+    if (config.defaultResolver) {
+      concreteDispatch["defaultResolver"] = config.defaultResolver;
+    }
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
     for (const subjectRef of config.subjectUnion) {
+      // When defaultResolver is declared, subjects without a dispatch entry are routed
+      // to defaultResolver at runtime — skip generating a specific resolver stub for them.
+      if (!config.dispatch[subjectRef] && config.defaultResolver) continue;
+
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {
@@ -369,6 +377,16 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
           ? `return this.${fieldName}; // @odetovibe-generated`
           : `throw new Error("Not implemented"); // @odetovibe-generated`,
       ]);
+    }
+
+    if (config.defaultResolver) {
+      const drClassName = dispatchTargetClass(config.defaultResolver);
+      const fieldName = singletonMap.get(drClassName)!;
+      cls.addProperty({
+        name: "defaultResolver",
+        type: drClassName,
+        initializer: `this.${fieldName}`,
+      });
     }
 
     return { targetFile: filePath };
@@ -985,6 +1003,7 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     // Only emit singletons for subjects that will receive a resolver stub:
     //   - exclude abstract middleware template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
+    // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
     const concreteDispatch = Object.fromEntries(
       Object.entries(config.dispatch).filter(
         ([subjectRef, v]) =>
@@ -992,9 +1011,16 @@ abstract class MiddlewareCommandClassEmitter implements Template<
           configIndex.subjectTypes.has(subjectRef),
       ),
     );
+    if (config.defaultResolver) {
+      concreteDispatch["defaultResolver"] = config.defaultResolver;
+    }
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
     for (const subjectRef of config.subjectUnion) {
+      // When defaultResolver is declared, subjects without a dispatch entry are routed
+      // to defaultResolver at runtime — skip generating a specific resolver stub for them.
+      if (!config.dispatch[subjectRef] && config.defaultResolver) continue;
+
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {
@@ -1021,6 +1047,16 @@ abstract class MiddlewareCommandClassEmitter implements Template<
           ? `return this.${fieldName}; // @odetovibe-generated`
           : `throw new Error("Not implemented"); // @odetovibe-generated`,
       ]);
+    }
+
+    if (config.defaultResolver) {
+      const drClassName = dispatchTargetClass(config.defaultResolver);
+      const fieldName = singletonMap.get(drClassName)!;
+      cls.addProperty({
+        name: "defaultResolver",
+        type: drClassName,
+        initializer: `this.${fieldName}`,
+      });
     }
 
     return { targetFile: filePath };

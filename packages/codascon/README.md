@@ -86,7 +86,7 @@ class Professor extends Subject implements Person {
 
 ### Define a Command
 
-A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute.
+A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute. A `defaultResolver` can be provided as a fallback instead of listing all resolver methods.
 
 ```typescript
 import { Command } from "codascon";
@@ -94,10 +94,8 @@ import { Command } from "codascon";
 class LogCommand extends Command<Person, { message: string }, void, [Student, Professor]> {
   readonly commandName = "log" as const;
   private readonly entry = new LogEntry(); // Strategy — defined below
+  readonly defaultResolver = this.entry; // catch-all — fires for Professor and any other subject with no specific resolver
   resolveStudent(_s: Student) {
-    return this.entry;
-  }
-  resolveProfessor(_p: Professor) {
     return this.entry;
   }
 }
