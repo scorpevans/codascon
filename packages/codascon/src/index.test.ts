@@ -1285,6 +1285,82 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     strictEqual(cmd.run(new Cat("Whiskers", true), ""), "cat:Whiskers");
     deepEqual(log, ["mw-default-before", "mw-default-after"]);
   });
+
+  it("defaultResolver path is preserved through a 2-layer middleware stack (chain order)", () => {
+    // Verifies that the reduceRight chain in _runChain correctly threads
+    // the terminal defaultResolver step through two middleware layers.
+    // Expected order: outer wraps inner wraps the terminal defaultResolver execute.
+    const log: string[] = [];
+
+    class OuterMw extends MiddlewareCommand<Person, string, string, [Dog, Cat]> {
+      readonly commandName = "outer2l" as const;
+      resolveDog(_d: Dog) {
+        return {
+          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string => {
+            log.push("outer-before");
+            const r = inner.run(s, o);
+            log.push("outer-after");
+            return r;
+          },
+        };
+      }
+      resolveCat(_c: Cat) {
+        return {
+          execute: (s: Cat, o: string, inner: Runnable<Cat, string, string>): string => {
+            log.push("outer-before");
+            const r = inner.run(s, o);
+            log.push("outer-after");
+            return r;
+          },
+        };
+      }
+    }
+
+    class InnerMw extends MiddlewareCommand<Person, string, string, [Dog, Cat]> {
+      readonly commandName = "inner2l" as const;
+      resolveDog(_d: Dog) {
+        return {
+          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string => {
+            log.push("inner-before");
+            const r = inner.run(s, o);
+            log.push("inner-after");
+            return r;
+          },
+        };
+      }
+      resolveCat(_c: Cat) {
+        return {
+          execute: (s: Cat, o: string, inner: Runnable<Cat, string, string>): string => {
+            log.push("inner-before");
+            const r = inner.run(s, o);
+            log.push("inner-after");
+            return r;
+          },
+        };
+      }
+    }
+
+    class TwoLayerCmd extends Command<Person, string, string, [Dog, Cat]> {
+      readonly commandName = "twoLayerDef" as const;
+      private readonly outerMw = new OuterMw();
+      private readonly innerMw = new InnerMw();
+      override get middleware() {
+        return [this.outerMw, this.innerMw];
+      }
+      readonly defaultResolver = {
+        execute: (s: Dog | Cat, _o: string): string => `default:${s.name}`,
+      };
+    }
+
+    const cmd = new TwoLayerCmd();
+
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), ""), "default:Rex");
+    deepEqual(log, ["outer-before", "inner-before", "inner-after", "outer-after"]);
+
+    log.length = 0;
+    strictEqual(cmd.run(new Cat("Whiskers", true), ""), "default:Whiskers");
+    deepEqual(log, ["outer-before", "inner-before", "inner-after", "outer-after"]);
+  });
 });
 
 describe("§19 Subject constructor contract — super() takes no required arguments", () => {

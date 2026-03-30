@@ -560,7 +560,7 @@ export abstract class Subject {
       return command.defaultResolver as unknown as Template<C, any[], this & BS>;
     }
     throw new Error(
-      `No resolver for "${this.resolverName}" on command "${(command as any).commandName ?? "(unknown)"}". ` +
+      `No resolver for "${this.resolverName}" on command "${(command as AnyCommand).commandName ?? "(unknown)"}". ` +
         `Either implement a resolver method named "${this.resolverName}" or declare defaultResolver.`,
     );
   }
@@ -662,7 +662,9 @@ export abstract class Subject {
  */
 type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
   | MiddlewareSubjectStrategies<B, O, R, BSL>
-  | { readonly defaultResolver: MiddlewareDefaultResolverTemplate<O, R, BSL[number]> }
+  | ({
+      readonly defaultResolver: MiddlewareDefaultResolverTemplate<O, R, BSL[number]>;
+    } & Partial<MiddlewareSubjectStrategies<B, O, R, BSL>>)
 ) & {
   _runChain(subject: BSL[number], object: O, continuation: Runnable<BSL[number], O, R>): R;
 };
@@ -694,13 +696,6 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
    *
    * Specific resolver methods take precedence — `defaultResolver` is only invoked
    * when no matching resolver method is found for the dispatched subject's `resolverName`.
-   *
-   * **Design tension**: once `defaultResolver` is declared, `run()`'s exhaustiveness
-   * constraint is satisfied via the `| { defaultResolver: ... }` branch of the `this`
-   * union. As a consequence, any specific resolver methods also present on the class
-   * are no longer type-checked by the framework — only their local TypeScript
-   * declarations are checked. Treat specific resolvers as purely additive when
-   * `defaultResolver` is also declared.
    *
    * **MiddlewareCommand note**: `MiddlewareCommand` narrows this field to
    * `MiddlewareDefaultResolverTemplate`, which requires `execute` to accept an `inner`
@@ -775,7 +770,9 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
     this: this &
       (
         | CommandSubjectStrategies<Command<B, O, R, BSL>>
-        | { readonly defaultResolver: DefaultResolverTemplate<O, R, BSL[number]> }
+        | ({
+            readonly defaultResolver: DefaultResolverTemplate<O, R, BSL[number]>;
+          } & Partial<CommandSubjectStrategies<Command<B, O, R, BSL>>>)
       ) &
       ValidResolverNames<BSL>,
     subject: T,

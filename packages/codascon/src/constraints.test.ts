@@ -401,7 +401,7 @@ describe("§11 type-level assertions", () => {
   const _cmd = new DynamicCommand();
   const _14e = () => {
     // @ts-expect-error — DynamicResolverName.resolverName is 'string' not a literal;
-    // WithLiteralResolverNames<[DynamicResolverName]> resolves to { "Error: ...": never }
+    // ValidResolverNames<[DynamicResolverName]> produces { [WidenedResolverNameError]: never } — run() uncallable
     _cmd.run(new DynamicResolverName("x"), "test");
   };
 }
@@ -740,6 +740,28 @@ describe("§14 compile-time constraint tests", () => {
       cmd.run(new ReservedSubject(), "");
     };
     void _14j7;
+  });
+
+  it("14j8: defaultResolver + wrong-typed resolver → run() uncallable", () => {
+    // Partial<CommandSubjectStrategies> in the defaultResolver branch ensures any
+    // specific resolver methods present on the class are still type-checked, even
+    // when defaultResolver is declared. Without this intersection, the defaultResolver
+    // branch would bypass all per-resolver type checking.
+    class BadResolverCmd extends Command<Subject, string, string, [Dog, Cat]> {
+      readonly commandName = "badResolverCmd" as const;
+      readonly defaultResolver = { execute: (_s: Dog | Cat, _o: string): string => "" };
+      resolveDog(_d: Dog) {
+        // Returns wrong shape — missing execute method; run() must be uncallable.
+        return { notATemplate: true };
+      }
+    }
+    const cmd = new BadResolverCmd();
+    const _14j8 = () => {
+      // @ts-expect-error — resolveDog returns wrong type; even with defaultResolver,
+      // Partial<CommandSubjectStrategies> requires any present resolver to be correctly typed.
+      cmd.run(new Dog("Rex", "Lab"), "");
+    };
+    void _14j8;
   });
 
   it("14k: non-literal commandName on hook — implements rejected (not silent)", () => {
