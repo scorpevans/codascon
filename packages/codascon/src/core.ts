@@ -221,6 +221,7 @@ export type SubjectResolverName<S> =
       : never;
 
 type AnyCommand = Command<any, any, any, any>;
+type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
 
 /*
  * Extracts the `commandName` string literal type from a Command.
@@ -416,7 +417,7 @@ type CommandSubjectStrategies<C extends AnyCommand> = {
  * a 3-arg execute that includes the `inner` continuation. The two types are otherwise
  * structurally symmetric.
  */
-type MiddlewareVisit<C extends AnyCommand, BS extends CommandSubjectUnion<C>> = {
+type MiddlewareVisit<C extends AnyMiddlewareCommand, BS extends CommandSubjectUnion<C>> = {
   [K in SubjectResolverName<BS>]: (
     subject: BS,
     object: Readonly<CommandObject<C>>,
@@ -433,8 +434,10 @@ type MiddlewareVisit<C extends AnyCommand, BS extends CommandSubjectUnion<C>> = 
  * in BSL satisfies this type even if its own BSL is wider.
  */
 type MiddlewareSubjectStrategies<B, O, R, BSL extends (B & Subject)[]> = {
-  [SU in CommandSubjectUnion<Command<B, O, R, BSL>> as SubjectResolverName<SU>]: MiddlewareVisit<
-    Command<B, O, R, BSL>,
+  [SU in CommandSubjectUnion<
+    MiddlewareCommand<B, O, R, BSL>
+  > as SubjectResolverName<SU>]: MiddlewareVisit<
+    MiddlewareCommand<B, O, R, BSL>,
     SU
   >[SubjectResolverName<SU>];
 };
@@ -992,7 +995,7 @@ export type Template<
  * site, but `MiddlewareCommand._dispatch` always passes it.
  */
 export type MiddlewareTemplate<
-  C extends AnyCommand,
+  C extends AnyMiddlewareCommand,
   H extends AnyCommand[] = [],
   SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
 > = Omit<Template<C, H, SU>, "execute"> & {
