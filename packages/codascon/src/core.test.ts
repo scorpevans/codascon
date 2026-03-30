@@ -928,16 +928,12 @@ describe("§MC middleware compile-time constraints", () => {
     void _14j5;
   });
 
-  it("14j6: MiddlewareCommand.defaultResolver accepts MiddlewareDefaultResolverTemplate (inner surfaced)", () => {
+  it("14j6: MiddlewareCommand.defaultResolver accepts MiddlewareDefaultResolverTemplate (inner required)", () => {
     // MiddlewareCommand narrows defaultResolver? to MiddlewareDefaultResolverTemplate,
-    // which surfaces inner as a third argument in the execute signature. inner is typed as
-    // optional (inner?) so MiddlewareDefaultResolverTemplate remains a subtype of
-    // DefaultResolverTemplate — a required-inner function is not assignable to a 2-arg
-    // function. At runtime inner is always supplied by _dispatch.
-    //
-    // The inner! assertion is still needed in the implementation body because the type
-    // declares inner as optional (the type-system concession). TypeScript cannot prevent
-    // an implementation from ignoring inner — the type makes the requirement visible.
+    // which surfaces inner as a required third argument in the execute signature.
+    // MiddlewareDefaultResolverTemplate is a subtype of DefaultResolverTemplate via
+    // parameter contravariance: never <: Runnable, so execute(s, o, inner: Runnable)
+    // is assignable to execute(s, o, inner: never). No inner? or inner! needed.
     class DefMw extends MiddlewareCommand<Person, string, string, [Dog]> {
       readonly commandName = "defMw" as const;
       resolveDog(_d: Dog) {
@@ -947,8 +943,8 @@ describe("§MC middleware compile-time constraints", () => {
         };
       }
       override readonly defaultResolver = {
-        execute: (s: Dog, o: string, inner?: Runnable<Dog, string, string>): string =>
-          inner!.run(s, o),
+        execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+          inner.run(s, o),
       };
     }
     void DefMw;

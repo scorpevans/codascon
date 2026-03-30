@@ -162,7 +162,9 @@ type ReservedResolverNameError =
  * Structurally equivalent to `Template<Command<B,O,R,BSL>, [], BSL[number]>` — any
  * `Template` implementation satisfies it.
  */
-type DefaultResolverTemplate<O, R, SU> = { execute<T extends SU>(subject: T, object: O): R };
+type DefaultResolverTemplate<O, R, SU> = {
+  execute<T extends SU>(subject: T, object: O, inner: never): R;
+};
 
 /*
  * Middleware variant of `DefaultResolverTemplate` for `MiddlewareCommand.defaultResolver?`.
@@ -171,22 +173,18 @@ type DefaultResolverTemplate<O, R, SU> = { execute<T extends SU>(subject: T, obj
  * When dispatched, `MiddlewareCommand._dispatch` passes the continuation to `execute`,
  * so `inner` is always defined — no non-null assertion needed.
  *
- * A value satisfying `MiddlewareDefaultResolverTemplate` is assignable to
- * `DefaultResolverTemplate` via method bivariance, so `getCommandStrategy` needs no
- * separate overload for the middleware case.
+ * `MiddlewareDefaultResolverTemplate` is a structural subtype of `DefaultResolverTemplate`
+ * via parameter contravariance: `never` is the bottom type, so `never <: Runnable<...>`,
+ * making `execute(s, o, inner: Runnable)` assignable to `execute(s, o, inner: never)`.
+ * `DefaultResolverTemplate` uses `inner: never` (not 2-arg) precisely to preserve this
+ * subtype relationship while allowing `inner` to be required here.
  *
- * `inner` is declared optional (`inner?`) so that `MiddlewareDefaultResolverTemplate`
- * remains a structural subtype of `DefaultResolverTemplate` (a required `inner` would
- * break the subtype relationship — a 3-arg-required function is not assignable to a
- * 2-arg function). At runtime `inner` is always defined when dispatched via the chain;
- * the optionality is a type-system concession, not a runtime reality.
- *
- * **Responsibility**: the implementation must call `inner!.run(subject, object)` to
+ * **Responsibility**: the implementation must call `inner.run(subject, object)` to
  * forward control down the chain. TypeScript cannot guarantee `inner` is called, but
  * the signature makes the requirement explicit.
  */
 export type MiddlewareDefaultResolverTemplate<O, R, SU> = {
-  execute<T extends SU>(subject: T, object: O, inner?: Runnable<SU, O, R>): R;
+  execute<T extends SU>(subject: T, object: O, inner: Runnable<SU, O, R>): R;
 };
 
 /*
@@ -1095,11 +1093,10 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
 > {
   /**
    * Narrows `Command.defaultResolver?` to `MiddlewareDefaultResolverTemplate`, surfacing
-   * the `inner` continuation in the `execute` signature. `inner` is typed as optional to
-   * preserve the subtype relationship with `DefaultResolverTemplate` — at runtime it is
-   * always defined when dispatched via the middleware chain.
+   * the `inner` continuation as a required third argument in the `execute` signature.
+   * `inner` is always defined when dispatched via the middleware chain.
    *
-   * The implementation must call `inner!.run(subject, object)` to forward control down
+   * The implementation must call `inner.run(subject, object)` to forward control down
    * the chain. The signature makes this requirement explicit; TypeScript cannot enforce it.
    */
   declare readonly defaultResolver?: MiddlewareDefaultResolverTemplate<O, R, BSL[number]>;

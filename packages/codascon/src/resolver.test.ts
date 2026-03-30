@@ -186,9 +186,9 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
         };
       }
       override readonly defaultResolver = {
-        execute: (s: Dog | Cat, o: string, inner?: Runnable<Dog | Cat, string, string>): string => {
+        execute: (s: Dog | Cat, o: string, inner: Runnable<Dog | Cat, string, string>): string => {
           log.push("mw-default-before");
-          const r = inner!.run(s, o);
+          const r = inner.run(s, o);
           log.push("mw-default-after");
           return r;
         },
