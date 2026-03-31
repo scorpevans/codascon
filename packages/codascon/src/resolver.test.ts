@@ -126,7 +126,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       readonly commandName = "wrap" as const;
       resolveDog(_d: Dog) {
         return {
-          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string => {
+          execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) => {
             log.push("before");
             const r = inner.run(s, o);
             log.push("after");
@@ -136,7 +136,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       }
       resolveCat(_c: Cat) {
         return {
-          execute: (s: Cat, o: string, inner: Runnable<Cat, string, string>): string => {
+          execute: <T extends Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
             log.push("before");
             const r = inner.run(s, o);
             log.push("after");
@@ -177,7 +177,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       readonly commandName = "mixedMw" as const;
       resolveDog(_d: Dog) {
         return {
-          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string => {
+          execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) => {
             log.push("mw-dog-before");
             const r = inner.run(s, o);
             log.push("mw-dog-after");
@@ -186,7 +186,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
         };
       }
       override readonly defaultResolver = {
-        execute: (s: Dog | Cat, o: string, inner: Runnable<Dog | Cat, string, string>): string => {
+        execute: <T extends Dog | Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
           log.push("mw-default-before");
           const r = inner.run(s, o);
           log.push("mw-default-after");
@@ -232,7 +232,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       readonly commandName = "outer2l" as const;
       resolveDog(_d: Dog) {
         return {
-          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string => {
+          execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) => {
             log.push("outer-before");
             const r = inner.run(s, o);
             log.push("outer-after");
@@ -242,7 +242,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       }
       resolveCat(_c: Cat) {
         return {
-          execute: (s: Cat, o: string, inner: Runnable<Cat, string, string>): string => {
+          execute: <T extends Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
             log.push("outer-before");
             const r = inner.run(s, o);
             log.push("outer-after");
@@ -256,7 +256,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       readonly commandName = "inner2l" as const;
       resolveDog(_d: Dog) {
         return {
-          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string => {
+          execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) => {
             log.push("inner-before");
             const r = inner.run(s, o);
             log.push("inner-after");
@@ -266,7 +266,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       }
       resolveCat(_c: Cat) {
         return {
-          execute: (s: Cat, o: string, inner: Runnable<Cat, string, string>): string => {
+          execute: <T extends Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
             log.push("inner-before");
             const r = inner.run(s, o);
             log.push("inner-after");

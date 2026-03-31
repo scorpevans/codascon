@@ -75,7 +75,7 @@ class TraceMiddleware extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
   resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<TraceMiddleware, any[], Rock> {
     const { label, log } = this;
     return {
-      execute(s: Rock, o: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+      execute<T extends Rock>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>): Res {
         log.push(`before:${label}`);
         const result = inner.run(s, o);
         log.push(`after:${label}`);
@@ -87,7 +87,7 @@ class TraceMiddleware extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
   resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<TraceMiddleware, any[], Gem> {
     const { label, log } = this;
     return {
-      execute(s: Gem, o: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+      execute<T extends Gem>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>): Res {
         log.push(`before:${label}`);
         const result = inner.run(s, o);
         log.push(`after:${label}`);
@@ -108,7 +108,7 @@ class EnrichMiddleware extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> 
   resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<EnrichMiddleware, any[], Rock> {
     const { bonus } = this;
     return {
-      execute(s: Rock, o: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+      execute<T extends Rock>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>): Res {
         return inner.run(s, { factor: o.factor + bonus });
       },
     };
@@ -117,7 +117,7 @@ class EnrichMiddleware extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> 
   resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<EnrichMiddleware, any[], Gem> {
     const { bonus } = this;
     return {
-      execute(s: Gem, o: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+      execute<T extends Gem>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>): Res {
         return inner.run(s, { factor: o.factor + bonus });
       },
     };
@@ -368,10 +368,10 @@ describe("§M9 Domain base class middleware composition", () => {
 // §MT3 · NON-PARAM MIDDLEWARE TEMPLATE — NO HOOKS, ABSTRACT EXECUTE
 // Matrix: MT3 — Non-param, no hooks, abstract execute (→ Strategy)
 //
-// MW templates must be per-subject due to `inner: Runnable<T, ...>` — a full-union
-// execute can't be returned from a subject-specific resolver. The "non-param" aspect
-// here is that the abstract base class has no SU type parameter; each Strategy
-// implements MiddlewareTemplate<Cmd, [], SpecificSubject> directly.
+// With `inner: Runnable<T>`, a single full-union Strategy can be returned from any
+// subject-specific resolver — `Runnable<Rock|Gem>` satisfies `Runnable<T=Rock>` via
+// contravariance. The "non-param" aspect here is that there is no SU type parameter;
+// one Strategy implements MiddlewareTemplate<Cmd, [], Rock | Gem> and serves both resolvers.
 // ═══════════════════════════════════════════════════════════════════
 
 // Single Strategy implements MiddlewareTemplate<ScaleMwCommand, [], Rock | Gem> —
@@ -474,20 +474,20 @@ abstract class ParamAbsMwTemplate<SU extends Rock | Gem> implements MiddlewareTe
   [],
   SU
 > {
-  abstract execute(subject: SU, object: Ctx, inner: Runnable<SU, Ctx, Res>): Res;
+  abstract execute<T extends SU>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res;
 }
 
 class RockOnlyScaleStrategy extends ParamAbsMwTemplate<Rock> {
   constructor(private readonly scale: number) {
     super();
   }
-  execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+  execute<T extends Rock>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res {
     return inner.run(subject, { factor: object.factor * this.scale });
   }
 }
 
 class GemPassThroughStrategy extends ParamAbsMwTemplate<Gem> {
-  execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+  execute<T extends Gem>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res {
     return inner.run(subject, object);
   }
 }
@@ -534,7 +534,7 @@ class ParamTaggedMwTemplate<SU extends Rock | Gem> implements MiddlewareTemplate
   constructor(tag: TagCommand) {
     this.tag = tag;
   }
-  execute(subject: SU, object: Ctx, inner: Runnable<SU, Ctx, Res>): Res {
+  execute<T extends SU>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res {
     const tagged = this.tag.run(subject, object);
     this.tagLog.push(tagged);
     return inner.run(subject, object);

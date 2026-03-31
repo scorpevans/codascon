@@ -131,21 +131,21 @@
 /*
  * The minimal interface required to invoke a middleware continuation.
  *
- * Declare `inner` as `Runnable<CommandSubjectUnion<C>, O, R>` in middleware `execute`
- * methods rather than as the full Command type. `Runnable` accurately describes
- * the only safe operation on `inner`: calling `run()`. The framework passes
+ * Declare `inner` as `Runnable<T, O, R>` (where T is the same type parameter as
+ * `execute`'s `subject: T`) rather than as the full Command type. `Runnable` accurately
+ * describes the only safe operation on `inner`: calling `run()`. The framework passes
  * a `Chain` object (not a real Command instance) as `inner` at runtime;
  * typing it as the full Command would allow clients to call methods that
  * do not exist on the Chain, compiling but crashing at runtime.
  *
  * @example
- * execute(subject: Rock, object: Ctx, inner: Runnable<Rock | Gem, Ctx, Res>): Res {
+ * execute<T extends Rock>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res {
  *   return inner.run(subject, object);
  * }
  */
 /**
  * Minimal continuation interface for middleware `execute` methods. Declare `inner` as
- * `Runnable<CommandSubjectUnion<C>, O, R>` rather than the full Command type.
+ * `Runnable<T, O, R>` (where T matches the `execute` subject parameter) rather than the full Command type.
  *
  * `run` is declared as a function property (not a shorthand method) — see
  * `Template.execute` for the bivariance-safety rationale that applies here as well.
@@ -196,7 +196,7 @@ type DefaultResolverTemplate<O, R, SU> = {
  * rationale.
  */
 export type MiddlewareDefaultResolverTemplate<O, R, SU> = {
-  execute: <T extends SU>(subject: T, object: O, inner: Runnable<SU, O, R>) => R;
+  execute: <T extends SU>(subject: T, object: O, inner: Runnable<T, O, R>) => R;
 };
 
 /*
@@ -1023,7 +1023,7 @@ export type MiddlewareTemplate<
   execute: <T extends SU>(
     subject: T,
     object: CommandObject<C>,
-    inner: Runnable<CommandSubjectUnion<C>, CommandObject<C>, CommandReturn<C>>,
+    inner: Runnable<T, CommandObject<C>, CommandReturn<C>>,
   ) => CommandReturn<C>;
 };
 

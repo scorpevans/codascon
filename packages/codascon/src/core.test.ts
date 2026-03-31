@@ -238,7 +238,7 @@ class TraceMiddleware extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
   resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<TraceMiddleware, any[], Rock> {
     const { label, log } = this;
     return {
-      execute(s: Rock, o: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+      execute<T extends Rock>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>): Res {
         log.push(`before:${label}`);
         const result = inner.run(s, o);
         log.push(`after:${label}`);
@@ -250,7 +250,7 @@ class TraceMiddleware extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
   resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<TraceMiddleware, any[], Gem> {
     const { label, log } = this;
     return {
-      execute(s: Gem, o: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+      execute<T extends Gem>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>): Res {
         log.push(`before:${label}`);
         const result = inner.run(s, o);
         log.push(`after:${label}`);
@@ -931,7 +931,7 @@ describe("§14 compile-time constraint tests", () => {
     constructor(h: RockOnlyHook) {
       this.rockOnlyHook = h;
     }
-    execute(subject: Rock | Gem, object: Ctx, inner: Runnable<Rock | Gem, Ctx, Res>): Res {
+    execute<T extends Rock | Gem>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res {
       return inner.run(subject, object);
     }
   }
@@ -944,8 +944,11 @@ describe("§14 compile-time constraint tests", () => {
 // execute<T extends Gem>. The subject type constraint mismatch (Rock vs Gem) catches this.
 {
   class RockOnlyMwTemplate {
-    execute: (subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>) => Res = (s, o, inner) =>
-      inner.run(s, o);
+    execute: <T extends Rock>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>) => Res = (
+      s,
+      o,
+      inner,
+    ) => inner.run(s, o);
   }
 
   class WrongSUMwCmd extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
@@ -963,6 +966,24 @@ describe("§14 compile-time constraint tests", () => {
   void WrongSUMwCmd;
 }
 
+// §MC5 — A full-union MiddlewareTemplate (SU = Rock|Gem) is assignable to a narrow
+// resolver's return type (MiddlewareTemplate<..., Rock>). Regression guard for
+// `inner: Runnable<T>`: if inner regresses to Runnable<SU> or Runnable<CommandSubjectUnion<C>>,
+// the Runnable<Rock|Gem> produced by a full-union execute would no longer satisfy the
+// narrow Runnable<T=Rock> required by the resolver, causing this assignment to fail.
+{
+  class FullUnionMwTemplate implements MiddlewareTemplate<TraceMiddleware, [], Rock | Gem> {
+    execute<T extends Rock | Gem>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>): Res {
+      return inner.run(s, o);
+    }
+  }
+  const t = new FullUnionMwTemplate();
+  const _narrow: MiddlewareTemplate<TraceMiddleware, [], Rock> = t; // must compile
+  const _wide: MiddlewareTemplate<TraceMiddleware, [], Rock | Gem> = t; // must compile
+  void _narrow;
+  void _wide;
+}
+
 describe("§MC middleware compile-time constraints", () => {
   it("MC1: MiddlewareCommand missing resolver makes its own run() uncallable", () => void 0);
   it("MC1b: complete MiddlewareCommand run() is still uncallable — MiddlewareTemplate (3-arg) incompatible with CommandSubjectStrategies (2-arg) this-constraint", () =>
@@ -972,6 +993,8 @@ describe("§MC middleware compile-time constraints", () => {
     void 0);
   it("MC4: MiddlewareCommand resolver returning wrong-SU MiddlewareTemplate rejected at return site", () =>
     void 0);
+  it("MC5: full-union MiddlewareTemplate (SU=Rock|Gem) is assignable to narrow resolver return type (SU=Rock)", () =>
+    void 0);
 
   it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () => {
     // run(this: never) applies regardless of whether resolver methods or defaultResolver
@@ -980,7 +1003,7 @@ describe("§MC middleware compile-time constraints", () => {
       readonly commandName = "coveredMw" as const;
       resolveDog(_d: Dog) {
         return {
-          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+          execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) =>
             inner.run(s, o),
         };
       }
@@ -1003,12 +1026,12 @@ describe("§MC middleware compile-time constraints", () => {
       readonly commandName = "defMw" as const;
       resolveDog(_d: Dog) {
         return {
-          execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+          execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) =>
             inner.run(s, o),
         };
       }
       override readonly defaultResolver = {
-        execute: (s: Dog, o: string, inner: Runnable<Dog, string, string>): string =>
+        execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) =>
           inner.run(s, o),
       };
     }
@@ -1028,7 +1051,7 @@ describe("§MC middleware compile-time constraints", () => {
     //   (2) DefaultResolverTemplate losing `inner: never`, which would break the subtype chain
     //   (3) inner becoming optional in MiddlewareDefaultResolverTemplate
     const catchAll: MiddlewareTemplate<TraceMiddleware, [], Rock | Gem> = {
-      execute: (s: Rock | Gem, o: Ctx, inner: Runnable<Rock | Gem, Ctx, Res>): Res =>
+      execute: <T extends Rock | Gem>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>) =>
         inner.run(s, o),
     };
     class TraceMwWithDefault extends TraceMiddleware {
