@@ -534,6 +534,7 @@ Additional implementation rules:
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
 - Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
 - Use middleware for cross-cutting concerns such as logging, auditing, timing, and default enrichments — prefer a middleware Command over duplicating the same logic in individual Templates or Strategies
+- Prefer `defaultResolver` over repeating the same Strategy across multiple resolver methods — when a Command routes several subjects to the same catch-all, declare `readonly defaultResolver` on the Command instead of enumerating them in `dispatch`; in particular, when a Template defines a single default Strategy covering the full subject union, always set `defaultResolver` to it
 
 ### Step 4: Implement This Domain
 
@@ -583,40 +584,52 @@ Do not modify existing class declarations or method signatures — only fill in 
 ## Project Structure
 
 ```
-codascon/                        # monorepo root
+codascon/                                    # monorepo root
 ├── packages/
-│   ├── codascon/                # published as "codascon"
+│   ├── codascon/                            # published as "codascon"
 │   │   ├── src/
-│   │   │   ├── index.test.ts
-│   │   │   └── index.ts         # Subject, Command, Template, Strategy + type machinery
+│   │   │   ├── core.ts                      # Subject, Command, MiddlewareCommand + type machinery
+│   │   │   ├── index.ts                     # barrel re-export
+│   │   │   ├── command.test.ts              # Command runtime tests
+│   │   │   ├── core.test.ts                 # compile-time type constraint proofs
+│   │   │   ├── middleware.test.ts
+│   │   │   ├── resolver.test.ts
+│   │   │   ├── subject.test.ts
+│   │   │   └── template.test.ts
 │   │   └── README.md
-│   └── odetovibe/               # published as "odetovibe"
+│   └── odetovibe/                           # published as "odetovibe"
 │       ├── src/
-│       │   ├── extract/         # parse YAML → validate → ConfigIndex
+│       │   ├── extract/                     # parse YAML → validate → ConfigIndex
 │       │   │   ├── commands/
+│       │   │   │   ├── validate-command-hooks.ts
 │       │   │   │   └── validate-entry.ts
 │       │   │   ├── domain-types.ts
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
-│       │   ├── load/            # ts-morph AST → write files to disk
+│       │   ├── load/                        # ts-morph AST → write files to disk
 │       │   │   ├── commands/
 │       │   │   │   └── write-file.ts
 │       │   │   ├── domain-types.ts
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
-│       │   ├── transform/       # ConfigIndex → ts-morph AST
+│       │   ├── transform/                   # ConfigIndex → ts-morph AST
 │       │   │   ├── commands/
 │       │   │   │   └── emit-ast.ts
 │       │   │   ├── domain-types.ts
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
-│       │   ├── cli.ts           # bin entry: odetovibe <schema.yaml> --outDir <dir>
-│       │   ├── index.ts         # library entry
-│       │   └── schema.ts        # YamlConfig type definitions
-│       ├── specs/               # odetovibe's own codascon domain specs
-│       │   ├── extract.yaml     # extract phase domain config
-│       │   ├── load.yaml        # load phase domain config
-│       │   └── transform.yaml   # transform phase domain config
+│       │   ├── cli.ts                       # bin entry: odetovibe <schema.yaml> --outDir <dir>
+│       │   ├── cli.test.ts
+│       │   ├── index.ts                     # library entry
+│       │   ├── schema.ts                    # YamlConfig type definitions
+│       │   └── smoke.test.ts                # end-to-end pipeline + golden output tests
+│       ├── fixtures/                        # smoke test input and golden output
+│       │   ├── smoke.yaml
+│       │   └── smoke-expected/
+│       ├── specs/                           # odetovibe's own codascon domain specs
+│       │   ├── extract.yaml
+│       │   ├── load.yaml
+│       │   └── transform.yaml
 │       └── README.md
 └── README.md
 ```

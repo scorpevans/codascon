@@ -410,6 +410,7 @@ Additional implementation rules:
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
 - Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
 - Use middleware for cross-cutting concerns such as logging, auditing, timing, and default enrichments — prefer a middleware Command over duplicating the same logic in individual Templates or Strategies
+- Prefer `defaultResolver` over repeating the same Strategy across multiple resolver methods — when a Command routes several subjects to the same catch-all, declare `readonly defaultResolver` on the Command instead of enumerating them in `dispatch`; in particular, when a Template defines a single default Strategy covering the full subject union, always set `defaultResolver` to it
 
 ### Step 4: Implement This Domain
 

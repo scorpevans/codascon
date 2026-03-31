@@ -4,6 +4,8 @@ domainTypes:
   Person:
   User:
     resolverName: resolveUser
+  Guest:
+    resolverName: resolveGuest
   Greeting:
 
 commands:
@@ -23,3 +25,25 @@ commands:
         subjectSubset: [User]
         strategies:
           UserGreeterDefault: {}
+
+  FarewellCommand:
+    commandName: farewell
+    baseType: Person
+    objectType: Greeting
+    returnType: Greeting
+    subjectUnion:
+      - User
+      - Guest
+    dispatch:
+      User: UserFarewellDefault
+    defaultResolver: GuestFarewellDefault
+    templates:
+      UserFarewell:
+        isParameterized: false
+        subjectSubset: [User]
+        strategies:
+          UserFarewellDefault: {}
+      GuestFarewell:
+        isParameterized: false
+        strategies:
+          GuestFarewellDefault: {}

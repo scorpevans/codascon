@@ -8,3 +8,7 @@ export class User extends Subject {
 export interface Person {}
 
 export interface Greeting {}
+
+export class Guest extends Subject {
+  readonly resolverName = "resolveGuest" as const;
+}
