@@ -71,15 +71,16 @@ middleware:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
+    defaultResolver: DefaultPolicy
     dispatch:
-      Student: StudentPolicy
       Professor: ProfessorPolicy
     templates:
       CheckoutMiddlewareTemplate:
-        isParameterized: false
+        isParameterized: true
         strategies:
-          StudentPolicy: {}
-          ProfessorPolicy: {}
+          DefaultPolicy: {}
+          ProfessorPolicy:
+            subjectSubset: [Professor]
 
 commands:
   CheckoutCommand:
