@@ -584,49 +584,49 @@ Do not modify existing class declarations or method signatures — only fill in 
 ## Project Structure
 
 ```
-codascon/                        # monorepo root
+codascon/                                    # monorepo root
 ├── packages/
-│   ├── codascon/                # published as "codascon"
+│   ├── codascon/                            # published as "codascon"
 │   │   ├── src/
-│   │   │   ├── core.ts          # Subject, Command, MiddlewareCommand + type machinery
-│   │   │   ├── index.ts         # barrel re-export
-│   │   │   ├── command.test.ts  # Command runtime tests
-│   │   │   ├── core.test.ts     # compile-time type constraint proofs
+│   │   │   ├── core.ts                      # Subject, Command, MiddlewareCommand + type machinery
+│   │   │   ├── index.ts                     # barrel re-export
+│   │   │   ├── command.test.ts              # Command runtime tests
+│   │   │   ├── core.test.ts                 # compile-time type constraint proofs
 │   │   │   ├── middleware.test.ts
 │   │   │   ├── resolver.test.ts
 │   │   │   ├── subject.test.ts
 │   │   │   └── template.test.ts
 │   │   └── README.md
-│   └── odetovibe/               # published as "odetovibe"
+│   └── odetovibe/                           # published as "odetovibe"
 │       ├── src/
-│       │   ├── extract/         # parse YAML → validate → ConfigIndex
+│       │   ├── extract/                     # parse YAML → validate → ConfigIndex
 │       │   │   ├── commands/
 │       │   │   │   ├── validate-command-hooks.ts
 │       │   │   │   └── validate-entry.ts
 │       │   │   ├── domain-types.ts
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
-│       │   ├── load/            # ts-morph AST → write files to disk
+│       │   ├── load/                        # ts-morph AST → write files to disk
 │       │   │   ├── commands/
 │       │   │   │   └── write-file.ts
 │       │   │   ├── domain-types.ts
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
-│       │   ├── transform/       # ConfigIndex → ts-morph AST
+│       │   ├── transform/                   # ConfigIndex → ts-morph AST
 │       │   │   ├── commands/
 │       │   │   │   └── emit-ast.ts
 │       │   │   ├── domain-types.ts
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
-│       │   ├── cli.ts           # bin entry: odetovibe <schema.yaml> --outDir <dir>
+│       │   ├── cli.ts                       # bin entry: odetovibe <schema.yaml> --outDir <dir>
 │       │   ├── cli.test.ts
-│       │   ├── index.ts         # library entry
-│       │   ├── schema.ts        # YamlConfig type definitions
-│       │   └── smoke.test.ts    # end-to-end pipeline + golden output tests
-│       ├── fixtures/            # smoke test input and golden output
+│       │   ├── index.ts                     # library entry
+│       │   ├── schema.ts                    # YamlConfig type definitions
+│       │   └── smoke.test.ts                # end-to-end pipeline + golden output tests
+│       ├── fixtures/                        # smoke test input and golden output
 │       │   ├── smoke.yaml
 │       │   └── smoke-expected/
-│       ├── specs/               # odetovibe's own codascon domain specs
+│       ├── specs/                           # odetovibe's own codascon domain specs
 │       │   ├── extract.yaml
 │       │   ├── load.yaml
 │       │   └── transform.yaml
