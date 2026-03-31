@@ -941,7 +941,7 @@ describe("§14 compile-time constraint tests", () => {
 
 // §MC4 — A MiddlewareCommand resolver returning wrong-SU MiddlewareTemplate is rejected.
 // execute: (s: Rock, ...) is incompatible with MiddlewareTemplate<..., Gem> which requires
-// execute<T extends Gem>. Function-property contravariance catches the mismatch.
+// execute<T extends Gem>. The subject type constraint mismatch (Rock vs Gem) catches this.
 {
   class RockOnlyMwTemplate {
     execute: (subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>) => Res = (s, o, inner) =>

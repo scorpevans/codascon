@@ -374,26 +374,11 @@ describe("§M9 Domain base class middleware composition", () => {
 // implements MiddlewareTemplate<Cmd, [], SpecificSubject> directly.
 // ═══════════════════════════════════════════════════════════════════
 
-// Non-parameterized abstract base: shared state, no execute declared.
-// Strategies extend it and implement per-subject MiddlewareTemplate.
-abstract class ScaleMwBase {
-  constructor(protected readonly scale: number) {}
-}
-
-class ScaleMwRockStrategy
-  extends ScaleMwBase
-  implements MiddlewareTemplate<ScaleMwCommand, [], Rock>
-{
-  execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
-    return inner.run(subject, { factor: object.factor * this.scale });
-  }
-}
-
-class ScaleMwGemStrategy
-  extends ScaleMwBase
-  implements MiddlewareTemplate<ScaleMwCommand, [], Gem>
-{
-  execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+// Single Strategy implements MiddlewareTemplate<ScaleMwCommand, [], Rock | Gem> —
+// execute logic is subject-agnostic (scale the factor, forward subject unchanged).
+class ScaleMwStrategy implements MiddlewareTemplate<ScaleMwCommand, [], Rock | Gem> {
+  constructor(private readonly scale: number) {}
+  execute<T extends Rock | Gem>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res {
     return inner.run(subject, { factor: object.factor * this.scale });
   }
 }
@@ -404,15 +389,15 @@ class ScaleMwCommand extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
     super();
   }
   resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<ScaleMwCommand, any[], Rock> {
-    return new ScaleMwRockStrategy(this.scale);
+    return new ScaleMwStrategy(this.scale);
   }
   resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<ScaleMwCommand, any[], Gem> {
-    return new ScaleMwGemStrategy(this.scale);
+    return new ScaleMwStrategy(this.scale);
   }
 }
 
 describe("§MT3 non-param MW template, no hooks, abstract execute — Strategy", () => {
-  it("per-subject Strategies extend abstract base and provide 3-arg execute", () => {
+  it("single Strategy serves all subjects via 3-arg execute", () => {
     class Cmd extends MeasureCommand {
       override get middleware() {
         return [new ScaleMwCommand(3)];
@@ -430,32 +415,15 @@ describe("§MT3 non-param MW template, no hooks, abstract execute — Strategy",
 // Matrix: MT2 — Non-param, hook(s), concrete execute
 // ═══════════════════════════════════════════════════════════════════
 
-// Abstract base with hook — no SU type param (non-param).
-// Per-subject strategies extend it and implement MiddlewareTemplate<Cmd, [TagCommand], SU>.
-abstract class TaggedMwBase {
+// Single template implements MiddlewareTemplate<TaggedMwCommand, [TagCommand], Rock | Gem> —
+// hook invocation and forwarding are subject-agnostic; both resolvers share one instance.
+class TaggedMwTemplate implements MiddlewareTemplate<TaggedMwCommand, [TagCommand], Rock | Gem> {
   tag: TagCommand;
   readonly tagLog: Tag[] = [];
   constructor(tag: TagCommand) {
     this.tag = tag;
   }
-}
-
-class TaggedMwRockTemplate
-  extends TaggedMwBase
-  implements MiddlewareTemplate<TaggedMwCommand, [TagCommand], Rock>
-{
-  execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
-    const tagged = this.tag.run(subject, object);
-    this.tagLog.push(tagged);
-    return inner.run(subject, object);
-  }
-}
-
-class TaggedMwGemTemplate
-  extends TaggedMwBase
-  implements MiddlewareTemplate<TaggedMwCommand, [TagCommand], Gem>
-{
-  execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+  execute<T extends Rock | Gem>(subject: T, object: Ctx, inner: Runnable<T, Ctx, Res>): Res {
     const tagged = this.tag.run(subject, object);
     this.tagLog.push(tagged);
     return inner.run(subject, object);
@@ -464,23 +432,21 @@ class TaggedMwGemTemplate
 
 class TaggedMwCommand extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
   readonly commandName = "taggedMw" as const;
-  readonly rockTemplate: TaggedMwRockTemplate;
-  readonly gemTemplate: TaggedMwGemTemplate;
+  readonly template: TaggedMwTemplate;
   constructor(tagCmd: TagCommand) {
     super();
-    this.rockTemplate = new TaggedMwRockTemplate(tagCmd);
-    this.gemTemplate = new TaggedMwGemTemplate(tagCmd);
+    this.template = new TaggedMwTemplate(tagCmd);
   }
   resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<TaggedMwCommand, any[], Rock> {
-    return this.rockTemplate;
+    return this.template;
   }
   resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<TaggedMwCommand, any[], Gem> {
-    return this.gemTemplate;
+    return this.template;
   }
 }
 
 describe("§MT2 non-param MW template, hooks, concrete execute", () => {
-  it("per-subject MW templates with Command hook invoke hook inside 3-arg execute", () => {
+  it("single MW template with Command hook invokes hook inside 3-arg execute", () => {
     const tagCmd = new TagCommand();
     const mw = new TaggedMwCommand(tagCmd);
 
@@ -491,8 +457,8 @@ describe("§MT2 non-param MW template, hooks, concrete execute", () => {
     }
 
     strictEqual(new Cmd().run(new Rock(5), { factor: 2 }), 10); // Rock(5) * factor(2) = 10
-    strictEqual(mw.rockTemplate.tagLog.length, 1);
-    strictEqual(mw.rockTemplate.tagLog[0].label, "rock:10");
+    strictEqual(mw.template.tagLog.length, 1);
+    strictEqual(mw.template.tagLog[0].label, "rock:10");
   });
 });
 

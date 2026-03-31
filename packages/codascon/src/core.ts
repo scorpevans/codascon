@@ -131,21 +131,21 @@
 /*
  * The minimal interface required to invoke a middleware continuation.
  *
- * Declare `inner` as `Runnable<SU, O, R>` in middleware `execute` methods
- * rather than as the full Command type. `Runnable` accurately describes
+ * Declare `inner` as `Runnable<CommandSubjectUnion<C>, O, R>` in middleware `execute`
+ * methods rather than as the full Command type. `Runnable` accurately describes
  * the only safe operation on `inner`: calling `run()`. The framework passes
  * a `Chain` object (not a real Command instance) as `inner` at runtime;
  * typing it as the full Command would allow clients to call methods that
  * do not exist on the Chain, compiling but crashing at runtime.
  *
  * @example
- * execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+ * execute(subject: Rock, object: Ctx, inner: Runnable<Rock | Gem, Ctx, Res>): Res {
  *   return inner.run(subject, object);
  * }
  */
 /**
  * Minimal continuation interface for middleware `execute` methods. Declare `inner` as
- * `Runnable<SU, O, R>` rather than the full Command type.
+ * `Runnable<CommandSubjectUnion<C>, O, R>` rather than the full Command type.
  *
  * `run` is declared as a function property (not a shorthand method) — see
  * `Template.execute` for the bivariance-safety rationale that applies here as well.
@@ -984,22 +984,20 @@ export type Template<
  * ```ts
  * class TraceMiddleware extends MiddlewareCommand<object, Ctx, number, [Rock, Gem]> {
  *   readonly commandName = "trace" as const;
+ *   // A single full-union template can serve both resolvers.
+ *   readonly traceTemplate = {
+ *     execute<T extends Rock | Gem>(subject: T, object: Ctx, inner: Runnable<T, Ctx, number>): number {
+ *       console.log("before");
+ *       const result = inner.run(subject, object);
+ *       console.log("after");
+ *       return result;
+ *     },
+ *   };
  *   resolveRock(r: Rock, ctx: Ctx): MiddlewareTemplate<TraceMiddleware, [], Rock> {
- *     return {
- *       execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, number>): number {
- *         console.log("before");
- *         const result = inner.run(subject, object);
- *         console.log("after");
- *         return result;
- *       },
- *     };
+ *     return this.traceTemplate;
  *   }
  *   resolveGem(g: Gem, ctx: Ctx): MiddlewareTemplate<TraceMiddleware, [], Gem> {
- *     return {
- *       execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, number>): number {
- *         return inner.run(subject, object);
- *       },
- *     };
+ *     return this.traceTemplate;
  *   }
  * }
  * ```
@@ -1025,7 +1023,7 @@ export type MiddlewareTemplate<
   execute: <T extends SU>(
     subject: T,
     object: CommandObject<C>,
-    inner: Runnable<SU, CommandObject<C>, CommandReturn<C>>,
+    inner: Runnable<CommandSubjectUnion<C>, CommandObject<C>, CommandReturn<C>>,
   ) => CommandReturn<C>;
 };
 
