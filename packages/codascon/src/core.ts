@@ -143,8 +143,14 @@
  *   return inner.run(subject, object);
  * }
  */
-/** Minimal continuation interface for middleware `execute` methods. Declare `inner` as `Runnable<SU, O, R>` rather than the full Command type. */
-export type Runnable<SU, O, R> = { run(subject: SU, object: O): R };
+/**
+ * Minimal continuation interface for middleware `execute` methods. Declare `inner` as
+ * `Runnable<SU, O, R>` rather than the full Command type.
+ *
+ * `run` is declared as a function property (not a shorthand method) — see
+ * `Template.execute` for the bivariance-safety rationale that applies here as well.
+ */
+export type Runnable<SU, O, R> = { run: (subject: SU, object: O) => R };
 
 type ReservedResolverNameError =
   "resolverName cannot be 'defaultResolver'. Fix: rename it to a unique non-reserved value";
@@ -161,9 +167,12 @@ type ReservedResolverNameError =
  *
  * Structurally equivalent to `Template<Command<B,O,R,BSL>, [], BSL[number]>` — any
  * `Template` implementation satisfies it.
+ *
+ * `execute` uses function property syntax — see `Template.execute` for the bivariance
+ * rationale.
  */
 type DefaultResolverTemplate<O, R, SU> = {
-  execute<T extends SU>(subject: T, object: O, inner: never): R;
+  execute: <T extends SU>(subject: T, object: O, inner: never) => R;
 };
 
 /*
@@ -182,9 +191,12 @@ type DefaultResolverTemplate<O, R, SU> = {
  * **Responsibility**: the implementation must call `inner.run(subject, object)` to
  * forward control down the chain. TypeScript cannot guarantee `inner` is called, but
  * the signature makes the requirement explicit.
+ *
+ * `execute` uses function property syntax — see `Template.execute` for the bivariance
+ * rationale.
  */
 export type MiddlewareDefaultResolverTemplate<O, R, SU> = {
-  execute<T extends SU>(subject: T, object: O, inner: Runnable<SU, O, R>): R;
+  execute: <T extends SU>(subject: T, object: O, inner: Runnable<SU, O, R>) => R;
 };
 
 /*
@@ -945,13 +957,23 @@ type CommandHooks<H extends AnyCommand[], SU extends CommandSubjectUnion<H[numbe
  *    and the `implements` check fails with TS2416 on the hook property. For example, a
  *    `LogCommand` that only handles `Cat` (declaring only `resolveCat`) cannot satisfy
  *    `Template<C, [LogCommand], Cat | Dog>` because it is missing `resolveDog`.
+ *
+ * ## Why `execute` (and all callable members) use function property syntax
+ *
+ * `execute: (...) => R` (function property) rather than `execute(...): R` (shorthand
+ * method). TypeScript applies bivariant parameter checking to shorthand methods even under
+ * `strictFunctionTypes`: an implementation can silently narrow `object` to a stricter type
+ * than the interface declares, making it uncallable with valid inputs. Function property
+ * syntax triggers strict (contravariant) checking — a narrower `object` is rejected at the
+ * `implements` site with TS2416. The same pattern is applied to `MiddlewareTemplate`,
+ * `Runnable`, `DefaultResolverTemplate`, and `MiddlewareDefaultResolverTemplate`.
  */
 export type Template<
   C extends AnyCommand,
   H extends AnyCommand[] = [],
   SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
 > = {
-  execute<T extends SU>(subject: T, object: CommandObject<C>): CommandReturn<C>;
+  execute: <T extends SU>(subject: T, object: CommandObject<C>) => CommandReturn<C>;
 } & CommandHooks<H, SU>;
 
 /**
@@ -991,17 +1013,20 @@ export type Template<
  * **Note:** TypeScript's fewer-params rule means an `execute` that omits `inner` still
  * satisfies this type — the requirement is not enforced at the implementer's declaration
  * site, but `MiddlewareCommand._dispatch` always passes it.
+ *
+ * `execute` is declared as a function property — see `Template.execute` for the
+ * bivariance-safety rationale.
  */
 export type MiddlewareTemplate<
   C extends AnyMiddlewareCommand,
   H extends AnyCommand[] = [],
   SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
 > = Omit<Template<C, H, SU>, "execute"> & {
-  execute<T extends SU>(
+  execute: <T extends SU>(
     subject: T,
     object: CommandObject<C>,
     inner: Runnable<SU, CommandObject<C>, CommandReturn<C>>,
-  ): CommandReturn<C>;
+  ) => CommandReturn<C>;
 };
 
 /*

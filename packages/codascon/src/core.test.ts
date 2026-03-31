@@ -949,6 +949,28 @@ describe("§MC middleware compile-time constraints", () => {
     }
     void DefMw;
   });
+
+  it("14j9: MiddlewareTemplate<C,H,SU>-typed value is assignable to MiddlewareCommand.defaultResolver", () => {
+    // Regression guard for the subtype chain:
+    //   MiddlewareTemplate<C,H,SU>  →  MiddlewareDefaultResolverTemplate<O,R,SU>  →  DefaultResolverTemplate<O,R,SU>
+    //
+    // Unlike 14j6 (inline object literal, types inferred from context), this test uses an
+    // explicitly typed MiddlewareTemplate<C,H,SU> variable. TypeScript must resolve
+    // CommandObject<C> and CommandReturn<C> from the MiddlewareCommand subclass to verify
+    // the assignment. Guards against:
+    //   (1) CommandObject<C>/CommandReturn<C> regressing to `never` (e.g. from a constraint
+    //       change on MiddlewareTemplate's C parameter)
+    //   (2) DefaultResolverTemplate losing `inner: never`, which would break the subtype chain
+    //   (3) inner becoming optional in MiddlewareDefaultResolverTemplate
+    const catchAll: MiddlewareTemplate<TraceMiddleware, [], Rock | Gem> = {
+      execute: (s: Rock | Gem, o: Ctx, inner: Runnable<Rock | Gem, Ctx, Res>): Res =>
+        inner.run(s, o),
+    };
+    class TraceMwWithDefault extends TraceMiddleware {
+      override readonly defaultResolver = catchAll; // must compile
+    }
+    void TraceMwWithDefault;
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
