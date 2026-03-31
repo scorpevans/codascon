@@ -241,10 +241,10 @@ abstract class CheckoutMiddlewareTemplate<
 > implements MiddlewareTemplate<CheckoutMiddleware, [LogCommand], SU> {
   readonly log = new LogCommand();
 
-  execute(
-    subject: SU,
+  execute<T extends SU>(
+    subject: T,
     eq: Equipment,
-    inner: Runnable<SU, Equipment, CheckoutResult>,
+    inner: Runnable<T, Equipment, CheckoutResult>,
   ): CheckoutResult {
     const start = Date.now();
     const result = inner.run(subject, { ...eq, days: this.clamp(eq.days) });
@@ -304,7 +304,7 @@ class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Studen
 }
 ```
 
-- **Declare `inner` as `Runnable<SU, O, R>`**, not as the full Command type.
+- **Declare `inner` as `Runnable<T, O, R>`** (where `T` is `execute`'s subject type parameter), not as the full Command type.
 - **Omit `inner.run()`** to short-circuit — the downstream command and strategy do not execute.
 - **Object enrichment**: pass `{ ...object, extra }` to `inner.run()` to add context downstream.
   Declare enrichment fields as optional on `O` so that Strategies that don't use them still typecheck.

@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { Command, Subject, type Template } from "./index.js";
+import { Command, Subject, type Template, type CommandSubjectUnion } from "./index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected) throw new Error(msg ?? `Expected ${expected}, got ${actual}`);
@@ -124,8 +124,39 @@ class GroomCommand extends Command<Person, Clinic, GroomResult, [Dog, Cat]> {
   }
 }
 
+// A second hook command — used for "abstract hook" and "mixed hook" test patterns.
+// AuditCommand covers all three subjects, making it valid for non-param templates.
+class AuditCommand extends Command<Person, { action: string }, LogEntry, [Dog, Cat, Bird]> {
+  readonly commandName = "audit" as const;
+  resolveDog(d: Dog) {
+    return {
+      execute: (s: Dog, o: { action: string }): LogEntry => ({
+        action: `audit:${o.action}`,
+        subject: s.name,
+      }),
+    };
+  }
+  resolveCat(c: Cat) {
+    return {
+      execute: (s: Cat, o: { action: string }): LogEntry => ({
+        action: `audit:${o.action}`,
+        subject: s.name,
+      }),
+    };
+  }
+  resolveBird(b: Bird) {
+    return {
+      execute: (s: Bird, o: { action: string }): LogEntry => ({
+        action: `audit:${o.action}`,
+        subject: s.name,
+      }),
+    };
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // §8 · TEMPLATE WITH COMMAND HOOKS
+// Matrix: T2 — Non-param, single concrete hook, concrete execute
 // ═══════════════════════════════════════════════════════════════════
 
 interface LogEntry {
@@ -217,6 +248,7 @@ describe("§8 template with command hooks", () => {
 
 // ═══════════════════════════════════════════════════════════════════
 // §8b · TEMPLATE WITH DEFAULTRESOLVER HOOK
+// Matrix: T21 — Any, hook Command itself has defaultResolver
 //
 //   §8 exercises a hook Command with full explicit resolver coverage.
 //   This section proves that a hook Command with `defaultResolver` (and
@@ -307,6 +339,8 @@ describe("§8b template with defaultResolver hook", () => {
 
 // ═══════════════════════════════════════════════════════════════════
 // §15 · NESTED COMMAND HOOKS — end-to-end runtime
+// Matrix: T14 — Param, single concrete hook, concrete execute
+//         T17 — Param, no hooks, abstract execute (Strategy pattern)
 // ═══════════════════════════════════════════════════════════════════
 
 class ExportTemplate implements Template<ExportCommand, [FeedCommand], Dog | Cat> {
@@ -397,6 +431,8 @@ describe("§15 nested command hooks — end-to-end runtime", () => {
 
 // ═══════════════════════════════════════════════════════════════════
 // §17 · MULTI-HOOK TEMPLATE — H tuple with two hooks
+// Matrix: T4 — Non-param, multiple concrete hooks, concrete execute
+//         T12 — Non-param, mixed hooks, abstract execute (via satisfies)
 //
 //   §8 and §15 each exercise H = [OneHook]. This section proves that
 //   H = [HookA, HookB] works correctly: both hooks are structurally
@@ -461,5 +497,419 @@ describe("§17 multi-hook template — H = [LogCommand, GroomCommand]", () => {
     // is re-invoked on every call, not cached
     strictEqual(morning.food, "morning");
     strictEqual(evening.food, "evening");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T3 · NON-PARAM TEMPLATE — SINGLE ABSTRACT HOOK, CONCRETE EXECUTE
+// Matrix: T3 — Non-param, single abstract hook, concrete execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class AbsHookConcreteExecTemplate implements Template<FeedCommand, [AuditCommand]> {
+  abstract readonly audit: AuditCommand;
+  execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult {
+    const entry = this.audit.run(subject, { action: "feed" });
+    return { fed: true, food: `abs-hook:${entry.subject}`, amount: 1 };
+  }
+}
+
+class AbsHookConcreteExecStrategy extends AbsHookConcreteExecTemplate {
+  readonly audit = new AuditCommand();
+}
+
+class AbsHookConcreteExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "absHookConcreteExec" as const;
+  resolveDog() {
+    return new AbsHookConcreteExecStrategy();
+  }
+  resolveCat() {
+    return new AbsHookConcreteExecStrategy();
+  }
+  resolveBird() {
+    return new AbsHookConcreteExecStrategy();
+  }
+}
+
+describe("§T3 non-param, single abstract hook, concrete execute", () => {
+  it("Strategy provides abstract hook; concrete execute on abstract template calls it", () => {
+    const cmd = new AbsHookConcreteExecCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), { time: "am" }).food, "abs-hook:Rex");
+    strictEqual(cmd.run(new Cat("Mimi", true), { time: "am" }).food, "abs-hook:Mimi");
+    strictEqual(cmd.run(new Bird("Tweety", true), { time: "am" }).food, "abs-hook:Tweety");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T8 · NON-PARAM TEMPLATE — SINGLE CONCRETE HOOK, ABSTRACT EXECUTE
+// Matrix: T8 — Non-param, single concrete hook, abstract execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class ConcreteHookAbsExecTemplate implements Template<FeedCommand, [LogCommand]> {
+  readonly log = new LogCommand();
+  abstract execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult;
+}
+
+class ConcreteHookAbsExecStrategy extends ConcreteHookAbsExecTemplate {
+  execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult {
+    const entry = this.log.run(subject, { action: "feed" });
+    return { fed: true, food: `conc-hook-abs:${entry.subject}`, amount: 1 };
+  }
+}
+
+class ConcreteHookAbsExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "concreteHookAbsExec" as const;
+  resolveDog() {
+    return new ConcreteHookAbsExecStrategy();
+  }
+  resolveCat() {
+    return new ConcreteHookAbsExecStrategy();
+  }
+  resolveBird() {
+    return new ConcreteHookAbsExecStrategy();
+  }
+}
+
+describe("§T8 non-param, single concrete hook, abstract execute", () => {
+  it("Strategy provides execute; concrete hook initialized on abstract template is accessible", () => {
+    const cmd = new ConcreteHookAbsExecCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), { time: "am" }).food, "conc-hook-abs:Rex");
+    strictEqual(cmd.run(new Cat("Mimi", true), { time: "am" }).food, "conc-hook-abs:Mimi");
+    strictEqual(cmd.run(new Bird("Tweety", true), { time: "am" }).food, "conc-hook-abs:Tweety");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T9 · NON-PARAM TEMPLATE — SINGLE ABSTRACT HOOK, ABSTRACT EXECUTE
+// Matrix: T9 — Non-param, single abstract hook, abstract execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class AbsHookAbsExecTemplate implements Template<FeedCommand, [AuditCommand]> {
+  abstract readonly audit: AuditCommand;
+  abstract execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult;
+}
+
+class AbsHookAbsExecStrategy extends AbsHookAbsExecTemplate {
+  readonly audit = new AuditCommand();
+  execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult {
+    const entry = this.audit.run(subject, { action: "feed" });
+    return { fed: true, food: `abs-both:${entry.subject}`, amount: 1 };
+  }
+}
+
+class AbsHookAbsExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "absHookAbsExec" as const;
+  resolveDog() {
+    return new AbsHookAbsExecStrategy();
+  }
+  resolveCat() {
+    return new AbsHookAbsExecStrategy();
+  }
+  resolveBird() {
+    return new AbsHookAbsExecStrategy();
+  }
+}
+
+describe("§T9 non-param, single abstract hook, abstract execute", () => {
+  it("Strategy provides both abstract hook and abstract execute", () => {
+    const cmd = new AbsHookAbsExecCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), { time: "am" }).food, "abs-both:Rex");
+    strictEqual(cmd.run(new Bird("Tweety", true), { time: "am" }).food, "abs-both:Tweety");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T12 · NON-PARAM TEMPLATE — MIXED HOOKS, ABSTRACT EXECUTE
+// Matrix: T12 — Non-param, mixed hooks (concrete + abstract), abstract execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class MixedHookAbsExecTemplate implements Template<
+  FeedCommand,
+  [LogCommand, AuditCommand]
+> {
+  readonly log = new LogCommand();
+  abstract readonly audit: AuditCommand;
+  abstract execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult;
+}
+
+class MixedHookAbsExecStrategy extends MixedHookAbsExecTemplate {
+  readonly audit = new AuditCommand();
+  execute(subject: Dog | Cat | Bird, object: { time: string }): FeedResult {
+    const logEntry = this.log.run(subject, { action: "log" });
+    const auditEntry = this.audit.run(subject, { action: "audit" });
+    return {
+      fed: true,
+      food: `mixed-abs:${logEntry.subject}:${auditEntry.subject}`,
+      amount: 1,
+    };
+  }
+}
+
+class MixedHookAbsExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "mixedHookAbsExec" as const;
+  resolveDog() {
+    return new MixedHookAbsExecStrategy();
+  }
+  resolveCat() {
+    return new MixedHookAbsExecStrategy();
+  }
+  resolveBird() {
+    return new MixedHookAbsExecStrategy();
+  }
+}
+
+describe("§T12 non-param, mixed hooks, abstract execute", () => {
+  it("both concrete and abstract hooks invoked inside Strategy-provided execute", () => {
+    const cmd = new MixedHookAbsExecCommand();
+    const result = cmd.run(new Dog("Rex", "Lab"), { time: "am" });
+    strictEqual(result.food, "mixed-abs:Rex:Rex");
+    strictEqual(result.fed, true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T15 · PARAM TEMPLATE — SINGLE ABSTRACT HOOK, CONCRETE EXECUTE
+// Matrix: T15 — Param, single abstract hook, concrete execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class ParamAbsHookConcreteExecTemplate<
+  SU extends CommandSubjectUnion<FeedCommand>,
+> implements Template<FeedCommand, [AuditCommand], SU> {
+  abstract readonly audit: AuditCommand;
+  execute(subject: SU, object: { time: string }): FeedResult {
+    const entry = this.audit.run(subject, { action: "feed" });
+    return { fed: true, food: `param-abs-hook:${entry.subject}`, amount: 1 };
+  }
+}
+
+class ParamAbsHookConcreteExecStrategy extends ParamAbsHookConcreteExecTemplate<Dog | Cat> {
+  readonly audit = new AuditCommand();
+}
+
+class ParamAbsHookConcreteExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "paramAbsHookConcreteExec" as const;
+  resolveDog() {
+    return new ParamAbsHookConcreteExecStrategy();
+  }
+  resolveCat() {
+    return new ParamAbsHookConcreteExecStrategy();
+  }
+  resolveBird() {
+    return {
+      execute: (s: Bird, o: { time: string }): FeedResult => ({
+        fed: s.canFly,
+        food: `bird:${s.name}`,
+        amount: 0.5,
+      }),
+    };
+  }
+}
+
+describe("§T15 param, single abstract hook, concrete execute", () => {
+  it("parameterized Strategy provides abstract hook; concrete execute in abstract template calls it", () => {
+    const cmd = new ParamAbsHookConcreteExecCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), { time: "am" }).food, "param-abs-hook:Rex");
+    strictEqual(cmd.run(new Cat("Mimi", true), { time: "am" }).food, "param-abs-hook:Mimi");
+    strictEqual(cmd.run(new Bird("Tweety", true), { time: "am" }).food, "bird:Tweety");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T17 · PARAM TEMPLATE — NO HOOKS, ABSTRACT EXECUTE (STRATEGY PATTERN)
+// Matrix: T17 — Param, no hooks, abstract execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class ParamNoHookAbsExecTemplate<
+  SU extends CommandSubjectUnion<FeedCommand>,
+> implements Template<FeedCommand, [], SU> {
+  abstract execute(subject: SU, object: { time: string }): FeedResult;
+}
+
+class ParamNoHookDogStrategy extends ParamNoHookAbsExecTemplate<Dog> {
+  execute(subject: Dog, object: { time: string }): FeedResult {
+    return { fed: true, food: `dog-strategy:${subject.breed}`, amount: 2 };
+  }
+}
+
+class ParamNoHookCatStrategy extends ParamNoHookAbsExecTemplate<Cat> {
+  execute(subject: Cat, object: { time: string }): FeedResult {
+    return {
+      fed: true,
+      food: `cat-strategy:${subject.indoor ? "indoor" : "outdoor"}`,
+      amount: 1,
+    };
+  }
+}
+
+class ParamNoHookAbsExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "paramNoHookAbsExec" as const;
+  resolveDog() {
+    return new ParamNoHookDogStrategy();
+  }
+  resolveCat() {
+    return new ParamNoHookCatStrategy();
+  }
+  resolveBird() {
+    return {
+      execute: (s: Bird, o: { time: string }): FeedResult => ({
+        fed: s.canFly,
+        food: `bird-direct:${s.name}`,
+        amount: 0.3,
+      }),
+    };
+  }
+}
+
+describe("§T17 param, no hooks, abstract execute — Strategy pattern", () => {
+  it("parameterized Strategies narrow SU and each provide their own execute", () => {
+    const cmd = new ParamNoHookAbsExecCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Labrador"), { time: "am" }).food, "dog-strategy:Labrador");
+    strictEqual(cmd.run(new Cat("Mimi", false), { time: "am" }).food, "cat-strategy:outdoor");
+    strictEqual(cmd.run(new Bird("Tweety", true), { time: "am" }).food, "bird-direct:Tweety");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T18 · PARAM TEMPLATE — SINGLE CONCRETE HOOK, ABSTRACT EXECUTE
+// Matrix: T18 — Param, single concrete hook, abstract execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class ParamConcreteHookAbsExecTemplate<
+  SU extends CommandSubjectUnion<FeedCommand>,
+> implements Template<FeedCommand, [LogCommand], SU> {
+  readonly log = new LogCommand();
+  abstract execute(subject: SU, object: { time: string }): FeedResult;
+}
+
+class ParamConcreteHookDogStrategy extends ParamConcreteHookAbsExecTemplate<Dog> {
+  execute(subject: Dog, object: { time: string }): FeedResult {
+    const entry = this.log.run(subject, { action: "feed" });
+    return { fed: true, food: `param-conc-hook:${entry.subject}:dog`, amount: 2 };
+  }
+}
+
+class ParamConcreteHookCatStrategy extends ParamConcreteHookAbsExecTemplate<Cat> {
+  execute(subject: Cat, object: { time: string }): FeedResult {
+    const entry = this.log.run(subject, { action: "feed" });
+    return { fed: true, food: `param-conc-hook:${entry.subject}:cat`, amount: 1 };
+  }
+}
+
+class ParamConcreteHookAbsExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "paramConcreteHookAbsExec" as const;
+  resolveDog() {
+    return new ParamConcreteHookDogStrategy();
+  }
+  resolveCat() {
+    return new ParamConcreteHookCatStrategy();
+  }
+  resolveBird() {
+    return {
+      execute: (s: Bird, o: { time: string }): FeedResult => ({
+        fed: false,
+        food: "none",
+        amount: 0,
+      }),
+    };
+  }
+}
+
+describe("§T18 param, single concrete hook, abstract execute", () => {
+  it("parameterized Strategies each provide execute; concrete hook from abstract template is accessible", () => {
+    const cmd = new ParamConcreteHookAbsExecCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), { time: "am" }).food, "param-conc-hook:Rex:dog");
+    strictEqual(cmd.run(new Cat("Mimi", true), { time: "am" }).food, "param-conc-hook:Mimi:cat");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §T20 · PARAM TEMPLATE — MIXED HOOKS, ABSTRACT EXECUTE
+// Matrix: T20 — Param, mixed hooks (concrete + abstract), abstract execute
+// ═══════════════════════════════════════════════════════════════════
+
+abstract class ParamMixedHookAbsExecTemplate<
+  SU extends CommandSubjectUnion<FeedCommand>,
+> implements Template<FeedCommand, [LogCommand, AuditCommand], SU> {
+  readonly log = new LogCommand();
+  abstract readonly audit: AuditCommand;
+  abstract execute(subject: SU, object: { time: string }): FeedResult;
+}
+
+class ParamMixedHookDogCatStrategy extends ParamMixedHookAbsExecTemplate<Dog | Cat> {
+  readonly audit = new AuditCommand();
+  execute(subject: Dog | Cat, object: { time: string }): FeedResult {
+    const logEntry = this.log.run(subject, { action: "log" });
+    const auditEntry = this.audit.run(subject, { action: "audit" });
+    return {
+      fed: true,
+      food: `param-mixed:${logEntry.subject}:${auditEntry.subject}`,
+      amount: 1,
+    };
+  }
+}
+
+class ParamMixedHookAbsExecCommand extends Command<
+  Person,
+  { time: string },
+  FeedResult,
+  [Dog, Cat, Bird]
+> {
+  readonly commandName = "paramMixedHookAbsExec" as const;
+  resolveDog() {
+    return new ParamMixedHookDogCatStrategy();
+  }
+  resolveCat() {
+    return new ParamMixedHookDogCatStrategy();
+  }
+  resolveBird() {
+    return {
+      execute: (s: Bird, o: { time: string }): FeedResult => ({
+        fed: false,
+        food: "none",
+        amount: 0,
+      }),
+    };
+  }
+}
+
+describe("§T20 param, mixed hooks, abstract execute", () => {
+  it("parameterized Strategy provides abstract hook and execute; concrete hook from abstract template is accessible", () => {
+    const cmd = new ParamMixedHookAbsExecCommand();
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), { time: "am" }).food, "param-mixed:Rex:Rex");
+    strictEqual(cmd.run(new Cat("Mimi", true), { time: "am" }).food, "param-mixed:Mimi:Mimi");
   });
 });
