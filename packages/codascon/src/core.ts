@@ -723,6 +723,12 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
    * Each element must cover every Subject in this Command's BSL — declare its
    * own BSL as a superset and implement the required resolver methods.
    *
+   * Each element acts as a **router**: its resolver methods select the `MiddlewareTemplate`
+   * that executes for each dispatch. All per-dispatch state — timers, accumulators,
+   * per-call context — belongs in those templates, not in the `MiddlewareCommand` itself.
+   * `MiddlewareCommand` instances are stateless routers and are cached for the lifetime
+   * of this command instance.
+   *
    * Array ordering: the first element is outermost (starts first, finishes last).
    * To share middleware across all Commands in a domain, override this getter
    * in a shared base class and compose with `[...super.middleware, myMiddleware]`.
@@ -1112,6 +1118,10 @@ export type MiddlewareTemplate<
 /**
  * Abstract base class for middleware Commands. Extend this to define
  * interceptors that wrap dispatch with pre/post logic or object enrichment.
+ *
+ * A `MiddlewareCommand` is a **router**: its resolver methods select the `MiddlewareTemplate`
+ * that executes for each dispatch. Keep `MiddlewareCommand` subclasses stateless — all
+ * execution logic and per-dispatch state belong in those templates.
  *
  * The type parameters mirror `Command<B, O, R, BSL>` — declare the BSL as a
  * superset of any Command's BSL you intend to register this middleware in.
