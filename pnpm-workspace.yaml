@@ -1,2 +1,8 @@
 packages:
   - "packages/*"
+
+# Security: reject packages published less than 3 days ago (4320 minutes).
+# Guards against supply chain attacks that rely on the window between a
+# malicious publish and its discovery/yanking (e.g. the axios RAT incident,
+# March 2026). Applies to direct and transitive dependencies.
+minimumReleaseAge: 4320
