@@ -24,7 +24,7 @@
  * extending them.
  *
  * **MiddlewareCommand** — A Command subclass that intercepts dispatch.
- * Middleware receives the subject, object, and `inner` (the wrapped command —
+ * Middleware receives the subject, object, and `inner` (a `Runnable` representing
  * the next step in the chain), and can run logic before and after calling
  * `inner.run()`. Registered at the command level via `Command.middleware`:
  * wraps the full dispatch cycle — resolver method selection and execute —
@@ -199,6 +199,9 @@ type MiddlewareDefaultResolverTemplate<O, R, SU> = {
   execute: <T extends SU>(subject: T, object: O, inner: Runnable<T, O, R>) => R;
 };
 
+type WidenedResolverNameError =
+  "resolverName must be a literal. Fix: readonly resolverName = 'resolveFoo' as const";
+
 /*
  * Extracts the `resolverName` string literal type from a Subject.
  *
@@ -206,7 +209,8 @@ type MiddlewareDefaultResolverTemplate<O, R, SU> = {
  * resolverNames. When `never` is used as a mapped type key it produces `{}`,
  * so `Visit<C, S>` and `CommandSubjectStrategies<C>` collapse to `{}`
  * for Subjects with non-literal resolverNames — the resolver method requirement
- * for that Subject is silently dropped at the type level.
+ * for that Subject is dropped from `CommandSubjectStrategies`. `ValidResolverNames`
+ * separately makes `run()` uncallable with a descriptive error.
  *
  * @example
  * class Dog extends Subject { readonly resolverName = "resolveDog" as const; }
@@ -215,9 +219,6 @@ type MiddlewareDefaultResolverTemplate<O, R, SU> = {
  * class Bad extends Subject { readonly resolverName: string = "oops"; }
  * type T = SubjectResolverName<Bad>;  // never
  */
-type WidenedResolverNameError =
-  "resolverName must be a literal. Fix: readonly resolverName = 'resolveFoo' as const";
-
 /** Extracts the `resolverName` string literal type from a Subject. Returns `never` for non-literal `resolverName` or `any`. */
 export type SubjectResolverName<S> =
   // IsAny guard: when S is `any`, return `never` so mapped types keyed by SubjectResolverName<S>
@@ -966,7 +967,7 @@ type CommandHooks<H extends AnyCommand[], SU extends CommandSubjectUnion<H[numbe
  * than the interface declares, making it uncallable with valid inputs. Function property
  * syntax triggers strict (contravariant) checking — a narrower `object` is rejected at the
  * `implements` site with TS2416. The same pattern is applied to `MiddlewareTemplate`,
- * `Runnable`, `DefaultResolverTemplate`, and `MiddlewareDefaultResolverTemplate`.
+ * `Runnable`, and the internal default-resolver template types.
  */
 export type Template<
   C extends AnyCommand,
@@ -1102,10 +1103,9 @@ export type MiddlewareTemplate<
  *
  * ## Standalone invocation
  *
- * Invoking a `MiddlewareCommand` directly via `run()` is a **compile error**
- * in well-typed TypeScript: `MiddlewareTemplate`'s 3-arg execute is
- * incompatible with the 2-arg `Template` that `CommandSubjectStrategies` (the
- * `run()` this-constraint) requires. If bypassed (JavaScript, `any`-typed
+ * Invoking a `MiddlewareCommand` directly via `run()` is a **compile error**:
+ * `MiddlewareCommand.run()` is declared with `this: never`, making it uncallable
+ * on any instance from well-typed TypeScript. If bypassed (JavaScript, `any`-typed
  * code), a runtime error is also thrown. Always register middleware via
  * `Command.middleware`.
  */
