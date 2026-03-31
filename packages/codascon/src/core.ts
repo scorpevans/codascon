@@ -195,7 +195,7 @@ type DefaultResolverTemplate<O, R, SU> = {
  * `execute` uses function property syntax — see `Template.execute` for the bivariance
  * rationale.
  */
-export type MiddlewareDefaultResolverTemplate<O, R, SU> = {
+type MiddlewareDefaultResolverTemplate<O, R, SU> = {
   execute: <T extends SU>(subject: T, object: O, inner: Runnable<T, O, R>) => R;
 };
 

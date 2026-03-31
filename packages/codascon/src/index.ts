@@ -3,7 +3,6 @@ export type {
   Template,
   MiddlewareTemplate,
   Runnable,
-  MiddlewareDefaultResolverTemplate,
   SubjectResolverName,
   CommandName,
   CommandObject,
