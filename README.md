@@ -588,13 +588,20 @@ codascon/                        # monorepo root
 ├── packages/
 │   ├── codascon/                # published as "codascon"
 │   │   ├── src/
-│   │   │   ├── index.test.ts
-│   │   │   └── index.ts         # Subject, Command, Template, Strategy + type machinery
+│   │   │   ├── core.ts          # Subject, Command, MiddlewareCommand + type machinery
+│   │   │   ├── index.ts         # barrel re-export
+│   │   │   ├── command.test.ts  # Command runtime tests
+│   │   │   ├── core.test.ts     # compile-time type constraint proofs
+│   │   │   ├── middleware.test.ts
+│   │   │   ├── resolver.test.ts
+│   │   │   ├── subject.test.ts
+│   │   │   └── template.test.ts
 │   │   └── README.md
 │   └── odetovibe/               # published as "odetovibe"
 │       ├── src/
 │       │   ├── extract/         # parse YAML → validate → ConfigIndex
 │       │   │   ├── commands/
+│       │   │   │   ├── validate-command-hooks.ts
 │       │   │   │   └── validate-entry.ts
 │       │   │   ├── domain-types.ts
 │       │   │   ├── index.test.ts
@@ -612,12 +619,17 @@ codascon/                        # monorepo root
 │       │   │   ├── index.test.ts
 │       │   │   └── index.ts
 │       │   ├── cli.ts           # bin entry: odetovibe <schema.yaml> --outDir <dir>
+│       │   ├── cli.test.ts
 │       │   ├── index.ts         # library entry
-│       │   └── schema.ts        # YamlConfig type definitions
+│       │   ├── schema.ts        # YamlConfig type definitions
+│       │   └── smoke.test.ts    # end-to-end pipeline + golden output tests
+│       ├── fixtures/            # smoke test input and golden output
+│       │   ├── smoke.yaml
+│       │   └── smoke-expected/
 │       ├── specs/               # odetovibe's own codascon domain specs
-│       │   ├── extract.yaml     # extract phase domain config
-│       │   ├── load.yaml        # load phase domain config
-│       │   └── transform.yaml   # transform phase domain config
+│       │   ├── extract.yaml
+│       │   ├── load.yaml
+│       │   └── transform.yaml
 │       └── README.md
 └── README.md
 ```
