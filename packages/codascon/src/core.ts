@@ -437,7 +437,7 @@ type MiddlewareVisit<C extends AnyMiddlewareCommand, BS extends CommandSubjectUn
 /*
  * Parallel to `CommandSubjectStrategies<C>` but for `MiddlewareCommand` coverage.
  *
- * Iterates over `CommandSubjectUnion<Command<B, O, R, BSL>>` and checks that each
+ * Iterates over `CommandSubjectUnion<MiddlewareCommand<B, O, R, BSL>>` and checks that each
  * Subject's resolver method is present and returns a `MiddlewareTemplate`-shaped
  * value. Used as the coverage constraint in `MiddlewareElement` — a
  * `MiddlewareCommand<B, O, R, SupersetBSL>` with resolver methods for all subjects
@@ -1091,6 +1091,16 @@ export type MiddlewareTemplate<
  * ```
  * Strategies that do not use the slot simply ignore it. Enrichment fields
  * belong in `O` — they are part of the command's contextual contract.
+ *
+ * **Limitation — enrichment is not type-checked end-to-end.** The framework
+ * uses a single `O` type throughout the chain: `run`, middleware `execute`,
+ * and strategy `execute` all see the same `O`. TypeScript has no way to
+ * express that middleware has narrowed `O` to `O & { slot: T }` by the time
+ * the strategy runs. Strategies that rely on middleware-supplied fields must
+ * cast (`object as O & { slot: T }`) — this documents the runtime contract
+ * but is not enforced at the call site. A framework-level fix would require
+ * splitting `O` into separate input (`O_in`) and enriched (`O_out`) type
+ * parameters, which is a deeper design change.
  *
  * ## Standalone invocation
  *

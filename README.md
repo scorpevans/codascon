@@ -79,21 +79,23 @@ interface Person {
 
 class Student extends Subject implements Person {
   readonly resolverName = "resolveStudent" as const;
-  constructor(
-    public readonly name: string,
-    public readonly year: number,
-  ) {
+  readonly name: string;
+  readonly year: number;
+  constructor(name: string, year: number) {
     super();
+    this.name = name;
+    this.year = year;
   }
 }
 
 class Professor extends Subject implements Person {
   readonly resolverName = "resolveProfessor" as const;
-  constructor(
-    public readonly name: string,
-    public readonly department: string,
-  ) {
+  readonly name: string;
+  readonly department: string;
+  constructor(name: string, department: string) {
     super();
+    this.name = name;
+    this.department = department;
   }
 }
 ```
@@ -220,10 +222,14 @@ abstract class CheckoutTemplate<
   readonly log = new LogCommand(); // hook — shared across all Strategies
 
   execute(subject: SU, equipment: Equipment): CheckoutResult {
+    // pattern to make visible that execute expects enrichment from middleware
+    const enrichedEquipment: Equipment & { days: number } = equipment as Equipment & {
+      days: number;
+    };
     this.log.run(subject, {
       message: `checking out "${equipment.name}" for ${equipment.days} days`,
     });
-    return this.approve(subject, equipment as Equipment & { days: number });
+    return this.approve(subject, enrichedEquipment);
   }
 
   protected abstract approve(subject: SU, equipment: Equipment & { days: number }): CheckoutResult;
@@ -241,21 +247,18 @@ A `MiddlewareCommand` intercepts every dispatch through a `Command` — before r
 ```typescript
 import { MiddlewareCommand, type MiddlewareTemplate, type Runnable } from "codascon";
 
-// Clamps days per subject and logs timing. Non-parameterized — clamp() doesn't need
-// the subject type, so Student | Professor is used directly.
+// Clamps days per subject before calling inner.run(), then logs execution time.
 //   Student:   default 7 days, max 14
 //   Professor: default 14 days, max 30
-abstract class CheckoutMiddlewareTemplate implements MiddlewareTemplate<
-  CheckoutMiddleware,
-  [LogCommand],
-  Student | Professor
-> {
+abstract class CheckoutMiddlewareTemplate<
+  SU extends CommandSubjectUnion<CheckoutMiddleware>,
+> implements MiddlewareTemplate<CheckoutMiddleware, [LogCommand], SU> {
   readonly log = new LogCommand();
 
   execute(
-    subject: Student | Professor,
+    subject: SU,
     eq: Equipment,
-    inner: Runnable<Student | Professor, Equipment, CheckoutResult>,
+    inner: Runnable<SU, Equipment, CheckoutResult>,
   ): CheckoutResult {
     const start = Date.now();
     const result = inner.run(subject, { ...eq, days: this.clamp(eq.days) });
@@ -266,13 +269,13 @@ abstract class CheckoutMiddlewareTemplate implements MiddlewareTemplate<
   protected abstract clamp(days: number | undefined): number;
 }
 
-class StudentPolicy extends CheckoutMiddlewareTemplate {
+class DefaultPolicy extends CheckoutMiddlewareTemplate<Student | Professor> {
   protected clamp(days: number | undefined): number {
     return Math.min(days ?? 7, 14);
   }
 }
 
-class ProfessorPolicy extends CheckoutMiddlewareTemplate {
+class ProfessorPolicy extends CheckoutMiddlewareTemplate<Professor> {
   protected clamp(days: number | undefined): number {
     return Math.min(days ?? 14, 30);
   }
@@ -285,15 +288,8 @@ class CheckoutMiddleware extends MiddlewareCommand<
   [Student, Professor]
 > {
   readonly commandName = "checkoutPolicy" as const;
-  private readonly forStudent = new StudentPolicy();
   private readonly forProfessor = new ProfessorPolicy();
-
-  resolveStudent(
-    _s: Student,
-    _e: Equipment,
-  ): MiddlewareTemplate<CheckoutMiddleware, [LogCommand], Student> {
-    return this.forStudent;
-  }
+  readonly defaultResolver = new DefaultPolicy();
   resolveProfessor(
     _p: Professor,
     _e: Equipment,
@@ -395,15 +391,16 @@ middleware:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
+    defaultResolver: DefaultPolicy
     dispatch:
-      Student: StudentPolicy
       Professor: ProfessorPolicy
     templates:
       CheckoutMiddlewareTemplate:
-        isParameterized: false
+        isParameterized: true
         strategies:
-          StudentPolicy: {}
-          ProfessorPolicy: {}
+          DefaultPolicy: {}
+          ProfessorPolicy:
+            subjectSubset: [Professor]
 
 commands:
   CheckoutCommand:
