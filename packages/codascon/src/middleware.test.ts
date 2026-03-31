@@ -6,6 +6,7 @@ import {
   type MiddlewareTemplate,
   type Template,
   type Runnable,
+  type CommandSubjectUnion,
 } from "./index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
@@ -139,6 +140,28 @@ class BlockMiddleware extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
   resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<BlockMiddleware, any[], Gem> {
     const { fixed } = this;
     return { execute: () => fixed };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TagCommand — plain Command used as a hook inside MW templates (§MT2, §MT5)
+// ─────────────────────────────────────────────────────────────────
+
+interface Tag {
+  label: string;
+}
+
+class TagCommand extends Command<object, Ctx, Tag, [Rock, Gem]> {
+  readonly commandName = "tag" as const;
+  resolveRock(_: Rock, __: Readonly<Ctx>): Template<TagCommand, [], Rock> {
+    return {
+      execute: (s: Rock, o: Ctx): Tag => ({ label: `rock:${s.weight * o.factor}` }),
+    };
+  }
+  resolveGem(_: Gem, __: Readonly<Ctx>): Template<TagCommand, [], Gem> {
+    return {
+      execute: (s: Gem, o: Ctx): Tag => ({ label: `gem:${s.value * o.factor}` }),
+    };
   }
 }
 
@@ -338,5 +361,254 @@ describe("§M9 Domain base class middleware composition", () => {
 
     // base is index 0 (outermost), specific is index 1 (inner)
     deepEqual(log, ["before:base", "before:specific", "after:specific", "after:base"]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §MT3 · NON-PARAM MIDDLEWARE TEMPLATE — NO HOOKS, ABSTRACT EXECUTE
+// Matrix: MT3 — Non-param, no hooks, abstract execute (→ Strategy)
+//
+// MW templates must be per-subject due to `inner: Runnable<T, ...>` — a full-union
+// execute can't be returned from a subject-specific resolver. The "non-param" aspect
+// here is that the abstract base class has no SU type parameter; each Strategy
+// implements MiddlewareTemplate<Cmd, [], SpecificSubject> directly.
+// ═══════════════════════════════════════════════════════════════════
+
+// Non-parameterized abstract base: shared state, no execute declared.
+// Strategies extend it and implement per-subject MiddlewareTemplate.
+abstract class ScaleMwBase {
+  constructor(protected readonly scale: number) {}
+}
+
+class ScaleMwRockStrategy
+  extends ScaleMwBase
+  implements MiddlewareTemplate<ScaleMwCommand, [], Rock>
+{
+  execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+    return inner.run(subject, { factor: object.factor * this.scale });
+  }
+}
+
+class ScaleMwGemStrategy
+  extends ScaleMwBase
+  implements MiddlewareTemplate<ScaleMwCommand, [], Gem>
+{
+  execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+    return inner.run(subject, { factor: object.factor * this.scale });
+  }
+}
+
+class ScaleMwCommand extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+  readonly commandName = "scaleMw" as const;
+  constructor(private readonly scale: number) {
+    super();
+  }
+  resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<ScaleMwCommand, any[], Rock> {
+    return new ScaleMwRockStrategy(this.scale);
+  }
+  resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<ScaleMwCommand, any[], Gem> {
+    return new ScaleMwGemStrategy(this.scale);
+  }
+}
+
+describe("§MT3 non-param MW template, no hooks, abstract execute — Strategy", () => {
+  it("per-subject Strategies extend abstract base and provide 3-arg execute", () => {
+    class Cmd extends MeasureCommand {
+      override get middleware() {
+        return [new ScaleMwCommand(3)];
+      }
+    }
+    // Rock(5), factor=2, scaled to 6: 5*6=30
+    strictEqual(new Cmd().run(new Rock(5), { factor: 2 }), 30);
+    // Gem(4), factor=2, scaled to 6: 4*6=24
+    strictEqual(new Cmd().run(new Gem(4), { factor: 2 }), 24);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §MT2 · NON-PARAM MIDDLEWARE TEMPLATE — HOOK(S), CONCRETE EXECUTE
+// Matrix: MT2 — Non-param, hook(s), concrete execute
+// ═══════════════════════════════════════════════════════════════════
+
+// Abstract base with hook — no SU type param (non-param).
+// Per-subject strategies extend it and implement MiddlewareTemplate<Cmd, [TagCommand], SU>.
+abstract class TaggedMwBase {
+  tag: TagCommand;
+  readonly tagLog: Tag[] = [];
+  constructor(tag: TagCommand) {
+    this.tag = tag;
+  }
+}
+
+class TaggedMwRockTemplate
+  extends TaggedMwBase
+  implements MiddlewareTemplate<TaggedMwCommand, [TagCommand], Rock>
+{
+  execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+    const tagged = this.tag.run(subject, object);
+    this.tagLog.push(tagged);
+    return inner.run(subject, object);
+  }
+}
+
+class TaggedMwGemTemplate
+  extends TaggedMwBase
+  implements MiddlewareTemplate<TaggedMwCommand, [TagCommand], Gem>
+{
+  execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+    const tagged = this.tag.run(subject, object);
+    this.tagLog.push(tagged);
+    return inner.run(subject, object);
+  }
+}
+
+class TaggedMwCommand extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+  readonly commandName = "taggedMw" as const;
+  readonly rockTemplate: TaggedMwRockTemplate;
+  readonly gemTemplate: TaggedMwGemTemplate;
+  constructor(tagCmd: TagCommand) {
+    super();
+    this.rockTemplate = new TaggedMwRockTemplate(tagCmd);
+    this.gemTemplate = new TaggedMwGemTemplate(tagCmd);
+  }
+  resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<TaggedMwCommand, any[], Rock> {
+    return this.rockTemplate;
+  }
+  resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<TaggedMwCommand, any[], Gem> {
+    return this.gemTemplate;
+  }
+}
+
+describe("§MT2 non-param MW template, hooks, concrete execute", () => {
+  it("per-subject MW templates with Command hook invoke hook inside 3-arg execute", () => {
+    const tagCmd = new TagCommand();
+    const mw = new TaggedMwCommand(tagCmd);
+
+    class Cmd extends MeasureCommand {
+      override get middleware() {
+        return [mw];
+      }
+    }
+
+    strictEqual(new Cmd().run(new Rock(5), { factor: 2 }), 10); // Rock(5) * factor(2) = 10
+    strictEqual(mw.rockTemplate.tagLog.length, 1);
+    strictEqual(mw.rockTemplate.tagLog[0].label, "rock:10");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §MT6 · PARAM MIDDLEWARE TEMPLATE — NO HOOKS, ABSTRACT EXECUTE
+// Matrix: MT6 — Param, no hooks, abstract execute (→ Strategy)
+// ═══════════════════════════════════════════════════════════════════
+
+// SU bound uses Rock | Gem directly (= CommandSubjectUnion<ParamAbsMwCommand>)
+// to avoid a forward reference in the constraint position.
+abstract class ParamAbsMwTemplate<SU extends Rock | Gem> implements MiddlewareTemplate<
+  ParamAbsMwCommand,
+  [],
+  SU
+> {
+  abstract execute(subject: SU, object: Ctx, inner: Runnable<SU, Ctx, Res>): Res;
+}
+
+class RockOnlyScaleStrategy extends ParamAbsMwTemplate<Rock> {
+  constructor(private readonly scale: number) {
+    super();
+  }
+  execute(subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>): Res {
+    return inner.run(subject, { factor: object.factor * this.scale });
+  }
+}
+
+class GemPassThroughStrategy extends ParamAbsMwTemplate<Gem> {
+  execute(subject: Gem, object: Ctx, inner: Runnable<Gem, Ctx, Res>): Res {
+    return inner.run(subject, object);
+  }
+}
+
+class ParamAbsMwCommand extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+  readonly commandName = "paramAbsMw" as const;
+  constructor(private readonly scale: number) {
+    super();
+  }
+  resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<ParamAbsMwCommand, any[], Rock> {
+    return new RockOnlyScaleStrategy(this.scale);
+  }
+  resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<ParamAbsMwCommand, any[], Gem> {
+    return new GemPassThroughStrategy();
+  }
+}
+
+describe("§MT6 param MW template, no hooks, abstract execute — Strategy", () => {
+  it("parameterized Strategies narrow SU and each provide 3-arg execute", () => {
+    class Cmd extends MeasureCommand {
+      override get middleware() {
+        return [new ParamAbsMwCommand(4)];
+      }
+    }
+    // Rock(5), factor=2, scaled to 8: 5*8=40
+    strictEqual(new Cmd().run(new Rock(5), { factor: 2 }), 40);
+    // Gem(3), factor=2, pass-through: 3*2=6
+    strictEqual(new Cmd().run(new Gem(3), { factor: 2 }), 6);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// §MT5 · PARAM MIDDLEWARE TEMPLATE — HOOK(S), CONCRETE EXECUTE
+// Matrix: MT5 — Param, hook(s), concrete execute
+// ═══════════════════════════════════════════════════════════════════
+
+class ParamTaggedMwTemplate<SU extends Rock | Gem> implements MiddlewareTemplate<
+  ParamTaggedMwCommand,
+  [TagCommand],
+  SU
+> {
+  tag: TagCommand;
+  readonly tagLog: Tag[] = [];
+  constructor(tag: TagCommand) {
+    this.tag = tag;
+  }
+  execute(subject: SU, object: Ctx, inner: Runnable<SU, Ctx, Res>): Res {
+    const tagged = this.tag.run(subject, object);
+    this.tagLog.push(tagged);
+    return inner.run(subject, object);
+  }
+}
+
+class ParamTaggedMwCommand extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+  readonly commandName = "paramTaggedMw" as const;
+  readonly rockTemplate: ParamTaggedMwTemplate<Rock>;
+  readonly gemTemplate: ParamTaggedMwTemplate<Gem>;
+  constructor(tagCmd: TagCommand) {
+    super();
+    this.rockTemplate = new ParamTaggedMwTemplate<Rock>(tagCmd);
+    this.gemTemplate = new ParamTaggedMwTemplate<Gem>(tagCmd);
+  }
+  resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<ParamTaggedMwCommand, any[], Rock> {
+    return this.rockTemplate;
+  }
+  resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<ParamTaggedMwCommand, any[], Gem> {
+    return this.gemTemplate;
+  }
+}
+
+describe("§MT5 param MW template, hooks, concrete execute", () => {
+  it("parameterized MW templates with Command hook invoke hook per subject type", () => {
+    const tagCmd = new TagCommand();
+    const mw = new ParamTaggedMwCommand(tagCmd);
+
+    class Cmd extends MeasureCommand {
+      override get middleware() {
+        return [mw];
+      }
+    }
+
+    strictEqual(new Cmd().run(new Rock(5), { factor: 2 }), 10);
+    strictEqual(mw.rockTemplate.tagLog.length, 1);
+    strictEqual(mw.rockTemplate.tagLog[0].label, "rock:10");
+
+    strictEqual(new Cmd().run(new Gem(4), { factor: 3 }), 12);
+    strictEqual(mw.gemTemplate.tagLog.length, 1);
+    strictEqual(mw.gemTemplate.tagLog[0].label, "gem:12");
   });
 });

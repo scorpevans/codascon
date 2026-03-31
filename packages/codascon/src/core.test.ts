@@ -902,11 +902,76 @@ describe("§14 compile-time constraint tests", () => {
   }
 }
 
+// §MC3 — A MiddlewareTemplate whose hook Command does not cover all subjects in SU
+// produces the same TS2416 error as Template (§14d). CommandHooks uses an intersection
+// type that evaluates to an unsatisfiable shape when the hook is missing a resolver.
+{
+  class RockOnlyHook extends Command<object, Ctx, Res, [Rock]> {
+    readonly commandName = "rockOnlyHook" as const;
+    resolveRock(_: Rock, __: Readonly<Ctx>): Template<RockOnlyHook, [], Rock> {
+      return { execute: (s, o) => s.weight * o.factor };
+    }
+    // resolveGem intentionally absent
+  }
+
+  class MeasureMwCmd extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+    readonly commandName = "measureMw" as const;
+    resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<MeasureMwCmd, any[], Rock> {
+      return { execute: (s, o, inner) => inner.run(s, o) };
+    }
+    resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<MeasureMwCmd, any[], Gem> {
+      return { execute: (s, o, inner) => inner.run(s, o) };
+    }
+  }
+
+  class MiswiredMwTemplate implements MiddlewareTemplate<MeasureMwCmd, [RockOnlyHook], Rock | Gem> {
+    // @ts-expect-error — RockOnlyHook lacks resolveGem; CommandHooks resolves
+    // rockOnlyHook to the error string rather than RockOnlyHook
+    rockOnlyHook: RockOnlyHook;
+    constructor(h: RockOnlyHook) {
+      this.rockOnlyHook = h;
+    }
+    execute(subject: Rock | Gem, object: Ctx, inner: Runnable<Rock | Gem, Ctx, Res>): Res {
+      return inner.run(subject, object);
+    }
+  }
+
+  void MiswiredMwTemplate;
+}
+
+// §MC4 — A MiddlewareCommand resolver returning wrong-SU MiddlewareTemplate is rejected.
+// execute: (s: Rock, ...) is incompatible with MiddlewareTemplate<..., Gem> which requires
+// execute<T extends Gem>. Function-property contravariance catches the mismatch.
+{
+  class RockOnlyMwTemplate {
+    execute: (subject: Rock, object: Ctx, inner: Runnable<Rock, Ctx, Res>) => Res = (s, o, inner) =>
+      inner.run(s, o);
+  }
+
+  class WrongSUMwCmd extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+    readonly commandName = "wrongSUMw" as const;
+    resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<WrongSUMwCmd, [], Rock> {
+      return new RockOnlyMwTemplate();
+    }
+    resolveGem(_: Gem, __: Readonly<Ctx>): MiddlewareTemplate<WrongSUMwCmd, [], Gem> {
+      // @ts-expect-error — RockOnlyMwTemplate.execute<T extends Rock> is incompatible
+      // with MiddlewareTemplate<..., Gem> which requires execute<T extends Gem>
+      return new RockOnlyMwTemplate();
+    }
+  }
+
+  void WrongSUMwCmd;
+}
+
 describe("§MC middleware compile-time constraints", () => {
   it("MC1: MiddlewareCommand missing resolver makes its own run() uncallable", () => void 0);
   it("MC1b: complete MiddlewareCommand run() is still uncallable — MiddlewareTemplate (3-arg) incompatible with CommandSubjectStrategies (2-arg) this-constraint", () =>
     void 0);
   it("MC2: MiddlewareCommand for wrong Command type rejected in middleware array", () => void 0);
+  it("MC3: MiddlewareTemplate hook-subject mismatch rejected at implements site (TS2416)", () =>
+    void 0);
+  it("MC4: MiddlewareCommand resolver returning wrong-SU MiddlewareTemplate rejected at return site", () =>
+    void 0);
 
   it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () => {
     // run(this: never) applies regardless of whether resolver methods or defaultResolver
