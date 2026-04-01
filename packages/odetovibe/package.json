@@ -40,8 +40,6 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.test.js",
-    "!dist/**/*.test.d.ts",
     "!dist/**/*.map",
     "LICENSE"
   ],
@@ -49,6 +47,7 @@
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc --build && chmod +x dist/cli.js",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.test.json",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "dependencies": {

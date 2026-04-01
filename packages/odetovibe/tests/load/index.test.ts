@@ -15,17 +15,17 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { describe, it, expect, afterEach } from "vitest";
 import { Project } from "ts-morph";
-import { WriteFileCommand, SourceFileEntry, writeFiles } from "./index.js";
-import type { WriteContext, WriteMode } from "./index.js";
+import { WriteFileCommand, SourceFileEntry, writeFiles } from "../../src/load/index.js";
+import type { WriteContext, WriteMode } from "../../src/load/index.js";
 import {
   SubjectTypeEntry,
   PlainTypeEntry,
   CommandEntry,
   AbstractTemplateEntry,
   StrategyEntry,
-} from "../extract/domain-types.js";
-import type { ConfigIndex } from "../extract/domain-types.js";
-import { emitAst } from "../transform/index.js";
+} from "../../src/extract/domain-types.js";
+import type { ConfigIndex } from "../../src/extract/domain-types.js";
+import { emitAst } from "../../src/transform/index.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS

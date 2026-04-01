@@ -21,10 +21,10 @@ import {
   MiddlewareCommandEntry,
   MiddlewareTemplateEntry,
   MiddlewareStrategyEntry,
-} from "../extract/domain-types.js";
-import type { ConfigIndex } from "../extract/domain-types.js";
-import { emitAst, EmitAstCommand } from "./index.js";
-import type { EmitContext } from "./index.js";
+} from "../../src/extract/domain-types.js";
+import type { ConfigIndex } from "../../src/extract/domain-types.js";
+import { emitAst, EmitAstCommand } from "../../src/transform/index.js";
+import type { EmitContext } from "../../src/transform/index.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS
