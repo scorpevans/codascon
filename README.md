@@ -588,8 +588,8 @@ codascon/                                    # monorepo root
 ├── packages/
 │   ├── codascon/                            # published as "codascon"
 │   │   ├── src/
-│   │   │   ├── core.ts                      # Subject, Command, MiddlewareCommand + type machinery
-│   │   │   ├── index.ts                     # barrel re-export
+│   │   │   └── index.ts                     # Subject, Command, MiddlewareCommand + type machinery
+│   │   ├── tests/
 │   │   │   ├── command.test.ts              # Command runtime tests
 │   │   │   ├── core.test.ts                 # compile-time type constraint proofs
 │   │   │   ├── middleware.test.ts
@@ -604,24 +604,28 @@ codascon/                                    # monorepo root
 │       │   │   │   ├── validate-command-hooks.ts
 │       │   │   │   └── validate-entry.ts
 │       │   │   ├── domain-types.ts
-│       │   │   ├── index.test.ts
 │       │   │   └── index.ts
 │       │   ├── load/                        # ts-morph AST → write files to disk
 │       │   │   ├── commands/
 │       │   │   │   └── write-file.ts
 │       │   │   ├── domain-types.ts
-│       │   │   ├── index.test.ts
 │       │   │   └── index.ts
 │       │   ├── transform/                   # ConfigIndex → ts-morph AST
 │       │   │   ├── commands/
 │       │   │   │   └── emit-ast.ts
 │       │   │   ├── domain-types.ts
-│       │   │   ├── index.test.ts
 │       │   │   └── index.ts
 │       │   ├── cli.ts                       # bin entry: odetovibe <schema.yaml> --outDir <dir>
-│       │   ├── cli.test.ts
 │       │   ├── index.ts                     # library entry
-│       │   ├── schema.ts                    # YamlConfig type definitions
+│       │   └── schema.ts                    # YamlConfig type definitions
+│       ├── tests/
+│       │   ├── extract/
+│       │   │   └── index.test.ts
+│       │   ├── load/
+│       │   │   └── index.test.ts
+│       │   ├── transform/
+│       │   │   └── index.test.ts
+│       │   ├── cli.test.ts
 │       │   └── smoke.test.ts                # end-to-end pipeline + golden output tests
 │       ├── fixtures/                        # smoke test input and golden output
 │       │   ├── smoke.yaml
@@ -640,6 +644,7 @@ codascon/                                    # monorepo root
 pnpm install      # install all dependencies
 pnpm build        # compile both packages (respects project reference order)
 pnpm test         # run all tests
+pnpm typecheck    # type-check src and tests (validates @ts-expect-error proofs)
 pnpm lint         # ESLint across all packages
 pnpm format       # Prettier
 pnpm clean        # remove build artifacts
