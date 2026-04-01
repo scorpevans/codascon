@@ -1,6 +1,6 @@
 {
   "name": "odetovibe",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI and library for generating TypeScript code from declarative YAML codascon domain schemas",
   "license": "MIT",
   "author": "@scorpevans",
