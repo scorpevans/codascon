@@ -250,7 +250,7 @@ type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
 type WidenedCommandNameError =
   "commandName must be a literal. Fix: readonly commandName = 'myHook' as const";
 
-/** Extracts the `commandName` string literal type from a Command. Returns `WidenedCommandNameError` for non-literal `commandName`, `never` for absent `commandName` or `any`. */
+/** Extracts the `commandName` string literal type from a Command. Returns a descriptive error string for non-literal `commandName`, `never` for absent `commandName` or `any`. */
 export type CommandName<C> =
   // IsAny guard: when C is `any`, return `never` so mapped types keyed by CommandName<Cmd>
   // (e.g. CommandHooks<any[], SU>) produce {} rather than a spurious error-keyed property.
@@ -956,6 +956,52 @@ type CommandHooks<H extends AnyCommand[], SU extends CommandSubjectUnion<H[numbe
  * syntax triggers strict (contravariant) checking — a narrower `object` is rejected at the
  * `implements` site with TS2416. The same pattern is applied to `MiddlewareTemplate`,
  * `Runnable`, and the internal default-resolver template types.
+ */
+/**
+ * The strategy type. Combines an execution contract (`execute`) with structural hook
+ * requirements (`CommandHooks<H, SU>`). Use in `implements` clauses on abstract Template
+ * classes and concrete Strategy classes.
+ *
+ * ## Generic Parameters
+ *
+ * - `C` — The Command this Template serves. Determines `CommandObject<C>` (the object/payload
+ *   type), `CommandReturn<C>` (the result type), and the full Subject union.
+ * - `H` — Hook tuple (default `[]`). Commands whose `run` method `execute` may call during
+ *   execution. Each appears as a structural property on the Template, keyed by `commandName`.
+ *   Declare concrete hook types here — hooks are part of the Template's contract, not the
+ *   Strategy's choice:
+ *   ```ts
+ *   class MyTemplate implements Template<MyCmd, [AuditCmd, LogCmd]> { ... }
+ *   ```
+ * - `SU` — Subject subset (default `CommandSubjectUnion<C>`). The subset of subjects this
+ *   Template handles. Parameterize it on the Template class to let Strategies narrow:
+ *   ```ts
+ *   abstract class AccessTemplate<SU extends CommandSubjectUnion<AccessCmd>>
+ *     implements Template<AccessCmd, [AuditCmd], SU> { ... }
+ *
+ *   class GrantAccess extends AccessTemplate<Student> { ... }
+ *   ```
+ *   This does not break LSP — a `GrantAccess` is returned only for dispatches that route
+ *   Students to it.
+ *
+ * ## Hook Enforcement
+ *
+ * `CommandHooks<H, SU>` enforces two things at the `implements` site:
+ * 1. **Presence** — a property must exist for each hook Command, keyed by its `commandName`.
+ *    Missing one is a compile error.
+ * 2. **Subject coverage** — each hook Command must cover every Subject in `SU`. A hook missing
+ *    any required resolver method fails the `implements` check with TS2416 on that property.
+ *
+ * Hook properties can be concrete on the Template (shared across Strategies), abstract
+ * (each Strategy provides its own), or injected via the Command's resolver method.
+ *
+ * ## Why `execute` uses function property syntax
+ *
+ * `execute: (...) => R` rather than `execute(...): R`. TypeScript applies bivariant parameter
+ * checking to shorthand methods even under `strictFunctionTypes` — an implementation can
+ * silently narrow `object` to a stricter type than declared, making it uncallable with valid
+ * inputs. Function property syntax enforces strict (contravariant) checking, rejecting a
+ * narrower `object` with TS2416 at the `implements` site.
  */
 export type Template<
   C extends AnyCommand,
