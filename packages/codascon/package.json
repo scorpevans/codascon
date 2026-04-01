@@ -48,10 +48,11 @@
     }
   },
   "files": [
-    "dist",
-    "!dist/**/*.test.js",
-    "!dist/**/*.test.d.ts",
-    "!dist/**/*.map",
+    "dist/index.js",
+    "dist/index.cjs",
+    "dist/index.d.ts",
+    "dist/index.d.cts",
+    "dist/core.d.ts",
     "LICENSE"
   ],
   "scripts": {

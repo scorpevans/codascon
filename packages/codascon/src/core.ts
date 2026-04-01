@@ -528,6 +528,9 @@ type ValidResolverNames<BSL extends unknown[]> = UnionToIntersection<
  * is part of the Command's subject union. This is automatically satisfied
  * during normal dispatch.
  *
+ * `getCommandStrategy` is called by `Command._dispatch()` — not intended for
+ * direct use by consumers.
+ *
  * @example
  * class Student extends Subject {
  *   readonly resolverName = "resolveStudent" as const;
@@ -544,15 +547,7 @@ type ValidResolverNames<BSL extends unknown[]> = UnionToIntersection<
 export abstract class Subject {
   abstract readonly resolverName: string;
 
-  /**
-   * Performs the Subject's half of double dispatch. Called by `Command._dispatch()` —
-   * not intended for direct use by consumers.
-   *
-   * Looks up `command[this.resolverName]` and invokes it. If the specific resolver
-   * method is absent (the Command assigns `defaultResolver` instead),
-   * returns `command.defaultResolver` as the Template.
-   * @internal
-   */
+  /** @internal */
   getCommandStrategy<C extends AnyCommand, BS extends CommandSubjectUnion<C>>(
     this: this & BS,
     command:
@@ -641,11 +636,17 @@ type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
  *    (first element outermost), then calls `_dispatch` as the terminal step.
  *    Middleware commands are processed identically — their own registered
  *    middleware are applied recursively before their dispatch phase.
+ *    Do not override in client subclasses — doing so bypasses the dispatch chain.
+ *    `_runChain` is accessible to `MiddlewareElement` callers because
+ *    `MiddlewareElement` declares it as part of its structural contract;
+ *    `MiddlewareCommand` satisfies this by overriding without the `protected`
+ *    modifier (widening is permitted in TypeScript).
  *
  * 2. **`_dispatch`** — calls `subject.getCommandStrategy(this, object)` to
  *    select the strategy, then calls `strategy.execute(subject, object)` for
  *    regular commands. `MiddlewareCommand` overrides `_dispatch` to cast the
  *    strategy to the 3-arg form and forward the continuation as `inner`.
+ *    Do not override in client subclasses — doing so bypasses the dispatch chain.
  *
  * Because every step uses `_runChain` / `_dispatch`, middleware registered on
  * a middleware command are automatically applied.
@@ -744,18 +745,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
     return [];
   }
 
-  /**
-   * Processes this command's own middleware chain, then calls `_dispatch`.
-   * `MiddlewareCommand` overrides both this method and `_dispatch` to thread
-   * a continuation through to `execute`. Do not override in client subclasses
-   * — doing so bypasses the dispatch chain.
-   *
-   * `m._runChain` is callable directly from within this method because
-   * `MiddlewareElement` (the element type of `_mwCache`) declares `_runChain`
-   * as part of its contract. `MiddlewareCommand` satisfies this by overriding
-   * without an access modifier (widening protected → public is permitted).
-   * @internal
-   */
+  /** @internal */
   protected _runChain(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
     const mw = this._mwCache ?? (this._mwCache = this.middleware);
     if (mw.length === 0) return this._dispatch(subject, object);
@@ -767,15 +757,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
       .run(subject, object);
   }
 
-  /**
-   * Selects the strategy for the current subject and executes it without a
-   * continuation. Called by `_runChain` as the terminal dispatch step for
-   * regular (non-middleware) commands. `MiddlewareCommand` overrides this to
-   * cast the strategy to `MiddlewareTemplate` and pass the continuation as
-   * `inner`. Do not override in client subclasses — doing so bypasses the
-   * dispatch chain.
-   * @internal
-   */
+  /** @internal */
   protected _dispatch(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
     return subject.getCommandStrategy(this, object).execute(subject, object);
   }
@@ -1114,6 +1096,25 @@ export type MiddlewareTemplate<
  * on any instance from well-typed TypeScript. If bypassed (JavaScript, `any`-typed
  * code), a runtime error is also thrown. Always register middleware via
  * `Command.middleware`.
+ *
+ * ## Internal methods
+ *
+ * **`_runChain`** — Intentionally public (no `protected` modifier on `override`) —
+ * required so that `Command._runChain` can call `m._runChain(s, o, next)` where `m`
+ * is typed as `MiddlewareElement<...>`. Widening `protected` to public in an override
+ * is permitted in TypeScript. `continuation` is declared optional only for TypeScript
+ * override compatibility with `Command._runChain` (2-arg base). At runtime,
+ * `continuation` is always defined — `Command._runChain` is the sole legitimate caller
+ * and always passes a `Runnable` (MiddlewareElement contract).
+ *
+ * **`_dispatch`** — The cast from `Template<C, any[], SU>` (2-arg execute) to
+ * `MiddlewareTemplate<MiddlewareCommand<B, O, R, BSL>, any[], SU>` (3-arg execute) is
+ * required because `getCommandStrategy` returns the 2-arg form. This is safe because
+ * `MiddlewareSubjectStrategies` (enforced at `Command.middleware` assignment) guarantees
+ * any registered middleware's resolvers return `MiddlewareTemplate`-compatible values.
+ * Do not call directly — only safe when called from `_runChain`, which always passes
+ * `continuation`; bypassing this will cause the `continuation!` non-null assertion to
+ * panic at runtime.
  */
 /**
  * Abstract base class for middleware Commands. Extend this to define
@@ -1144,15 +1145,7 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
    */
   declare readonly defaultResolver?: MiddlewareDefaultResolverTemplate<O, R, BSL[number]>;
 
-  /**
-   * Direct invocation of `MiddlewareCommand` via `run()` is always a compile error.
-   * Register it in a `Command`'s `middleware` array — never call `run()` directly.
-   *
-   * The `this: never` constraint makes `run()` uncallable on any `MiddlewareCommand`
-   * instance from well-typed TypeScript. The runtime guard below catches JavaScript
-   * callers or any-typed bypasses and throws an informative error.
-   * @internal
-   */
+  /** @internal */
   override run(
     this: never,
     subject: CommandSubjectUnion<MiddlewareCommand<B, O, R, BSL>>,
@@ -1167,18 +1160,7 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
     );
   }
 
-  /**
-   * Intentionally public (no `protected` modifier on `override`) — required so
-   * that `Command._runChain` can call `m._runChain(s, o, next)` where `m` is
-   * typed as `MiddlewareElement<...>`. Widening protected to public in an
-   * override is permitted in TypeScript.
-   *
-   * `continuation` is declared optional only for TypeScript override compatibility
-   * with `Command._runChain` (2-arg base). At runtime, `continuation` is always
-   * defined — `Command._runChain` is the sole legitimate caller and always passes
-   * a `Runnable` (MiddlewareElement contract).
-   * @internal
-   */
+  /** @internal */
   override _runChain(
     subject: BSL[number],
     object: O,
@@ -1194,21 +1176,7 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
       .run(subject, object);
   }
 
-  /**
-   * The cast is required because `getCommandStrategy` returns
-   * `Template<C, any[], SU>` (2-arg execute). Casting to
-   * `MiddlewareTemplate<MiddlewareCommand<B, O, R, BSL>, any[], SU>` tells
-   * TypeScript the strategy's execute has the 3-arg form. This is safe because
-   * `MiddlewareSubjectStrategies` (enforced at `Command.middleware` assignment)
-   * guarantees any registered middleware's resolvers return `MiddlewareTemplate`-
-   * compatible values.
-   *
-   * Do not call this method directly. It is only safe when called from
-   * `_runChain`, which always passes `continuation`. Bypassing `_runChain`
-   * and calling `_dispatch` without a continuation will cause the
-   * `continuation!` non-null assertion to panic at runtime.
-   * @internal
-   */
+  /** @internal */
   protected override _dispatch(
     subject: BSL[number],
     object: O,
