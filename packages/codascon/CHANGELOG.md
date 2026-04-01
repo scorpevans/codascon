@@ -1,5 +1,11 @@
 # codascon
 
+## 1.1.0
+
+### Minor Changes
+
+- a13f0ef: Add middleware support (MiddlewareCommand, per-command hooks) and defaultResolver catch-all to codascon; update odetovibe codegen to generate both features.
+
 ## 1.0.0
 
 ### Patch Changes
