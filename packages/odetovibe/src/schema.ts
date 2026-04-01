@@ -306,9 +306,11 @@ export type DomainType = {
  *                            do appear in `dispatch` retain their specific
  *                            resolver stubs, which take precedence.
  *
- *                            Codegen emits a `defaultResolver` method on the
- *                            Command class returning an instance of the
- *                            referenced Strategy. Resolver stubs are only
+ *                            Codegen emits a `readonly defaultResolver` property
+ *                            on the Command class, typed as the referenced Strategy
+ *                            class and initialized to the corresponding singleton
+ *                            field (shared with the dispatch singleton pool).
+ *                            Resolver stubs are only
  *                            generated for subjects present in `dispatch` —
  *                            subjects absent from `dispatch` route to
  *                            `defaultResolver` via the runtime fallback.

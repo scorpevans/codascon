@@ -366,6 +366,7 @@ describe("CommandClassEmitter", () => {
       .getSourceFileOrThrow("commands/access-building.ts")
       .getClassOrThrow("AccessBuildingCommand");
     const prop = cls.getPropertyOrThrow("defaultResolver");
+    expect(prop.isReadonly()).toBe(true);
     expect(prop.getTypeNode()?.getText()).toBe("CatchAll");
     expect(prop.getInitializer()?.getText()).toContain("this.catchAll");
   });
@@ -391,9 +392,9 @@ describe("CommandClassEmitter", () => {
     // Only one singleton field despite dispatch + defaultResolver both naming SharedStrategy
     const singletonProps = cls.getProperties().filter((p) => p.getName() === "sharedStrategy");
     expect(singletonProps).toHaveLength(1);
-    expect(cls.getPropertyOrThrow("defaultResolver").getInitializer()?.getText()).toContain(
-      "this.sharedStrategy",
-    );
+    const drProp = cls.getPropertyOrThrow("defaultResolver");
+    expect(drProp.isReadonly()).toBe(true);
+    expect(drProp.getInitializer()?.getText()).toContain("this.sharedStrategy");
   });
 
   it("skips resolver stub for subjects absent from dispatch when defaultResolver is declared", () => {
@@ -420,8 +421,8 @@ describe("CommandClassEmitter", () => {
     expect(cls.getMethod("resolveStudent")).toBeDefined();
     // Professor has no dispatch entry — its resolver stub must NOT be emitted
     expect(cls.getMethod("resolveProfessor")).toBeUndefined();
-    // defaultResolver property must still be emitted
-    expect(cls.getProperty("defaultResolver")).toBeDefined();
+    // defaultResolver property must still be emitted and be readonly
+    expect(cls.getProperty("defaultResolver")?.isReadonly()).toBe(true);
   });
 
   it("imports Command as value and Template as type from codascon", () => {
@@ -1613,6 +1614,7 @@ describe("MiddlewareCommandClassEmitter", () => {
       .getSourceFileOrThrow("commands/trace-middleware.ts")
       .getClassOrThrow("TraceMiddleware");
     const prop = cls.getPropertyOrThrow("defaultResolver");
+    expect(prop.isReadonly()).toBe(true);
     expect(prop.getTypeNode()?.getText()).toBe("TraceRockDefault");
     expect(prop.getInitializer()?.getText()).toContain("this.traceRockDefault");
     // singleton deduplication: TraceRockDefault already in dispatch — only one field
@@ -1637,8 +1639,8 @@ describe("MiddlewareCommandClassEmitter", () => {
     expect(cls.getMethod("resolveRock")).toBeDefined();
     // Gem has no dispatch entry — its resolver stub must NOT be emitted
     expect(cls.getMethod("resolveGem")).toBeUndefined();
-    // defaultResolver property must still be emitted
-    expect(cls.getProperty("defaultResolver")).toBeDefined();
+    // defaultResolver property must still be emitted and be readonly
+    expect(cls.getProperty("defaultResolver")?.isReadonly()).toBe(true);
   });
 });
 
