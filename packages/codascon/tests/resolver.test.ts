@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { Command, MiddlewareCommand, Subject, type Runnable } from "./index.js";
+import { Command, MiddlewareCommand, Subject, type Runnable } from "../src/index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected)

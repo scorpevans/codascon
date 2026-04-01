@@ -7,7 +7,7 @@ import {
   type Template,
   type Runnable,
   type CommandSubjectUnion,
-} from "./index.js";
+} from "../src/index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected)

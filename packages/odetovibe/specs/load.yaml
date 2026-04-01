@@ -7,21 +7,18 @@
 # SourceFiles already populated. The Load domain iterates those
 # SourceFiles and writes each one to the correct output path.
 #
-# Phase 1 (current): overwrite mode — fresh files each run.
-#   All structural elements are annotated with /* @odetovibe-generated */
-#   from day one, so that Phase 2 merge can identify them.
+# Three write modes (selected by WriteContext.mode):
+#   "overwrite" — unconditionally replaces the file.
+#   "merge"     — default; reconciles generated structure with existing user code.
+#   "strict"    — merge only when no codegen-owned slot conflicts; otherwise writes
+#                 generated content to $filename.ode.ts and returns conflicted:true.
 #
-# Phase 2 (planned): merge mode — triggered when overwrite is false.
-#   Reads existing files and reconciles with newly generated code.
-#   Ownership contract:
-#     - Structural elements (/* @odetovibe-generated */) → odetovibe owns
-#     - Implementation bodies (resolver method bodies, execute body) → user owns
-#     - Imports → union (add missing, keep user's extras)
-#     - Unrecognized declarations → preserve untouched
-#     - User comments → preserved
-#   When merge is added, a MergeWriter template (with strategies per
-#   node type: ClassMerger, InterfaceMerger, ImportMerger) will replace
-#   OverwriteWriter when overwrite is false.
+# Merge ownership contract:
+#   - Class structure, properties, method signatures → odetovibe owns
+#   - Method bodies, JSDoc → user owns (always preserved)
+#   - Interfaces → user owns once created (never overwritten)
+#   - Imports → union (generated added, user extras kept)
+#   - Declarations absent from generated output → preserved untouched
 #
 # Public API exposed to clients:
 #   - writeFiles(project: Project, context: WriteContext): Promise<WriteResult[]>

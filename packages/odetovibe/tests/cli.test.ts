@@ -10,14 +10,14 @@
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./extract/index.js");
-vi.mock("./transform/index.js");
-vi.mock("./load/index.js");
+vi.mock("../src/extract/index.js");
+vi.mock("../src/transform/index.js");
+vi.mock("../src/load/index.js");
 
-import { printUsage, main } from "./cli.js";
-import { parseYaml, validateYaml } from "./extract/index.js";
-import { writeFiles } from "./load/index.js";
-import type { ConfigIndex, ExtractResult } from "./extract/domain-types.js";
+import { printUsage, main } from "../src/cli.js";
+import { parseYaml, validateYaml } from "../src/extract/index.js";
+import { writeFiles } from "../src/load/index.js";
+import type { ConfigIndex, ExtractResult } from "../src/extract/domain-types.js";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

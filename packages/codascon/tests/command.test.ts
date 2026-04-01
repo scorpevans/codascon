@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { Command, Subject, type Template } from "./index.js";
+import { Command, Subject, type Template } from "../src/index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected) throw new Error(msg ?? `Expected ${expected}, got ${actual}`);

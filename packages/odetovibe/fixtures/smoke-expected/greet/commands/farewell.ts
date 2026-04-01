@@ -43,5 +43,5 @@ export class FarewellCommand extends Command<
     return this.userFarewellDefault; // @odetovibe-generated
   }
 
-  defaultResolver: GuestFarewellDefault = this.guestFarewellDefault;
+  readonly defaultResolver: GuestFarewellDefault = this.guestFarewellDefault;
 }

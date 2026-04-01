@@ -25,8 +25,8 @@ import {
   ValidateCommandHooksCommand,
   parseYaml,
   validateYaml,
-} from "./index.js";
-import type { ConfigIndex } from "./index.js";
+} from "../../src/extract/index.js";
+import type { ConfigIndex } from "../../src/extract/index.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS

@@ -384,6 +384,7 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       const fieldName = singletonMap.get(drClassName)!;
       cls.addProperty({
         name: "defaultResolver",
+        isReadonly: true,
         type: drClassName,
         initializer: `this.${fieldName}`,
       });
@@ -1054,6 +1055,7 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       const fieldName = singletonMap.get(drClassName)!;
       cls.addProperty({
         name: "defaultResolver",
+        isReadonly: true,
         type: drClassName,
         initializer: `this.${fieldName}`,
       });

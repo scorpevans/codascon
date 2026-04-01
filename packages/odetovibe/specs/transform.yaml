@@ -96,7 +96,7 @@ commands:
       # Emits: class FooCommand extends Command<B, O, R, [S1, S2]> {
       #          readonly commandName = "foo" as const;
       #          override get middleware() { return [...]; }  // when config.middleware is set
-      #          defaultResolver(subject: S1 | S2, object: O): ... { ... }  // when config.defaultResolver is set
+      #          readonly defaultResolver: StrategyClass = this.strategyField;  // when config.defaultResolver is set
       #          resolveS1(...): Template { ... }   /* @odetovibe-generated */
       #          resolveS2(...): Template { ... }   /* @odetovibe-generated */
       #        }
@@ -147,7 +147,7 @@ commands:
 
       # Emits: class AuditMiddleware extends MiddlewareCommand<B, O, R, [S1, S2]> {
       #          readonly commandName = "audit" as const;
-      #          defaultResolver(subject: S1 | S2, object: O): ... { ... }  // when config.defaultResolver is set
+      #          readonly defaultResolver: StrategyClass = this.strategyField;  // when config.defaultResolver is set
       #          resolveS1(...): MiddlewareTemplate<AuditMiddleware, [], S1> { ... }
       #        }
       # Target: commands/<mw-name>.ts

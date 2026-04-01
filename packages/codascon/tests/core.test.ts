@@ -11,7 +11,7 @@ import {
   type CommandSubjectUnion,
   type MiddlewareTemplate,
   type Runnable,
-} from "./index.js";
+} from "../src/index.js";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected) throw new Error(msg ?? `Expected ${expected}, got ${actual}`);

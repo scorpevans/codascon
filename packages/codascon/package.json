@@ -48,10 +48,10 @@
     }
   },
   "files": [
-    "dist",
-    "!dist/**/*.test.js",
-    "!dist/**/*.test.d.ts",
-    "!dist/**/*.map",
+    "dist/index.js",
+    "dist/index.cjs",
+    "dist/index.d.ts",
+    "dist/index.d.cts",
     "LICENSE"
   ],
   "scripts": {
@@ -59,6 +59,7 @@
     "build:js": "tsup && cp dist/index.d.ts dist/index.d.cts",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.test.json",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "devDependencies": {
