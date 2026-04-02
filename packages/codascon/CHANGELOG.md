@@ -1,5 +1,11 @@
 # codascon
 
+## 1.1.1
+
+### Patch Changes
+
+- cf37743: Fix MiddlewareCommand.\_runChain stripped from dist d.ts; add \_commandBrand nominal brand to CommandSignature.
+
 ## 1.1.0
 
 ### Minor Changes
