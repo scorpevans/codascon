@@ -155,50 +155,6 @@ export type Runnable<SU, O, R> = { run: (subject: SU, object: O) => R };
 type ReservedResolverNameError =
   "resolverName cannot be 'defaultResolver'. Fix: rename it to a unique non-reserved value";
 
-/*
- * Minimal structural type for the `Command.defaultResolver?` field.
- *
- * Declares only the `execute` method using the raw `O` and `R` type params of the
- * declaring `Command`. Deliberately avoids `Template<Command<B,O,R,BSL>, any[], SU>`
- * (which internally uses `CommandObject<C>` / `CommandReturn<C>`) because those helpers
- * use `C extends Command<any, infer O, any, any>`, which triggers structural inspection
- * of `Command<B,O,R,BSL>`'s members — including `defaultResolver?` itself — creating a
- * circular evaluation chain that overflows the TypeScript type-checker.
- *
- * Structurally equivalent to `Template<Command<B,O,R,BSL>, [], BSL[number]>` — any
- * `Template` implementation satisfies it.
- *
- * `execute` uses function property syntax — see `Template.execute` for the bivariance
- * rationale.
- */
-type DefaultResolverTemplate<O, R, SU> = {
-  execute: <T extends SU>(subject: T, object: O, inner: never) => R;
-};
-
-/*
- * Middleware variant of `DefaultResolverTemplate` for `MiddlewareCommand.defaultResolver?`.
- *
- * Requires `execute` to accept the `inner` continuation as a required third argument.
- * When dispatched, `MiddlewareCommand._dispatch` passes the continuation to `execute`,
- * so `inner` is always defined — no non-null assertion needed.
- *
- * `MiddlewareDefaultResolverTemplate` is a structural subtype of `DefaultResolverTemplate`
- * via parameter contravariance: `never` is the bottom type, so `never <: Runnable<...>`,
- * making `execute(s, o, inner: Runnable)` assignable to `execute(s, o, inner: never)`.
- * `DefaultResolverTemplate` uses `inner: never` (not 2-arg) precisely to preserve this
- * subtype relationship while allowing `inner` to be required here.
- *
- * **Responsibility**: the implementation must call `inner.run(subject, object)` to
- * forward control down the chain. TypeScript cannot guarantee `inner` is called, but
- * the signature makes the requirement explicit.
- *
- * `execute` uses function property syntax — see `Template.execute` for the bivariance
- * rationale.
- */
-type MiddlewareDefaultResolverTemplate<O, R, SU> = {
-  execute: <T extends SU>(subject: T, object: O, inner: Runnable<T, O, R>) => R;
-};
-
 type WidenedResolverNameError =
   "resolverName must be a literal. Fix: readonly resolverName = 'resolveFoo' as const";
 
@@ -235,6 +191,65 @@ type AnyCommand = Command<any, any, any, any>;
 type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
 
 /*
+ * Structural fingerprint for all Command subtypes. Used as the pattern in phantom-based
+ * extractor conditionals (CommandObject, CommandReturn, CommandBase, CommandSubjectUnion)
+ * in place of the heritage-clause form `C extends Command<infer B, infer O, infer R, infer BSL>`,
+ * which triggers structural member inspection and causes circular type evaluation when a
+ * subclass property's type depends on one of the extractors (TS2589).
+ *
+ * Each phantom field corresponds to one of Command's four type parameters.
+ * `commandName: string` further narrows the match to types carrying the Command protocol
+ * identifier, preventing accidental matches on unrelated types sharing a phantom name.
+ *
+ * The phantom fields _b, _o, _r mirror the existing _bsl pattern: they are `declare readonly`
+ * on Command, carry no JS runtime cost, and must not use the JSDoc internal marker in their
+ * leading comments (stripInternal would strip them from .d.ts, breaking cross-package consumers).
+ */
+type CommandSignature<
+  N extends string = string,
+  B = unknown,
+  O = unknown,
+  R = unknown,
+  BSL extends any[] = any[],
+> = {
+  readonly commandName: N;
+  readonly _b: B;
+  readonly _o: O;
+  readonly _r: R;
+  readonly _bsl: BSL;
+};
+
+/*
+ * Extracts the object type (`O`) from a Command's generic parameters.
+ *
+ * The object is the context/payload passed alongside the Subject when
+ * running a Command. It is available to both the resolver method (for strategy
+ * selection) and the Template's execute method (for execution).
+ *
+ * @example
+ * class AccessCmd extends Command<Person, Building, Result, [Student]> { ... }
+ * type T = CommandObject<AccessCmd>;  // Building
+ */
+/** Extracts the object type (`O`) from a Command — the context/payload passed to resolver methods and `execute`. Returns `never` if `C` does not extend `Command`. */
+export type CommandObject<C> = C extends CommandSignature<any, any, infer O, any, any> ? O : never;
+
+/*
+ * Extracts the return type (`R`) from a Command's generic parameters.
+ *
+ * This is the type returned by both `command.run(...)` and `template.execute(...)`.
+ * For async Commands, this is `Promise<T>`.
+ *
+ * @example
+ * class AccessCmd extends Command<Person, Building, AccessResult, [Student]> { ... }
+ * type T = CommandReturn<AccessCmd>;  // AccessResult
+ */
+/** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. Returns `never` if `C` does not extend `Command`. */
+export type CommandReturn<C> = C extends CommandSignature<any, any, any, infer R, any> ? R : never;
+
+/** Extracts the base type (`B`) from a Command — the shared constraint all Subjects in the union extend. Returns `never` if `C` does not extend `Command`. */
+export type CommandBase<C> = C extends CommandSignature<any, infer B, any, any, any> ? B : never;
+
+/*
  * Extracts the `commandName` string literal type from a Command.
  *
  * Returns `never` if `C` does not have a `commandName` property at all,
@@ -256,41 +271,11 @@ export type CommandName<C> =
   // (e.g. CommandHooks<any[], SU>) produce {} rather than a spurious error-keyed property.
   0 extends 1 & C
     ? never
-    : C extends { commandName: infer K extends string }
-      ? string extends K
+    : C extends CommandSignature<infer N, any, any, any, any>
+      ? string extends N
         ? WidenedCommandNameError
-        : K
+        : N
       : never;
-
-/*
- * Extracts the object type (`O`) from a Command's generic parameters.
- *
- * The object is the context/payload passed alongside the Subject when
- * running a Command. It is available to both the resolver method (for strategy
- * selection) and the Template's execute method (for execution).
- *
- * @example
- * class AccessCmd extends Command<Person, Building, Result, [Student]> { ... }
- * type T = CommandObject<AccessCmd>;  // Building
- */
-/** Extracts the object type (`O`) from a Command — the context/payload passed to resolver methods and `execute`. Returns `never` if `C` does not extend `Command`. */
-export type CommandObject<C> = C extends Command<any, infer O, any, any> ? O : never;
-
-/*
- * Extracts the return type (`R`) from a Command's generic parameters.
- *
- * This is the type returned by both `command.run(...)` and `template.execute(...)`.
- * For async Commands, this is `Promise<T>`.
- *
- * @example
- * class AccessCmd extends Command<Person, Building, AccessResult, [Student]> { ... }
- * type T = CommandReturn<AccessCmd>;  // AccessResult
- */
-/** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. Returns `never` if `C` does not extend `Command`. */
-export type CommandReturn<C> = C extends Command<any, any, infer R, any> ? R : never;
-
-/** Extracts the base type (`B`) from a Command — the shared constraint all Subjects in the union extend. Returns `never` if `C` does not extend `Command`. */
-export type CommandBase<C> = C extends Command<infer B, any, any, any> ? B : never;
 
 // ─── Internal Type Utilities ─────────────────────────────────────
 
@@ -321,7 +306,7 @@ export type CommandSubjectUnion<C> =
       // Heritage-clause extraction triggers circular evaluation through CommandSubjectStrategies
       // → Visit → Template → CommandSubjectUnion. Property access breaks the cycle.
       // `any[]` (not `Subject[]`) avoids class-identity issues across package boundaries.
-      C extends { _bsl: infer BSL extends any[] }
+      C extends CommandSignature<any, any, any, any, infer BSL extends any[]>
       ? BSL[number]
       : never;
 
@@ -343,7 +328,7 @@ export type CommandSubjectUnion<C> =
 /** Extracts the BSL tuple from a Command — the original ordered Subject tuple declared on the Command. Returns `never` for `any` or non-Command types. */
 export type CommandBSL<C> = 0 extends 1 & C
   ? never
-  : C extends { _bsl: infer BSL extends any[] }
+  : C extends CommandSignature<any, any, any, any, infer BSL extends any[]>
     ? BSL
     : never;
 
@@ -552,13 +537,7 @@ export abstract class Subject {
     this: this & BS,
     command:
       | Visit<C, this & BS>
-      | {
-          readonly defaultResolver: DefaultResolverTemplate<
-            CommandObject<C>,
-            CommandReturn<C>,
-            CommandSubjectUnion<C>
-          >;
-        },
+      | { readonly defaultResolver: Template<C, any[], CommandSubjectUnion<C>> },
     object: CommandObject<C>,
   ): Template<C, any[], this & BS> {
     const specificResolver = this.resolverName as SubjectResolverName<this & BS>;
@@ -596,7 +575,11 @@ export abstract class Subject {
 type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
   | MiddlewareSubjectStrategies<B, O, R, BSL>
   | ({
-      readonly defaultResolver: MiddlewareDefaultResolverTemplate<O, R, BSL[number]>;
+      readonly defaultResolver: MiddlewareTemplate<
+        MiddlewareCommand<B, O, R, BSL>,
+        any[],
+        BSL[number]
+      >;
     } & Partial<MiddlewareSubjectStrategies<B, O, R, BSL>>)
 ) & {
   _runChain(subject: BSL[number], object: O, continuation: Runnable<BSL[number], O, R>): R;
@@ -689,11 +672,20 @@ type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
  * and implement one resolver method per Subject (named after that Subject's `resolverName`).
  * Call `run(subject, object)` to dispatch.
  */
-export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
+export abstract class Command<B, O, R, BSL extends (B & Subject)[]> implements CommandSignature<
+  string,
+  B,
+  O,
+  R,
+  BSL
+> {
   abstract readonly commandName: string;
-  // Phantom property — no JS emit. Enables non-circular BSL extraction in `CommandSubjectUnion`.
-  // Must NOT use the JSDoc internal marker — stripInternal would strip it from .d.ts, breaking cross-package consumers.
+  // Phantom properties — no JS emit. Enable non-circular type extraction via CommandSignature.
+  // Must NOT use the JSDoc internal marker — stripInternal would strip them from .d.ts, breaking cross-package consumers.
+  declare readonly _b: B;
   declare readonly _bsl: BSL;
+  declare readonly _o: O;
+  declare readonly _r: R;
 
   // Lazily populated by `_runChain` on the first dispatch. Caches the result of
   // `this.middleware` so that override getters returning array literals allocate
@@ -713,11 +705,11 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
    * when no matching resolver method is found for the dispatched subject's `resolverName`.
    *
    * **MiddlewareCommand note**: `MiddlewareCommand` narrows this field to
-   * `MiddlewareDefaultResolverTemplate`, which requires `execute` to accept an `inner`
-   * continuation as a required third argument. The implementation must call
-   * `inner.run(subject, object)` to forward control down the chain.
+   * `MiddlewareTemplate<MiddlewareCommand<B,O,R,BSL>, any[], BSL[number]>`, which requires
+   * `execute` to accept an `inner` continuation as a required third argument. The
+   * implementation must call `inner.run(subject, object)` to forward control down the chain.
    */
-  declare readonly defaultResolver?: DefaultResolverTemplate<O, R, BSL[number]>;
+  declare readonly defaultResolver?: Template<Command<B, O, R, BSL>, any[], BSL[number]>;
 
   /**
    * Command-level middleware applied to every dispatch through this Command.
@@ -759,7 +751,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
 
   /** @internal */
   protected _dispatch(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
-    return subject.getCommandStrategy(this, object).execute(subject, object);
+    return subject.getCommandStrategy(this, object).execute(subject, object, undefined as never);
   }
 
   /**
@@ -773,7 +765,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> {
       (
         | CommandSubjectStrategies<Command<B, O, R, BSL>>
         | ({
-            readonly defaultResolver: DefaultResolverTemplate<O, R, BSL[number]>;
+            readonly defaultResolver: Template<Command<B, O, R, BSL>, any[], BSL[number]>;
           } & Partial<CommandSubjectStrategies<Command<B, O, R, BSL>>>)
       ) &
       ValidResolverNames<BSL>,
@@ -1008,7 +1000,7 @@ export type Template<
   H extends AnyCommand[] = [],
   SU extends CommandSubjectUnion<C> = CommandSubjectUnion<C>,
 > = {
-  execute: <T extends SU>(subject: T, object: CommandObject<C>) => CommandReturn<C>;
+  execute: <T extends SU>(subject: T, object: CommandObject<C>, inner: never) => CommandReturn<C>;
 } & CommandHooks<H, SU>;
 
 /**
@@ -1182,14 +1174,18 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
   BSL
 > {
   /**
-   * Narrows `Command.defaultResolver?` to `MiddlewareDefaultResolverTemplate`, surfacing
-   * the `inner` continuation as a required third argument in the `execute` signature.
+   * Narrows `Command.defaultResolver?` to `MiddlewareTemplate`, surfacing the `inner`
+   * continuation as a required third argument in the `execute` signature.
    * `inner` is always defined when dispatched via the middleware chain.
    *
    * The implementation must call `inner.run(subject, object)` to forward control down
    * the chain. The signature makes this requirement explicit; TypeScript cannot enforce it.
    */
-  declare readonly defaultResolver?: MiddlewareDefaultResolverTemplate<O, R, BSL[number]>;
+  declare readonly defaultResolver?: MiddlewareTemplate<
+    MiddlewareCommand<B, O, R, BSL>,
+    any[],
+    BSL[number]
+  >;
 
   /** @internal */
   override run(
