@@ -197,14 +197,17 @@ type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
  * which triggers structural member inspection and causes circular type evaluation when a
  * subclass property's type depends on one of the extractors (TS2589).
  *
- * Each phantom field corresponds to one of Command's four type parameters.
- * `commandName: string` further narrows the match to types carrying the Command protocol
- * identifier, preventing accidental matches on unrelated types sharing a phantom name.
+ * `[_commandBrand]` is a unique symbol brand that makes `CommandSignature` nominally typed:
+ * only `Command` subclasses (which `implements CommandSignature`) satisfy it. External code
+ * cannot forge the symbol key, so accidental structural matches on unrelated types are impossible.
  *
- * The phantom fields _b, _o, _r mirror the existing _bsl pattern: they are `declare readonly`
- * on Command, carry no JS runtime cost, and must not use the JSDoc internal marker in their
- * leading comments (stripInternal would strip them from .d.ts, breaking cross-package consumers).
+ * The remaining phantom fields (_b, _o, _r, _bsl) correspond to Command's four type parameters.
+ * They are `declare readonly` on Command, carry no JS runtime cost, and must not use the JSDoc
+ * internal marker in their leading comments (stripInternal would strip them from .d.ts, breaking
+ * cross-package consumers).
  */
+declare const _commandBrand: unique symbol;
+
 type CommandSignature<
   N extends string = string,
   B = unknown,
@@ -212,6 +215,7 @@ type CommandSignature<
   R = unknown,
   BSL extends any[] = any[],
 > = {
+  readonly [_commandBrand]: typeof _commandBrand;
   readonly commandName: N;
   readonly _b: B;
   readonly _o: O;
@@ -680,18 +684,15 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> implements C
   BSL
 > {
   abstract readonly commandName: string;
-  // Phantom properties — no JS emit. Enable non-circular type extraction via CommandSignature.
-  // Must NOT use the JSDoc internal marker — stripInternal would strip them from .d.ts, breaking cross-package consumers.
+  // Phantom properties — no JS emit. Must NOT use the JSDoc internal marker —
+  // stripInternal would strip them from .d.ts, breaking cross-package consumers.
+  // [_commandBrand]: nominal brand — makes CommandSignature unforgeable; only Command subclasses satisfy it.
+  // _b, _o, _r, _bsl: enable non-circular type extraction via CommandSignature.
+  declare readonly [_commandBrand]: typeof _commandBrand;
   declare readonly _b: B;
-  declare readonly _bsl: BSL;
   declare readonly _o: O;
   declare readonly _r: R;
-
-  // Lazily populated by `_runChain` on the first dispatch. Caches the result of
-  // `this.middleware` so that override getters returning array literals allocate
-  // exactly once per instance rather than on every `run()` call.
-  // Protected (not private) so that MiddlewareCommand._runChain can access it.
-  protected _mwCache?: MiddlewareElement<B, O, R, BSL>[];
+  declare readonly _bsl: BSL;
 
   /**
    * Optional catch-all Template. When assigned, subjects without a specific resolver
@@ -710,6 +711,12 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> implements C
    * implementation must call `inner.run(subject, object)` to forward control down the chain.
    */
   declare readonly defaultResolver?: Template<Command<B, O, R, BSL>, any[], BSL[number]>;
+
+  // Lazily populated by `_runChain` on the first dispatch. Caches the result of
+  // `this.middleware` so that override getters returning array literals allocate
+  // exactly once per instance rather than on every `run()` call.
+  // Protected (not private) so that MiddlewareCommand._runChain can access it.
+  protected _mwCache?: MiddlewareElement<B, O, R, BSL>[];
 
   /**
    * Command-level middleware applied to every dispatch through this Command.
@@ -1202,7 +1209,7 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
     );
   }
 
-  /** @internal */
+  /** Runs this middleware command's own registered middleware chain, then delegates to `_dispatch` with the continuation. Called exclusively by `Command._runChain`. */
   override _runChain(
     subject: BSL[number],
     object: O,

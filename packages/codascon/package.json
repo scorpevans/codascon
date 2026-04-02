@@ -60,6 +60,7 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.test.json",
+    "typecheck:dist": "tsc -p tsconfig.dist.json",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "devDependencies": {
