@@ -1,5 +1,5 @@
 /**
- * Consumer type proofs — compiled by `tsc` against dist/index.d.ts via tsconfig.dist.json.
+ * Dist type proofs — compiled by `tsc` against dist/index.d.ts via tsconfig.dist.json.
  * NOT run by vitest. Run with: pnpm typecheck:dist  (requires a prior pnpm build)
  *
  * §CP (positive): correct consumer patterns that MUST compile.

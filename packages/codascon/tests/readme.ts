@@ -6,7 +6,7 @@ import {
   type MiddlewareTemplate,
   type CommandSubjectUnion,
   type Runnable,
-} from "../src/index.js";
+} from "codascon";
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 

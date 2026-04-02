@@ -1,5 +1,5 @@
 /**
- * auth-example.ts — codascon middleware: authentication + authorization
+ * auth.check.ts — codascon middleware: authentication + authorization
  *
  * Demonstrates layered middleware using two MiddlewareCommands:
  *

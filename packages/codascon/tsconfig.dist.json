@@ -8,5 +8,5 @@
       "codascon": ["./dist/index.d.ts"]
     }
   },
-  "include": ["tests/consumer.check.ts", "tests/auth-example.ts"]
+  "include": ["tests/dist.ts", "tests/auth.ts", "tests/readme.ts"]
 }

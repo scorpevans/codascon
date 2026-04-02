@@ -207,6 +207,7 @@ type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
  * cross-package consumers).
  */
 declare const _commandBrand: unique symbol;
+declare const _subjectBrand: unique symbol;
 
 type CommandSignature<
   N extends string = string,
@@ -535,6 +536,10 @@ type ValidResolverNames<BSL extends unknown[]> = UnionToIntersection<
  */
 export abstract class Subject {
   abstract readonly resolverName: string;
+  // Nominal brand — makes Subject unforgeable; only Subject subclasses satisfy it.
+  // Must NOT use the JSDoc internal marker — stripInternal would strip it from .d.ts,
+  // defeating the structural incompatibility it enforces for dist consumers.
+  declare readonly [_subjectBrand]: typeof _subjectBrand;
 
   /** @internal */
   getCommandStrategy<C extends AnyCommand, BS extends CommandSubjectUnion<C>>(

@@ -7,7 +7,7 @@ import {
   type Template,
   type Runnable,
   type CommandSubjectUnion,
-} from "../src/index.js";
+} from "codascon";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected)

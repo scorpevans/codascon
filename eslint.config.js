@@ -29,7 +29,7 @@ export default tseslint.config(
   },
   {
     // Test files — relax rules that fire on intentional test patterns
-    files: ["**/*.test.ts"],
+    files: ["**/test.*.ts"],
     rules: {
       // Tests deliberately declare unused vars/params for compile-time checks,
       // unused visit-method params, and _T1/_14a/etc. assertion fixtures
