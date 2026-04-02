@@ -1,5 +1,12 @@
 # odetovibe
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [cf37743]
+  - codascon@1.1.1
+
 ## 1.1.0
 
 ### Minor Changes
