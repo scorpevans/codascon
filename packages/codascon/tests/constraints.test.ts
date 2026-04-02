@@ -1040,7 +1040,8 @@ describe("§MC middleware compile-time constraints", () => {
 
   it("14j9: MiddlewareTemplate<C,H,SU>-typed value is assignable to MiddlewareCommand.defaultResolver", () => {
     // Regression guard for the subtype chain:
-    //   MiddlewareTemplate<C,H,SU>  →  MiddlewareDefaultResolverTemplate<O,R,SU>  →  DefaultResolverTemplate<O,R,SU>
+    //   MiddlewareTemplate<C,H,SU>  →  MiddlewareTemplate<MiddlewareCommand<B,O,R,BSL>, any[], BSL[number]>
+    //                               →  Template<Command<B,O,R,BSL>, any[], BSL[number]>
     //
     // Unlike 14j6 (inline object literal, types inferred from context), this test uses an
     // explicitly typed MiddlewareTemplate<C,H,SU> variable. TypeScript must resolve
@@ -1048,8 +1049,8 @@ describe("§MC middleware compile-time constraints", () => {
     // the assignment. Guards against:
     //   (1) CommandObject<C>/CommandReturn<C> regressing to `never` (e.g. from a constraint
     //       change on MiddlewareTemplate's C parameter)
-    //   (2) DefaultResolverTemplate losing `inner: never`, which would break the subtype chain
-    //   (3) inner becoming optional in MiddlewareDefaultResolverTemplate
+    //   (2) Template.execute losing `inner: never`, which would break the subtype chain
+    //   (3) inner becoming optional in MiddlewareTemplate
     const catchAll: MiddlewareTemplate<TraceMiddleware, [], Rock | Gem> = {
       execute: <T extends Rock | Gem>(s: T, o: Ctx, inner: Runnable<T, Ctx, Res>) =>
         inner.run(s, o),
