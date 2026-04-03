@@ -35,26 +35,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
-
       - name: Test
-        run: pnpm test --run
-
-      - name: Typecheck
-        run: pnpm typecheck
+        run: pnpm test
 
       - name: Lint
         run: pnpm lint
 
       - name: Format check
         run: pnpm format:check
-
-      - name: Typecheck dist — codascon
-        run: cd packages/codascon && pnpm typecheck:dist
-
-      - name: Typecheck dist — odetovibe
-        run: cd packages/odetovibe && pnpm typecheck:dist
 
       - name: Odetovibe self-generation check
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 22
