@@ -13,7 +13,7 @@ For larger domains, [**Odetovibe**](https://www.npmjs.com/package/odetovibe) pai
 
 _The Runtime:_ 10 lines of code.
 
-_The Power:_ Pure type-level enforcement via four primitives: `Subject`, `Command`, `Template`, and `Strategy`.
+_The Power:_ Pure type-level enforcement via three primitives: `Subject`, `Command`, and `Strategy`, where `Template` is the type contract that a Strategy implements.
 
 ---
 
@@ -580,75 +580,6 @@ Do not modify existing class declarations or method signatures — only fill in 
 ```
 
 > **Note:** You can return to steps 1 and 2 at any time to iterate on your YAML config. Rerun the odetovibe command and all updates will be merged into your existing files, preserving any business logic you have already implemented.
-
-## Project Structure
-
-```
-codascon/                                    # monorepo root
-├── packages/
-│   ├── codascon/                            # published as "codascon"
-│   │   ├── src/
-│   │   │   └── index.ts                     # Subject, Command, MiddlewareCommand + type machinery
-│   │   ├── tests/
-│   │   │   ├── command.test.ts              # Command runtime tests
-│   │   │   ├── core.test.ts                 # compile-time type constraint proofs
-│   │   │   ├── middleware.test.ts
-│   │   │   ├── resolver.test.ts
-│   │   │   ├── subject.test.ts
-│   │   │   └── template.test.ts
-│   │   └── README.md
-│   └── odetovibe/                           # published as "odetovibe"
-│       ├── src/
-│       │   ├── extract/                     # parse YAML → validate → ConfigIndex
-│       │   │   ├── commands/
-│       │   │   │   ├── validate-command-hooks.ts
-│       │   │   │   └── validate-entry.ts
-│       │   │   ├── domain-types.ts
-│       │   │   └── index.ts
-│       │   ├── load/                        # ts-morph AST → write files to disk
-│       │   │   ├── commands/
-│       │   │   │   └── write-file.ts
-│       │   │   ├── domain-types.ts
-│       │   │   └── index.ts
-│       │   ├── transform/                   # ConfigIndex → ts-morph AST
-│       │   │   ├── commands/
-│       │   │   │   └── emit-ast.ts
-│       │   │   ├── domain-types.ts
-│       │   │   └── index.ts
-│       │   ├── cli.ts                       # bin entry: odetovibe <schema.yaml> --outDir <dir>
-│       │   ├── index.ts                     # library entry
-│       │   └── schema.ts                    # YamlConfig type definitions
-│       ├── tests/
-│       │   ├── extract/
-│       │   │   └── index.test.ts
-│       │   ├── load/
-│       │   │   └── index.test.ts
-│       │   ├── transform/
-│       │   │   └── index.test.ts
-│       │   ├── cli.test.ts
-│       │   └── smoke.test.ts                # end-to-end pipeline + golden output tests
-│       ├── fixtures/                        # smoke test input and golden output
-│       │   ├── smoke.yaml
-│       │   └── smoke-expected/
-│       ├── specs/                           # odetovibe's own codascon domain specs
-│       │   ├── extract.yaml
-│       │   ├── load.yaml
-│       │   └── transform.yaml
-│       └── README.md
-└── README.md
-```
-
-## Development
-
-```bash
-pnpm install      # install all dependencies
-pnpm build        # compile both packages (respects project reference order)
-pnpm test         # run all tests
-pnpm typecheck    # type-check src and tests (validates @ts-expect-error proofs)
-pnpm lint         # ESLint across all packages
-pnpm format       # Prettier
-pnpm clean        # remove build artifacts
-```
 
 ## License
 
