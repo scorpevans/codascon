@@ -57,10 +57,9 @@
   "scripts": {
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc --build && pnpm run build:js",
     "build:js": "tsup && cp dist/index.d.ts dist/index.d.cts",
-    "test": "pnpm build && pnpm typecheck && pnpm typecheck:dist && vitest run",
+    "test": "pnpm build && pnpm typecheck && vitest run",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.test.json",
-    "typecheck:dist": "tsc -p tsconfig.dist.json",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "devDependencies": {

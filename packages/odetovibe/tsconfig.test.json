@@ -3,7 +3,10 @@
   "compilerOptions": {
     "composite": false,
     "noEmit": true,
-    "rootDir": "."
+    "rootDir": ".",
+    "paths": {
+      "codascon": ["../codascon/dist/index.d.ts"]
+    }
   },
   "include": ["src", "tests"]
 }
