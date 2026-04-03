@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { Command, Subject, type Template, type CommandSubjectUnion } from "../src/index.js";
+import { Command, Subject, type Template, type CommandSubjectUnion } from "codascon";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected) throw new Error(msg ?? `Expected ${expected}, got ${actual}`);

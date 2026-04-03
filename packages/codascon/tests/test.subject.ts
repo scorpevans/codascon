@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { Subject } from "../src/index.js";
+import { Subject } from "codascon";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected) throw new Error(msg ?? `Expected ${expected}, got ${actual}`);

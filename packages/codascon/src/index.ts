@@ -207,6 +207,7 @@ type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
  * cross-package consumers).
  */
 declare const _commandBrand: unique symbol;
+declare const _subjectBrand: unique symbol;
 
 type CommandSignature<
   N extends string = string,
@@ -535,6 +536,10 @@ type ValidResolverNames<BSL extends unknown[]> = UnionToIntersection<
  */
 export abstract class Subject {
   abstract readonly resolverName: string;
+  // Nominal brand — makes Subject unforgeable; only Subject subclasses satisfy it.
+  // Must NOT use the JSDoc internal marker — stripInternal would strip it from .d.ts,
+  // defeating the structural incompatibility it enforces for dist consumers.
+  declare readonly [_subjectBrand]: typeof _subjectBrand;
 
   /** @internal */
   getCommandStrategy<C extends AnyCommand, BS extends CommandSubjectUnion<C>>(
@@ -745,19 +750,27 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> implements C
   }
 
   /** @internal */
-  protected _runChain(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
+  protected _runChain(
+    subject: CommandSubjectUnion<Command<B, O, R, BSL>>,
+    object: O,
+    _continuation: never,
+  ): R {
     const mw = this._mwCache ?? (this._mwCache = this.middleware);
-    if (mw.length === 0) return this._dispatch(subject, object);
+    if (mw.length === 0) return this._dispatch(subject, object, undefined as never);
     type SU = CommandSubjectUnion<Command<B, O, R, BSL>>;
     return mw
       .reduceRight((next, m) => ({ run: (s: SU, o: O): R => m._runChain(s, o, next) }), {
-        run: (s: SU, o: O): R => this._dispatch(s, o),
+        run: (s: SU, o: O): R => this._dispatch(s, o, undefined as never),
       })
       .run(subject, object);
   }
 
   /** @internal */
-  protected _dispatch(subject: CommandSubjectUnion<Command<B, O, R, BSL>>, object: O): R {
+  protected _dispatch(
+    subject: CommandSubjectUnion<Command<B, O, R, BSL>>,
+    object: O,
+    _continuation: never,
+  ): R {
     return subject.getCommandStrategy(this, object).execute(subject, object, undefined as never);
   }
 
@@ -782,7 +795,7 @@ export abstract class Command<B, O, R, BSL extends (B & Subject)[]> implements C
     // Cast to the base class to access protected _runChain — safe because this is always
     // an instance of Command<B,O,R,BSL>. The cast is needed because the this & (A | B)
     // union in the this constraint causes TypeScript to lose class-identity for protected access.
-    return (this as Command<B, O, R, BSL>)._runChain(subject, object);
+    return (this as Command<B, O, R, BSL>)._runChain(subject, object, undefined as never);
   }
 }
 
@@ -1147,19 +1160,18 @@ export type MiddlewareTemplate<
  * **`_runChain`** — Intentionally public (no `protected` modifier on `override`) —
  * required so that `Command._runChain` can call `m._runChain(s, o, next)` where `m`
  * is typed as `MiddlewareElement<...>`. Widening `protected` to public in an override
- * is permitted in TypeScript. `continuation` is declared optional only for TypeScript
- * override compatibility with `Command._runChain` (2-arg base). At runtime,
- * `continuation` is always defined — `Command._runChain` is the sole legitimate caller
- * and always passes a `Runnable` (MiddlewareElement contract).
+ * is permitted in TypeScript. `continuation` mirrors the `Template.execute` / `never`
+ * pattern: the base `Command._runChain` declares `continuation: never` (callers pass
+ * `undefined as never`); the override declares `continuation: Runnable` (required,
+ * no `?`). Bivariance on class methods permits this override (`never extends Runnable`).
  *
- * **`_dispatch`** — The cast from `Template<C, any[], SU>` (2-arg execute) to
- * `MiddlewareTemplate<MiddlewareCommand<B, O, R, BSL>, any[], SU>` (3-arg execute) is
- * required because `getCommandStrategy` returns the 2-arg form. This is safe because
+ * **`_dispatch`** — The cast from `Template<C, any[], SU>` (3-arg execute with `inner: never`) to
+ * `MiddlewareTemplate<MiddlewareCommand<B, O, R, BSL>, any[], SU>` (3-arg execute with `inner: Runnable`) is
+ * required because `getCommandStrategy` returns the base-template form. This is safe because
  * `MiddlewareSubjectStrategies` (enforced at `Command.middleware` assignment) guarantees
  * any registered middleware's resolvers return `MiddlewareTemplate`-compatible values.
  * Do not call directly — only safe when called from `_runChain`, which always passes
- * `continuation`; bypassing this will cause the `continuation!` non-null assertion to
- * panic at runtime.
+ * a valid `Runnable` continuation.
  */
 /**
  * Abstract base class for middleware Commands. Extend this to define
@@ -1213,7 +1225,7 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
   override _runChain(
     subject: BSL[number],
     object: O,
-    continuation?: Runnable<BSL[number], O, R>,
+    continuation: Runnable<BSL[number], O, R>,
   ): R {
     const mw = this._mwCache ?? (this._mwCache = this.middleware);
     if (mw.length === 0) return this._dispatch(subject, object, continuation);
@@ -1229,7 +1241,7 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
   protected override _dispatch(
     subject: BSL[number],
     object: O,
-    continuation?: Runnable<BSL[number], O, R>,
+    continuation: Runnable<BSL[number], O, R>,
   ): R {
     type SU = BSL[number];
     const strategy = subject.getCommandStrategy(this, object) as MiddlewareTemplate<
@@ -1237,8 +1249,6 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
       any[],
       SU
     >;
-    // continuation is always defined here — _runChain always passes a Runnable
-    // (MiddlewareElement contract).
-    return strategy.execute(subject, object, continuation!);
+    return strategy.execute(subject, object, continuation);
   }
 }

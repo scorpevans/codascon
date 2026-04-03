@@ -1,5 +1,5 @@
 /**
- * auth-example.ts — codascon middleware: authentication + authorization
+ * auth.check.ts — codascon middleware: authentication + authorization
  *
  * Demonstrates layered middleware using two MiddlewareCommands:
  *
@@ -199,7 +199,7 @@ class HandleRequestCommand extends Command<
   private readonly authn = new AuthnMiddleware();
   private readonly authz = new AuthzMiddleware();
 
-  override get middleware() {
+  override get middleware(): [AuthnMiddleware, AuthzMiddleware] {
     return [this.authn, this.authz];
   }
 
@@ -208,7 +208,7 @@ class HandleRequestCommand extends Command<
     _req: Readonly<ApiRequest>,
   ): Template<HandleRequestCommand, [], PublicEndpoint> {
     return {
-      execute: (_s, _req) => ({
+      execute: (_s: PublicEndpoint, _req: ApiRequest): ApiResponse => ({
         status: 200,
         body: { message: `Public content at ${s.path}` },
       }),
@@ -220,7 +220,7 @@ class HandleRequestCommand extends Command<
     _req: Readonly<ApiRequest>,
   ): Template<HandleRequestCommand, [], ProtectedEndpoint> {
     return {
-      execute: (_s, req) => ({
+      execute: (_s: ProtectedEndpoint, req: ApiRequest): ApiResponse => ({
         status: 200,
         body: { message: `Protected content at ${s.path}`, user: req.user?.id },
       }),
@@ -232,7 +232,7 @@ class HandleRequestCommand extends Command<
     _req: Readonly<ApiRequest>,
   ): Template<HandleRequestCommand, [], AdminEndpoint> {
     return {
-      execute: (_s, req) => ({
+      execute: (_s: AdminEndpoint, req: ApiRequest): ApiResponse => ({
         status: 200,
         body: { message: `Admin panel at ${s.path}`, operator: req.user?.id },
       }),

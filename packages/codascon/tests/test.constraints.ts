@@ -11,7 +11,7 @@ import {
   type CommandSubjectUnion,
   type MiddlewareTemplate,
   type Runnable,
-} from "../src/index.js";
+} from "codascon";
 
 function strictEqual<T>(actual: T, expected: T, msg?: string) {
   if (actual !== expected) throw new Error(msg ?? `Expected ${expected}, got ${actual}`);
@@ -308,7 +308,13 @@ type SimpleTemplate = Template<FeedCommand>;
 type _T12 = Expect<
   Equal<
     SimpleTemplate,
-    { execute<T extends Dog | Cat | Bird>(subject: T, object: { time: string }): FeedResult }
+    {
+      execute: <T extends Dog | Cat | Bird>(
+        subject: T,
+        object: { time: string },
+        inner: never,
+      ) => FeedResult;
+    }
   >
 >;
 
@@ -327,12 +333,17 @@ type _T14_notAny = Expect<Equal<IsAny<CommandSubjectUnion<GroomCommand>>, false>
 // CommandName returns an error string (not never) for non-literal commandName —
 // so hook properties keyed by a non-literal name surface an error rather than
 // silently disappearing from the Template's implements check.
+abstract class _WidenedCmd extends Command<object, { time: string }, FeedResult, []> {
+  commandName: string = "widened";
+}
 type _T15 = Expect<
   Equal<
-    CommandName<{ commandName: string }>,
+    CommandName<_WidenedCmd>,
     "commandName must be a literal. Fix: readonly commandName = 'myHook' as const"
   >
 >;
+// Plain objects (no _commandBrand) are rejected entirely — returns never
+type _T15b = Expect<Equal<CommandName<{ commandName: string }>, never>>;
 
 // Utility types return never for non-Command inputs.
 type _T16 = Expect<Equal<CommandObject<string>, never>>;
@@ -860,22 +871,7 @@ describe("§14 compile-time constraint tests", () => {
   };
 }
 
-// §MC1b — A complete MiddlewareCommand (all resolvers implemented) still has
-// `run()` uncallable. MiddlewareTemplate's execute has a required 3rd `inner`
-// parameter, making it incompatible with the 2-arg Template that
-// CommandSubjectStrategies (the `this` constraint on `run()`) requires.
-// Middleware is designed to intercept a chain, not to be invoked standalone.
-{
-  // TraceMiddleware (defined in fixtures above) is a complete middleware — both
-  // resolveRock and resolveGem implemented, returning MiddlewareTemplate.
-  const _mc1b = new TraceMiddleware("t", []);
-  const _mc1b_run = () => {
-    // @ts-expect-error — MiddlewareTemplate (3-arg execute) ≠ Template (2-arg);
-    // CommandSubjectStrategies this-constraint on run() is unsatisfied even though
-    // all resolver methods are present.
-    _mc1b.run(new Rock(1), { factor: 1 });
-  };
-}
+// §MC1b — moved to src.check.ts (depends on @internal MiddlewareCommand.run() this: never)
 
 // §MC2 — A MiddlewareCommand typed for a structurally incompatible Command
 // (different BSL) cannot be placed in another Command's middleware array.
@@ -996,25 +992,9 @@ describe("§MC middleware compile-time constraints", () => {
   it("MC5: full-union MiddlewareTemplate (SU=Rock|Gem) is assignable to narrow resolver return type (SU=Rock)", () =>
     void 0);
 
-  it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () => {
-    // run(this: never) applies regardless of whether resolver methods or defaultResolver
-    // are present. A fully covered MiddlewareCommand is still uncallable via run().
-    class CoveredMw extends MiddlewareCommand<Person, string, string, [Dog]> {
-      readonly commandName = "coveredMw" as const;
-      resolveDog(_d: Dog) {
-        return {
-          execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) =>
-            inner.run(s, o),
-        };
-      }
-    }
-    const cmd = new CoveredMw();
-    const _14j5 = () => {
-      // @ts-expect-error — MiddlewareCommand.run() is always uncallable (this: never)
-      cmd.run(new Dog("Rex", "Lab"), "");
-    };
-    void _14j5;
-  });
+  it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () =>
+    // Moved to src.check.ts — depends on @internal MiddlewareCommand.run() this: never
+    void 0);
 
   it("14j6: MiddlewareCommand.defaultResolver accepts MiddlewareDefaultResolverTemplate (inner required)", () => {
     // MiddlewareCommand narrows defaultResolver? to MiddlewareDefaultResolverTemplate,

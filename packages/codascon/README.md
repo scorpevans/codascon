@@ -6,7 +6,7 @@
 
 _The Runtime:_ 10 lines of code.
 
-_The Power:_ Pure type-level enforcement via four primitives: `Subject`, `Command`, `Template`, and `Strategy`.
+_The Power:_ Pure type-level enforcement via three primitives: `Subject`, `Command`, and `Strategy`, where `Template` is the type contract that a Strategy implements.
 
 ---
 

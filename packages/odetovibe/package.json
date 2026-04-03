@@ -45,10 +45,9 @@
   ],
   "scripts": {
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc --build && chmod +x dist/cli.js",
-    "test": "vitest run",
+    "test": "pnpm build && pnpm typecheck && vitest run",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.test.json",
-    "typecheck:dist": "tsc -p tsconfig.dist.json",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "dependencies": {
@@ -60,8 +59,8 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^25.5.0",
-    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/coverage-istanbul": "^4.1.2",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.2"
   }
 }

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc --build --clean && rm -rf packages/codascon/dist packages/odetovibe/dist && tsc --build && pnpm --filter codascon run build:js && chmod +x packages/odetovibe/dist/cli.js",
     "clean": "tsc --build --clean",
-    "test": "vitest",
+    "test": "pnpm build && pnpm typecheck && vitest --run",
     "lint": "eslint packages/*/src",
     "lint:fix": "eslint packages/*/src --fix",
     "format": "prettier --write .",
@@ -39,6 +39,6 @@
     "prettier": "^3.0.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.57.1",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.2"
   }
 }

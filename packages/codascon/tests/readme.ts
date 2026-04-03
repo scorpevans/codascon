@@ -6,7 +6,7 @@ import {
   type MiddlewareTemplate,
   type CommandSubjectUnion,
   type Runnable,
-} from "../src/index.js";
+} from "codascon";
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 
@@ -65,7 +65,7 @@ class LogCommand extends Command<Person, { message: string }, void, [Student, Pr
   readonly commandName = "log" as const;
   private readonly entry = new LogEntry();
   readonly defaultResolver = this.entry; // fallback declared for resolver methods
-  resolveStudent(_s: Student) {
+  resolveStudent(_s: Student): Template<LogCommand, [], Student> {
     return this.entry;
   }
 }
@@ -167,14 +167,17 @@ class CheckoutMiddleware extends MiddlewareCommand<
 class CheckoutCommand extends Command<Person, Equipment, CheckoutResult, [Student, Professor]> {
   readonly commandName = "checkout" as const;
 
-  override get middleware() {
+  override get middleware(): CheckoutMiddleware[] {
     return [new CheckoutMiddleware()];
   }
 
-  resolveStudent(_s: Student, _e: Equipment) {
+  resolveStudent(_s: Student, _e: Equipment): Template<CheckoutCommand, [LogCommand], Student> {
     return new StudentCheckout();
   }
-  resolveProfessor(_p: Professor, _e: Equipment) {
+  resolveProfessor(
+    _p: Professor,
+    _e: Equipment,
+  ): Template<CheckoutCommand, [LogCommand], Professor> {
     return new ProfessorCheckout();
   }
 }
