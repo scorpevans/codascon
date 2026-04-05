@@ -11,6 +11,8 @@ Every instruction in every protocol section is a hard requirement. Skipping, def
 The protocol is evaluated sequentially from step to step, unless a step contains an explicit redirect (e.g., "goto step X") or return of control flow to the user; some steps MUST be skipped if the step's conditions are not met.
 The protocols are stateless so each user prompt MUST be handled with the _Prompt Protocol_ entry point.
 
+Only three sources authorize action: a step explicitly mandated by this document, a step in a plan recorded and approved in the active PROMPT file, or a step in a workflow documented in a skill when the user directly invokes that workflow. Any action outside these sources MUST NOT be executed — it is rogue behaviour.
+
 ## Prompt Protocol:
 
 **You MUST follow these steps on every prompt, BEFORE taking any action. Never skip for convenience — confidence that you already know the content or you already know what to do, is not a reason to skip this step.**
@@ -36,6 +38,7 @@ The protocols are stateless so each user prompt MUST be handled with the _Prompt
 Every time you receive a Task, you MUST follow this protocol:
 
 1. **Branch and sync check**
+   - If the task is simply an unambiguous workflow chore like 'push and commit', just proceed according to available skills, and return control back to the user.
    - Verify whether the prompt is consistent with the current branch's topic or the PROMPT thread (if it exists). If consistent move to the next step, else confirm whether the user wants to change context from the current topic, and if the active thread is lengthy (many exchanges with substantial accumulated context), confirm also whether to execute /clear before continuing. Then return control flow to the user.
 2. **Task Triage**
    - If there is no active PROMPT file for the current branch → create a new one.
@@ -44,11 +47,11 @@ Every time you receive a Task, you MUST follow this protocol:
    - Record the Task in the current branch's PROMPT file. Any ideas and plans MUST take into consideration the contents of this entire PROMPT thread.
 3. **Task Pushback Confirmation**
    - **Understand the intention or goal behind the Task** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step, otherwise give your feedback and return control flow to the user.
-   - **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in the current branch's PROMPT file to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. Then present your proposed plan or plans to the user for debate and brainstorming. Then return control flow to the user.
+   - **Task Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Task. Take into account the entire thread in the current branch's PROMPT file to which this Task belongs. All these MUST be done in accordance with the section _Planning Constraints_. You MUST write the plan to the PROMPT file before presenting it to the user — presenting a plan not yet written to the PROMPT file is a protocol violation. Then present the recorded plan to the user for debate and brainstorming. Then return control flow to the user.
 4. **Task Execution Confirmation**
    - Once the user confirms the execution of a proposed plan of action, proceed in accordance with the _Execution Constraints_.
 5. **Post Task Execution**
-   - If the user declined execution, or if execution aborted due to issues, goto _Task Pushback Confirmation_ and proceed.
+   - If the user declined execution, or if execution aborted due to issues, record what was declined or what caused the abort in the PROMPT file and goto _Task Pushback Confirmation_ and proceed.
    - Goto _Sign off_.
 
 ## Question Prompt Protocol:
@@ -65,12 +68,12 @@ Every time you receive a Question, you MUST follow this protocol:
 3. **Question Pushback Confirmation**
    - **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step, otherwise give your feedback and return control flow to the user.
    - **Question Analysis and Breakdown Planning** - Thinking out loud to the user, consider the challenges, caveats, gotchas, tradeoffs and competing ideas associated with the Question. Take into account the entire thread in the current branch's PROMPT file to which this Question belongs. All these MUST be done in accordance with the section _Planning Constraints_.
-   - **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan and ask for confirmation and return control flow to the user.
+   - **Question Research**: In case there's the need to check the web or run some commands in order to answer the Question, lay out the plan in the PROMPT file and ask for confirmation and return control flow to the user.
 4. **Question Execution Confirmation**
    - If there was a research proposed for the user to confirm, and if the user confirms the execution of a further research in order to answer the Question, proceed in accordance with the _Execution Constraints_, else if the user declined executing further research commands, goto _Question Pushback Confirmation_.
 5. **Post Question Execution**
    - If there was a research proposed for the user to confirm, and the Execution was aborted, goto _Question Pushback Confirmation_.
-   - If there was no research proposed for the user to confirm, or if the Execution ended successfully, present your proposed response or plan(s) to the user for debate and brainstorming.
+   - If there was no research proposed for the user to confirm, or if the Execution ended successfully, you MUST write your proposed response or plan(s) to the PROMPT file before presenting them to the user — presenting before recording is a protocol violation. Then present to the user for debate and brainstorming.
    - Goto _Sign off_.
 
 ## Confirmation Prompt Protocol:
@@ -117,9 +120,12 @@ In case the _Confirmation Prompt Protocol_ redirects here based on the user's ap
 
 ## Execution Constraints:
 
-Any action which mutates state, reads or writes or deletes or moves data, or exposes data or information to the internet MUST be in conformity with the following rules.
-Execution MUST only be triggered by a user's Prompt, and based on a communicated and approved Plan of execution. The execution Plan MUST be followed exactly as communicated to the user.
-**Any commands and actions taken must be in order to fulfill a step in the execution Plan.**
+Execution is governed by the authorization rule in _Protocol Meta-Rule_. The execution Plan MUST be followed exactly as recorded in the PROMPT file and communicated to the user.
+**Any commands and actions taken must be in order to fulfill a step in the recorded execution Plan.**
+
+### Plan Granularity
+
+A plan must be precise enough to execute without ambiguity: record the approach, key decisions, and specific targets (files, sections, locations). It need not reproduce the exact output — the rewritten sentence, the diff, or the generated code. Write no more than execution requires.
 
 While executing the steps in the Plan, the following constraints must hold on each step:
 
@@ -137,8 +143,8 @@ Follow this before any git action. Referencing an untracked file reveals its exi
 
 Pre-approved workflows are those documented in the devops skill's SKILL.md.
 
-- **Execute without interruption** — once started, run all steps in sequence without prompting; the Confirmation that triggered execution authorizes the entire workflow. Do not stop between steps to ask "shall I push?" or "shall I create the PR now?". Re-ask only if a deviation forces a change (see below).
-- **Re-ask mid-workflow** if an event forces a deviation from the documented steps — for example: a step fails, an unexpected error requires a recovery action, or completing the workflow would require interleaving steps not listed in the workflow. State what happened, what you propose to do instead and proceed to the next steps of the ongoing Prompt protocol.
+- **Execute without interruption** — All actions in conformance with the approved and recorded execution plan MUST be done without prompting; do not stop between steps to ask "shall I push?" or "shall I create the PR now?". Re-ask only if something has to be done differently from what is recorded in the PROMPT file (see below).
+- **Stop and re-approve if any action is not in the plan** — if any required action is not explicitly present in the recorded plan — however minor — stop execution immediately. Record the situation and the proposed deviation in the PROMPT file, then return flow to the user for discussion and approval before proceeding. Do not continue execution until the plan is updated and re-approved.
 
 ### In case of Changing execution Plans or implementation approaches
 
@@ -146,7 +152,7 @@ Follow this on every prompt where you pivot approach. Never carry forward change
 
 **Before pivoting to a new plan or implementation approach, always establish a clean slate**:
 
-- Document the learnings necessitating the pivot into the relevant MEMORY.md files under Skills.
+- Document the learnings necessitating the pivot into the PROMPT file and relevant MEMORY.md files under Skills.
 - Create a new version of the current branch's name e.g. pivot-branch-v2
 - The new branch should be freshly checked-out from main
 - Relevant diffs from the old branch can be patched into the new branch
