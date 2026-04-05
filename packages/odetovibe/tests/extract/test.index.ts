@@ -344,6 +344,21 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("strategy-name-unique");
   });
 
+  it("[templateName-unique] passes when all template names within a command are distinct", () => {
+    // Semantic spec: template names must be unique per command. Plain JS objects enforce this
+    // structurally (duplicate keys are collapsed by the parser), so the rule is defensive —
+    // it guards against programmatic misuse and makes the constraint explicit.
+    const entry = makeCmd({
+      dispatch: { Student: "GrantAccessDefault" },
+      templates: {
+        AccessTemplate: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+        DenyTemplate: { isParameterized: false, strategies: { DenyAccessDefault: {} } },
+      },
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).not.toContain("templateName-unique");
+  });
+
   it("[commandName-file-unique] fails when two command keys normalize to the same file name", () => {
     // "AccessBuildingCommand" and "AccessBuilding" both normalize to "access-building.ts"
     const cmd1 = new CommandEntry("AccessBuildingCommand", validCmdConfig);
@@ -1241,6 +1256,15 @@ describe("MiddlewareCommandValidator", () => {
       },
     });
     expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+  });
+
+  it("[templateName-unique] passes when all template names within a middleware command are distinct", () => {
+    // Semantic spec: template names must be unique per command. Plain JS objects enforce this
+    // structurally (duplicate keys are collapsed by the parser), so the rule is defensive —
+    // it guards against programmatic misuse and makes the constraint explicit.
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", validMwConfig);
+    expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).not.toContain("templateName-unique");
   });
 
   // Rule 10: middleware-ref
