@@ -231,8 +231,8 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
     for (const [subjectRef, target] of Object.entries(config.dispatch)) {
       if (!target.includes(".")) {
         // Only plain strategy names are valid dispatch targets — all templates are abstract
-        const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
-        if (!isStrategy) {
+        const owningTplName = stratNameToTpl.get(target);
+        if (owningTplName === undefined) {
           errors.push(
             err(
               key,
@@ -240,6 +240,18 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
               `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
             ),
           );
+        } else {
+          const tplConfig = ownTemplates[owningTplName];
+          const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+          if (!effectiveSubset.includes(subjectRef)) {
+            errors.push(
+              err(
+                key,
+                "dispatch-subjectsubset",
+                `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+              ),
+            );
+          }
         }
       } else {
         errors.push(
@@ -570,8 +582,8 @@ abstract class MiddlewareCommandValidator implements Template<
 
     for (const [subjectRef, target] of Object.entries(config.dispatch)) {
       if (!target.includes(".")) {
-        const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
-        if (!isStrategy) {
+        const owningTplName = stratNameToTpl.get(target);
+        if (owningTplName === undefined) {
           errors.push(
             err(
               key,
@@ -579,6 +591,18 @@ abstract class MiddlewareCommandValidator implements Template<
               `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
             ),
           );
+        } else {
+          const tplConfig = ownTemplates[owningTplName];
+          const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+          if (!effectiveSubset.includes(subjectRef)) {
+            errors.push(
+              err(
+                key,
+                "dispatch-subjectsubset",
+                `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+              ),
+            );
+          }
         }
       } else {
         errors.push(
