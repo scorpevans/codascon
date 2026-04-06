@@ -38,7 +38,7 @@ Only three sources authorize action: a step explicitly mandated by this document
 Every time you receive a Task, you MUST follow this protocol:
 
 1. **Branch and sync check**
-   - If the task is simply an unambiguous workflow chore like 'push and commit', just proceed according to available skills, and return control back to the user.
+   - If the task is simply an unambiguous workflow chore like 'push and commit' documented in a skill, just proceed according to available skills, and return control back to the user.
    - Verify whether the prompt is consistent with the current branch's topic or the PROMPT thread (if it exists). If consistent move to the next step, else confirm whether the user wants to change context from the current topic, and if the active thread is lengthy (many exchanges with substantial accumulated context), confirm also whether to execute /clear before continuing. Then return control flow to the user.
 2. **Task Triage**
    - If there is no active PROMPT file for the current branch → create a new one.
