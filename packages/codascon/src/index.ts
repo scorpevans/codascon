@@ -1,7 +1,7 @@
 /*
  * codascon — code as config
  *
- * A structural protocol for code organization with exhaustive compile-time type checking.
+ * A structural protocol for code architecture with exhaustive compile-time type checking.
  *
  * ## Core Concepts
  *

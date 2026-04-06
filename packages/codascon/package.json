@@ -1,7 +1,7 @@
 {
   "name": "codascon",
   "version": "1.1.1",
-  "description": "A structural protocol for code organization with exhaustive compile-time type checking",
+  "description": "A structural protocol for code architecture with exhaustive compile-time type checking",
   "license": "MIT",
   "author": "@scorpevans",
   "repository": {
