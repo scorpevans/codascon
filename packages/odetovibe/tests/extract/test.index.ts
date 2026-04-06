@@ -284,6 +284,55 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
   });
 
+  it("[dispatch-subjectsubset] fails when dispatch routes a subject to a strategy whose template's subjectSubset does not cover that subject", () => {
+    // GrantAccessDefault belongs to GrantAccess which has subjectSubset: ["Student"]
+    // Dispatching Professor → GrantAccessDefault is invalid since Professor ∉ ["Student"]
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      templates: {
+        GrantAccess: {
+          isParameterized: true,
+          subjectSubset: ["Student"],
+          strategies: { GrantAccessDefault: {} },
+        },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-subjectsubset");
+  });
+
+  it("passes when dispatch routes a subject to a strategy under a template with no subjectSubset (full union coverage)", () => {
+    // No subjectSubset on template → effective subset is full subjectUnion → both subjects valid
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      templates: {
+        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+      },
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("passes when each subject is dispatched to a strategy under a template whose subjectSubset covers that subject", () => {
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "StudentOnly", Professor: "ProfessorOnly" },
+      templates: {
+        StudentTemplate: {
+          isParameterized: true,
+          subjectSubset: ["Student"],
+          strategies: { StudentOnly: {} },
+        },
+        ProfessorTemplate: {
+          isParameterized: true,
+          subjectSubset: ["Professor"],
+          strategies: { ProfessorOnly: {} },
+        },
+      },
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
   it("[strategy-name-unique] fails when two templates declare the same strategy name", () => {
     const entry = makeCmd({
       dispatch: { Student: "Shared" },
@@ -293,6 +342,21 @@ describe("CommandValidator", () => {
       },
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("strategy-name-unique");
+  });
+
+  it("[templateName-unique] passes when all template names within a command are distinct", () => {
+    // Semantic spec: template names must be unique per command. Plain JS objects enforce this
+    // structurally (duplicate keys are collapsed by the parser), so the rule is defensive —
+    // it guards against programmatic misuse and makes the constraint explicit.
+    const entry = makeCmd({
+      dispatch: { Student: "GrantAccessDefault" },
+      templates: {
+        AccessTemplate: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+        DenyTemplate: { isParameterized: false, strategies: { DenyAccessDefault: {} } },
+      },
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).not.toContain("templateName-unique");
   });
 
   it("[commandName-file-unique] fails when two command keys normalize to the same file name", () => {
@@ -1155,6 +1219,52 @@ describe("MiddlewareCommandValidator", () => {
       dispatch: { Rock: "NoSuchStrategy", Gem: "TraceGemDefault" },
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-target-ref");
+  });
+
+  it("[dispatch-subjectsubset] fails when dispatch routes a subject to a strategy whose template's subjectSubset does not cover that subject", () => {
+    // TraceRockDefault belongs to TraceRock which has subjectSubset: ["Rock"]
+    // Dispatching Gem → TraceRockDefault is invalid since Gem ∉ ["Rock"]
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      templates: {
+        TraceRock: {
+          isParameterized: true,
+          subjectSubset: ["Rock"],
+          strategies: { TraceRockDefault: {} },
+        },
+        TraceGem: { isParameterized: false, strategies: { TraceGemDefault: {} } },
+      },
+      dispatch: { Rock: "TraceRockDefault", Gem: "TraceRockDefault" },
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-subjectsubset");
+  });
+
+  it("passes when each subject is dispatched to a strategy under a template whose subjectSubset covers that subject", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      templates: {
+        TraceRock: {
+          isParameterized: true,
+          subjectSubset: ["Rock"],
+          strategies: { TraceRockDefault: {} },
+        },
+        TraceGem: {
+          isParameterized: true,
+          subjectSubset: ["Gem"],
+          strategies: { TraceGemDefault: {} },
+        },
+      },
+    });
+    expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+  });
+
+  it("[templateName-unique] passes when all template names within a middleware command are distinct", () => {
+    // Semantic spec: template names must be unique per command. Plain JS objects enforce this
+    // structurally (duplicate keys are collapsed by the parser), so the rule is defensive —
+    // it guards against programmatic misuse and makes the constraint explicit.
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", validMwConfig);
+    expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).not.toContain("templateName-unique");
   });
 
   // Rule 10: middleware-ref

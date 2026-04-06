@@ -136,6 +136,8 @@ class PlainTypeValidatorDefault extends PlainTypeValidator {}
 //   - dispatch must have exactly one entry per subjectUnion member
 //   - dispatch values must be plain strategy names (no dot notation)
 //   - dispatch values must resolve to a known strategy within this Command's templates
+//   - dispatch target strategy's parent template subjectSubset must cover dispatched subject
+//   - template names must be unique within a Command
 //   - strategy names must be unique across all templates within a Command
 // ═══════════════════════════════════════════════════════════════════
 
@@ -209,6 +211,24 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
     // dispatch values must be plain strategy names unique across this Command's templates
     const ownTemplates = config.templates ?? {};
 
+    // template names must be unique within this command
+    // Defensive: plain JS objects enforce key uniqueness structurally; this check guards
+    // against programmatic misuse and makes the semantic constraint explicit.
+    const templateNames = new Set<string>();
+    for (const tplName of Object.keys(ownTemplates)) {
+      if (templateNames.has(tplName)) {
+        errors.push(
+          err(
+            key,
+            "templateName-unique",
+            `template "${tplName}" is declared more than once in "${key}" — template names must be unique within a command`,
+          ),
+        );
+      } else {
+        templateNames.add(tplName);
+      }
+    }
+
     // strategy names must be unique across all templates within this command
     const stratNameToTpl = new Map<string, string>(); // stratName → first template that declared it
     for (const [tplName, tplConfig] of Object.entries(ownTemplates)) {
@@ -231,8 +251,8 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
     for (const [subjectRef, target] of Object.entries(config.dispatch)) {
       if (!target.includes(".")) {
         // Only plain strategy names are valid dispatch targets — all templates are abstract
-        const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
-        if (!isStrategy) {
+        const owningTplName = stratNameToTpl.get(target);
+        if (owningTplName === undefined) {
           errors.push(
             err(
               key,
@@ -240,6 +260,18 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
               `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
             ),
           );
+        } else {
+          const tplConfig = ownTemplates[owningTplName];
+          const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+          if (!effectiveSubset.includes(subjectRef)) {
+            errors.push(
+              err(
+                key,
+                "dispatch-subjectsubset",
+                `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+              ),
+            );
+          }
         }
       } else {
         errors.push(
@@ -470,6 +502,7 @@ class StrategyValidatorDefault extends StrategyValidator {}
 // TEMPLATE: MiddlewareCommandValidator
 //
 // Rules: identical to CommandValidator PLUS:
+//   - template names must be unique within a MiddlewareCommand
 //   - Rule 10: config.middleware[] entries must reference keys in
 //     object.middlewareCommands
 //   - Rule 11: each referenced middleware's effective subject union
@@ -550,6 +583,24 @@ abstract class MiddlewareCommandValidator implements Template<
     // dispatch values must be plain strategy names unique across this middleware's templates
     const ownTemplates = config.templates ?? {};
 
+    // template names must be unique within this middleware command
+    // Defensive: plain JS objects enforce key uniqueness structurally; this check guards
+    // against programmatic misuse and makes the semantic constraint explicit.
+    const templateNames = new Set<string>();
+    for (const tplName of Object.keys(ownTemplates)) {
+      if (templateNames.has(tplName)) {
+        errors.push(
+          err(
+            key,
+            "templateName-unique",
+            `template "${tplName}" is declared more than once in "${key}" — template names must be unique within a command`,
+          ),
+        );
+      } else {
+        templateNames.add(tplName);
+      }
+    }
+
     const stratNameToTpl = new Map<string, string>();
     for (const [tplName, tplConfig] of Object.entries(ownTemplates)) {
       for (const stratName of Object.keys(tplConfig.strategies)) {
@@ -570,8 +621,8 @@ abstract class MiddlewareCommandValidator implements Template<
 
     for (const [subjectRef, target] of Object.entries(config.dispatch)) {
       if (!target.includes(".")) {
-        const isStrategy = Object.values(ownTemplates).some((t) => target in t.strategies);
-        if (!isStrategy) {
+        const owningTplName = stratNameToTpl.get(target);
+        if (owningTplName === undefined) {
           errors.push(
             err(
               key,
@@ -579,6 +630,18 @@ abstract class MiddlewareCommandValidator implements Template<
               `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
             ),
           );
+        } else {
+          const tplConfig = ownTemplates[owningTplName];
+          const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+          if (!effectiveSubset.includes(subjectRef)) {
+            errors.push(
+              err(
+                key,
+                "dispatch-subjectsubset",
+                `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+              ),
+            );
+          }
         }
       } else {
         errors.push(
