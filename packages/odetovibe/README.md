@@ -1,5 +1,7 @@
 # odetovibe
 
+[odetovibe on GitHub](https://github.com/scorpevans/codascon) · [npm](https://www.npmjs.com/package/odetovibe)
+
 **YAML-to-TypeScript code generation for [codascon](https://www.npmjs.com/package/codascon) domains.**
 
 **Odetovibe** reads a declarative YAML schema describing your codascon domain — entity types, operations, and dispatch strategies — and generates the TypeScript scaffolding that enforces the protocol. On re-generation, existing method bodies, business logic and user comments are preserved.
