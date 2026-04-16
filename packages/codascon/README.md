@@ -1,5 +1,7 @@
 # codascon
 
+[codascon on GitHub](https://github.com/scorpevans/codascon) · [npm](https://www.npmjs.com/package/codascon)
+
 **A structural protocol for code architecture with exhaustive compile-time type checking.**
 
 **Codascon** distills high-level design patterns and SOLID principles into a zero-overhead TypeScript protocol. You describe what your domain looks like — which entities exist, which operations apply to them, and which strategies handle each combination — and your architectural intent is guarded with mathematical certainty. If a single edge case is unhandled, the compiler won't just warn you — it will stop you.
