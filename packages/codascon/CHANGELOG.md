@@ -1,5 +1,11 @@
 # codascon
 
+## 1.1.2
+
+### Patch Changes
+
+- ff14bf5: Add `continuation: never` to `_runChain` and `_dispatch`; fix odetovibe validator gaps for `dispatch-subjectsubset` and `templateName-unique` rules.
+
 ## 1.1.1
 
 ### Patch Changes

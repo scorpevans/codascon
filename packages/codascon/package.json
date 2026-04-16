@@ -1,6 +1,6 @@
 {
   "name": "codascon",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A structural protocol for code architecture with exhaustive compile-time type checking",
   "license": "MIT",
   "author": "@scorpevans",
