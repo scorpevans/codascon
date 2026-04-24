@@ -29,6 +29,11 @@
     "node": ">=18.0.0",
     "pnpm": ">=10.0.0"
   },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
     "@eslint/js": "^10.0.1",
