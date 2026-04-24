@@ -164,6 +164,10 @@ function findTsConfigPath(startPath: string): string | undefined {
  * resolve from disk, and the project's `target`/`strict`/`moduleResolution`
  * settings are honoured.  `composite` and `declaration` are disabled so that
  * files outside `rootDir` (e.g. testbed subdirectories) do not trigger TS6059.
+ * TS2591 is also suppressed: TypeScript 6.0 does not auto-load `@types/node`
+ * when `skipAddingFilesFromTsConfig: true` is used (sparse project), producing
+ * false positives for `node:` imports even when `@types/node` is installed.
+ * The real `tsc --build` catches any genuine TS2591 instances.
  *
  * When no tsconfig is found (e.g. test temp directories), falls back to an
  * isolated in-memory project with `FALLBACK_FILTERED_CODES` suppressed.
@@ -189,7 +193,10 @@ function checkDiagnostics(text: string, targetFilePath: string): string[] {
     return project
       .getPreEmitDiagnostics()
       .filter(
-        (d) => d.getSourceFile()?.getFilePath() === sf.getFilePath() && d.getCode() !== 6059, // TS6059: file outside rootDir — irrelevant for ad-hoc checks
+        (d) =>
+          d.getSourceFile()?.getFilePath() === sf.getFilePath() &&
+          d.getCode() !== 6059 && // TS6059: file outside rootDir — irrelevant for ad-hoc checks
+          d.getCode() !== 2591, // TS2591: node: imports — TypeScript 6.0 does not auto-load @types/node in a sparse project (skipAddingFilesFromTsConfig: true); real tsc --build catches genuine instances
       )
       .map((d) => {
         const msg = d.getMessageText();
