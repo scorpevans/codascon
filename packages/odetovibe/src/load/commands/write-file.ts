@@ -74,9 +74,26 @@ const GENERATED_HEADER = "/* @odetovibe-generated */\n";
  *   of TS2304; fires for names like `ReadonlyMap`/`ReadonlySet` in ES2015+
  *   libs.  Filtered for the same lib-version reason as TS2583.
  *
+ * TS2564 — "Property X has no initializer and is not definitely assigned in
+ *   the constructor." — TypeScript 6.0 defaults to enabling
+ *   `strictPropertyInitialization` in projects without an explicit tsconfig.
+ *   Generated abstract classes routinely have uninitialized abstract
+ *   properties (e.g. `abstract readonly commandName: string`) that are
+ *   valid and always assigned in concrete subclasses; this is not a codegen
+ *   error.
+ *
  * TS2583 — "Cannot find name X. Do you need to change your target library?" —
  *   fires for names like `Set`, `Map`, `Promise` that live in ES2015+ libs.
  *   Same lib-version mismatch; not a codegen error.
+ *
+ * TS2591 — "Cannot find name 'X'. Do you need to install type definitions for
+ *   node?" — TypeScript 6.0 emits this code (instead of TS2307) for
+ *   `node:`-protocol imports (e.g. `import * as fs from "node:fs"`) when
+ *   `@types/node` is absent from the isolated virtual FS.  Same root cause
+ *   as TS2307; not a codegen error.
+ *
+ * TS2705 — "An async function or method … requires a Promise constructor." —
+ *   fires in ES3 in-memory project which has no Promise type in its lib.
  *
  * TS4112 — "This member cannot have an 'override' modifier because its containing
  *   class does not extend another class." — fires when the base class (e.g.
@@ -85,13 +102,15 @@ const GENERATED_HEADER = "/* @odetovibe-generated */\n";
  *   projects where codascon resolves correctly.
  */
 // Codes suppressed in the in-memory fallback (no tsconfig found, e.g. test tmp dirs).
-// These are all environment false-positives from the isolated ES3 in-memory project,
+// These are all environment false-positives from the isolated in-memory project,
 // not real type errors.
 const FALLBACK_FILTERED_CODES = new Set([
   2307, // TS2307: Cannot find module — unresolvable in isolated virtual filesystem
   2550, // TS2550: Property does not exist — ES3 lib missing ES2015+ built-ins
   2552, // TS2552: Cannot find name — ES3 lib missing ES2015+ globals (ReadonlyMap etc.)
+  2564, // TS2564: Property has no initializer — TypeScript 6.0 strictPropertyInitialization default
   2583, // TS2583: Cannot find name 'Set' — ES3 lib missing Set/Map constructors
+  2591, // TS2591: Cannot find name 'node:*' — TypeScript 6.0 code for node: imports without @types/node
   2705, // TS2705: Async requires Promise — ES3 lib has no Promise
   4112, // TS4112: override modifier invalid — base class unresolvable in isolated FS
 ]);
@@ -145,6 +164,10 @@ function findTsConfigPath(startPath: string): string | undefined {
  * resolve from disk, and the project's `target`/`strict`/`moduleResolution`
  * settings are honoured.  `composite` and `declaration` are disabled so that
  * files outside `rootDir` (e.g. testbed subdirectories) do not trigger TS6059.
+ * TS2591 is also suppressed: TypeScript 6.0 does not auto-load `@types/node`
+ * when `skipAddingFilesFromTsConfig: true` is used (sparse project), producing
+ * false positives for `node:` imports even when `@types/node` is installed.
+ * The real `tsc --build` catches any genuine TS2591 instances.
  *
  * When no tsconfig is found (e.g. test temp directories), falls back to an
  * isolated in-memory project with `FALLBACK_FILTERED_CODES` suppressed.
@@ -170,7 +193,10 @@ function checkDiagnostics(text: string, targetFilePath: string): string[] {
     return project
       .getPreEmitDiagnostics()
       .filter(
-        (d) => d.getSourceFile()?.getFilePath() === sf.getFilePath() && d.getCode() !== 6059, // TS6059: file outside rootDir — irrelevant for ad-hoc checks
+        (d) =>
+          d.getSourceFile()?.getFilePath() === sf.getFilePath() &&
+          d.getCode() !== 6059 && // TS6059: file outside rootDir — irrelevant for ad-hoc checks
+          d.getCode() !== 2591, // TS2591: node: imports — TypeScript 6.0 does not auto-load @types/node in a sparse project (skipAddingFilesFromTsConfig: true); real tsc --build catches genuine instances
       )
       .map((d) => {
         const msg = d.getMessageText();

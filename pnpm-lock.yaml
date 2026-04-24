@@ -27,8 +27,8 @@ importers:
         specifier: ^16.4.0
         version: 16.4.0
       prettier:
-        specifier: ^3.0.0
-        version: 3.8.1
+        specifier: ^3.8.3
+        version: 3.8.3
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -63,11 +63,11 @@ importers:
         specifier: ^4.0.0
         version: 4.1.1
       prettier:
-        specifier: ^3.0.0
-        version: 3.8.1
+        specifier: ^3.8.3
+        version: 3.8.3
       ts-morph:
-        specifier: ^27.0.2
-        version: 27.0.2
+        specifier: ^28.0.0
+        version: 28.0.0
     devDependencies:
       '@types/js-yaml':
         specifier: ^4.0.0
@@ -906,8 +906,8 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@ts-morph/common@0.28.1':
-    resolution: {integrity: sha512-W74iWf7ILp1ZKNYXY5qbddNaml7e9Sedv5lvU1V8lftlitkc9Pq1A+jlH23ltDgWYeZFFEqGCD1Ies9hqu3O+g==}
+  '@ts-morph/common@0.29.0':
+    resolution: {integrity: sha512-35oUmphHbJvQ/+UTwFNme/t2p3FoKiGJ5auTjjpNTop2dyREspirjMy82PLSC1pnDJ8ah1GU98hwpVt64YXQsg==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1693,8 +1693,8 @@ packages:
     engines: {node: '>=10.13.0'}
     hasBin: true
 
-  prettier@3.8.1:
-    resolution: {integrity: sha512-UOnG6LftzbdaHZcKoPFtOcCKztrQ57WkHDeRD9t/PTQtmT0NHSeWWepj6pS0z/N7+08BHFDQVUrfmfMRcZwbMg==}
+  prettier@3.8.3:
+    resolution: {integrity: sha512-7igPTM53cGHMW8xWuVTydi2KO233VFiTNyF5hLJqpilHfmn8C8gPf+PS7dUT64YcXFbiMGZxS9pCSxL/Dxm/Jw==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -1882,8 +1882,8 @@ packages:
   ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
 
-  ts-morph@27.0.2:
-    resolution: {integrity: sha512-fhUhgeljcrdZ+9DZND1De1029PrE+cMkIP7ooqkLRTrRLTqcki2AstsyJm0vRNbTbVCNJ0idGlbBrfqc7/nA8w==}
+  ts-morph@28.0.0:
+    resolution: {integrity: sha512-Wp3tnZ2bzwxyTZMtgWVzXDfm7lB1Drz+y9DmmYH/L702PQhPyVrp3pkou3yIz4qjS14GY9kcpmLiOOMvl8oG1g==}
 
   tsup@8.5.1:
     resolution: {integrity: sha512-xtgkqwdhpKWr3tKPmCkvYmS9xnQK3m3XgxZHwSUjvfTjp7YfXe5tT3GgWi0F2N+ZSMsOeWeZFh7ZZFg5iPhing==}
@@ -2700,7 +2700,7 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@ts-morph/common@0.28.1':
+  '@ts-morph/common@0.29.0':
     dependencies:
       minimatch: 10.2.4
       path-browserify: 1.0.1
@@ -3513,7 +3513,7 @@ snapshots:
 
   prettier@2.8.8: {}
 
-  prettier@3.8.1: {}
+  prettier@3.8.3: {}
 
   punycode@2.3.1: {}
 
@@ -3722,9 +3722,9 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-morph@27.0.2:
+  ts-morph@28.0.0:
     dependencies:
-      '@ts-morph/common': 0.28.1
+      '@ts-morph/common': 0.29.0
       code-block-writer: 13.0.3
 
   tsup@8.5.1(postcss@8.5.8)(typescript@5.9.3)(yaml@2.8.3):
