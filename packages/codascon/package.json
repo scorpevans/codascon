@@ -63,9 +63,9 @@
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "devDependencies": {
-    "@vitest/coverage-istanbul": "^4.1.2",
+    "@vitest/coverage-istanbul": "^4.1.5",
     "tsup": "^8.0.0",
-    "typescript": "^5.7.0",
-    "vitest": "^4.1.2"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }
