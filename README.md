@@ -54,7 +54,7 @@ With a formal protocol in place, an LLM can generate structurally correct code b
 | Package                             | Description                                                                      |
 | ----------------------------------- | -------------------------------------------------------------------------------- |
 | [`codascon`](./packages/codascon)   | The framework — `Subject`, `Command`, `Template`, `Strategy`, and type utilities |
-| [`odetovibe`](./packages/odetovibe) | CLI + library: YAML schema, validation, and TypeScript scaffolding codegen       |
+| [`odetovibe`](./packages/odetovibe) | CLI: YAML schema, validation, and TypeScript scaffolding codegen                 |
 
 ## Quick Start
 
@@ -439,41 +439,6 @@ npx odetovibe campus.yaml --outDir src/ --overwrite
 
 # Strict mode — writes .ode.ts alongside the original on conflict instead of overwriting
 npx odetovibe campus.yaml --outDir src/ --no-overwrite
-```
-
-#### Library — three phases: Extract → Transform → Load
-
-```typescript
-import { Project } from "ts-morph";
-import { parseYaml, validateYaml, emitAst, writeFiles } from "odetovibe";
-
-// Extract: parse YAML and validate against schema rules
-const configIndex = parseYaml("campus.yaml");
-const { valid, validationResults } = validateYaml(configIndex);
-if (!valid) {
-  for (const validationResult of validationResults) {
-    for (const error of validationResult.errors)
-      console.error(`[${error.entryKey}] ${error.rule}: ${error.message}`);
-  }
-  process.exit(1);
-}
-
-// Transform: emit TypeScript AST into an in-memory ts-morph Project
-const project = new Project({ useInMemoryFileSystem: true });
-emitAst(configIndex, { configIndex, project });
-
-// Load: write SourceFiles to disk (merge preserves existing method bodies)
-const results = await writeFiles(project, { targetDir: "./src", mode: "merge" });
-for (const fileResult of results) {
-  if (fileResult.compileErrors) {
-    console.error("compile errors →", fileResult.path);
-    for (const e of fileResult.compileErrors) console.error(" ", e);
-  } else if (fileResult.conflicted) {
-    console.warn("conflict →", fileResult.path);
-  } else {
-    console.log(fileResult.created ? "created" : "updated", fileResult.path);
-  }
-}
 ```
 
 **Odetovibe** reads the YAML blueprint, validates it against the schema rules, and emits TypeScript classes that conform to the **Codascon** protocol — with all the type constraints already in place. You fill in the business logic; the structure is guaranteed.
