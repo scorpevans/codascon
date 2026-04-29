@@ -10,18 +10,8 @@
 
 ## Install
 
-**CLI (global):**
-
 ```bash
 npm install -g odetovibe
-```
-
-**Library (local):**
-
-```bash
-npm install odetovibe
-# or
-pnpm add odetovibe
 ```
 
 ## CLI
@@ -118,43 +108,6 @@ commands:
 - Commands with a `middleware:` list emit `override get middleware()` — no manual wiring needed
 
 See [`src/schema.ts`](./src/schema.ts) for the full schema type definitions and validation rules.
-
-## Library API
-
-Odetovibe exposes a three-phase ETL pipeline:
-
-```typescript
-import { Project } from "ts-morph";
-import { parseYaml, validateYaml, emitAst, writeFiles } from "odetovibe";
-
-// Extract: parse YAML and validate against schema rules
-const configIndex = parseYaml("campus.yaml");
-const { valid, validationResults } = validateYaml(configIndex);
-if (!valid) {
-  for (const validationResult of validationResults) {
-    for (const error of validationResult.errors)
-      console.error(`[${error.entryKey}] ${error.rule}: ${error.message}`);
-  }
-  process.exit(1);
-}
-
-// Transform: emit TypeScript AST into an in-memory ts-morph Project
-const project = new Project({ useInMemoryFileSystem: true });
-emitAst(configIndex, { configIndex, project });
-
-// Load: write SourceFiles to disk (merge preserves existing method bodies)
-const results = await writeFiles(project, { targetDir: "./src", mode: "merge" });
-for (const fileResult of results) {
-  if (fileResult.compileErrors) {
-    console.error("compile errors →", fileResult.path);
-    for (const e of fileResult.compileErrors) console.error(" ", e);
-  } else if (fileResult.conflicted) {
-    console.warn("conflict →", fileResult.path);
-  } else {
-    console.log(fileResult.created ? "created" : "updated", fileResult.path);
-  }
-}
-```
 
 ## What Gets Generated
 
