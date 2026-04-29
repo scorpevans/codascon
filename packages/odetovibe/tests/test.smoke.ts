@@ -15,7 +15,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { Project } from "ts-morph";
-import { emitAst, parseYaml, validateYaml, writeFiles } from "../src/index.js";
+import { parseYaml, validateYaml } from "../src/extract/index.js";
+import { emitAst } from "../src/transform/index.js";
+import { writeFiles } from "../src/load/index.js";
 
 const fixturesDir = resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures");
 

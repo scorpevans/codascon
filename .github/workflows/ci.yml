@@ -105,7 +105,6 @@ jobs:
           cd /tmp/smoke-odetovibe
           npm init -y
           npm install /tmp/codascon-*.tgz /tmp/odetovibe-*.tgz
-          node --input-type=module -e "import { parseYaml, validateYaml, emitAst, writeFiles } from 'odetovibe'; console.log('ESM: OK')"
           test -x ./node_modules/.bin/odetovibe && echo "CLI binary: OK"
 
           # --help must exit 0 and mention the positional arg
