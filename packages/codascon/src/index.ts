@@ -201,27 +201,24 @@ type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
  * only `Command` subclasses (which `implements CommandSignature`) satisfy it. External code
  * cannot forge the symbol key, so accidental structural matches on unrelated types are impossible.
  *
- * The remaining phantom fields (_b, _o, _r, _bsl) correspond to Command's four type parameters.
- * They are `declare readonly` on Command, carry no JS runtime cost, and must not use the JSDoc
- * internal marker in their leading comments (stripInternal would strip them from .d.ts, breaking
- * cross-package consumers).
+ * All four type parameters (B, O, R, BSL) are packed into the brand property's value type.
+ * This is the carrier: a single symbol-keyed property that is invisible to IDE autocomplete
+ * and does not pollute the Command interface with named `_b`/`_o`/`_r`/`_bsl` fields.
+ * Extractors match against `CommandSignature<any, infer O, any, any>` — TypeScript expands
+ * this to the carrier shape and infers from the nested fields.
+ *
+ * `commandName` is intentionally NOT part of `CommandSignature`: it is a runtime identity
+ * concern on `Command` (abstract property, implemented by subclasses). `CommandName<C>`
+ * infers the literal directly from the `commandName` property on `C` — no carrier slot needed.
+ *
+ * The phantom field must not use the JSDoc internal marker in its comments: stripInternal
+ * would strip it from the .d.ts, breaking cross-package consumers.
  */
 declare const _commandBrand: unique symbol;
 declare const _subjectBrand: unique symbol;
 
-type CommandSignature<
-  N extends string = string,
-  B = unknown,
-  O = unknown,
-  R = unknown,
-  BSL extends any[] = any[],
-> = {
-  readonly [_commandBrand]: typeof _commandBrand;
-  readonly commandName: N;
-  readonly _b: B;
-  readonly _o: O;
-  readonly _r: R;
-  readonly _bsl: BSL;
+type CommandSignature<B = unknown, O = unknown, R = unknown, BSL extends any[] = any[]> = {
+  readonly [_commandBrand]: { b: B; o: O; r: R; bsl: BSL };
 };
 
 /*
@@ -236,7 +233,7 @@ type CommandSignature<
  * type T = CommandObject<AccessCmd>;  // Building
  */
 /** Extracts the object type (`O`) from a Command — the context/payload passed to resolver methods and `execute`. Returns `never` if `C` does not extend `Command`. */
-export type CommandObject<C> = C extends CommandSignature<any, any, infer O, any, any> ? O : never;
+export type CommandObject<C> = C extends CommandSignature<any, infer O, any, any> ? O : never;
 
 /*
  * Extracts the return type (`R`) from a Command's generic parameters.
@@ -249,10 +246,10 @@ export type CommandObject<C> = C extends CommandSignature<any, any, infer O, any
  * type T = CommandReturn<AccessCmd>;  // AccessResult
  */
 /** Extracts the return type (`R`) from a Command — the result of `run()` and `execute()`. Returns `never` if `C` does not extend `Command`. */
-export type CommandReturn<C> = C extends CommandSignature<any, any, any, infer R, any> ? R : never;
+export type CommandReturn<C> = C extends CommandSignature<any, any, infer R, any> ? R : never;
 
 /** Extracts the base type (`B`) from a Command — the shared constraint all Subjects in the union extend. Returns `never` if `C` does not extend `Command`. */
-export type CommandBase<C> = C extends CommandSignature<any, infer B, any, any, any> ? B : never;
+export type CommandBase<C> = C extends CommandSignature<infer B, any, any, any> ? B : never;
 
 /*
  * Extracts the `commandName` string literal type from a Command.
@@ -276,10 +273,14 @@ export type CommandName<C> =
   // (e.g. CommandHooks<any[], SU>) produce {} rather than a spurious error-keyed property.
   0 extends 1 & C
     ? never
-    : C extends CommandSignature<infer N, any, any, any, any>
-      ? string extends N
-        ? WidenedCommandNameError
-        : N
+    : // Nominal gate: only Command subclasses carry [_commandBrand].
+      // Checked first so non-Commands short-circuit before the commandName lookup.
+      C extends { readonly [_commandBrand]: unknown }
+      ? C extends { commandName: infer N extends string }
+        ? string extends N
+          ? WidenedCommandNameError
+          : N
+        : never
       : never;
 
 // ─── Internal Type Utilities ─────────────────────────────────────
@@ -293,30 +294,27 @@ export type CommandName<C> =
  * Returns `never` for `any` (IsAny guard), mirroring `CommandName` and `SubjectResolverName`.
  * Returns `never` if `C` does not extend `Command`.
  *
- * **Why `_bsl` and not `C extends Command<any, any, any, infer BSL>`:** The heritage-clause
- * pattern extracts `BSL` via structural method-signature matching, which creates a circular
- * evaluation chain when `Template<C, any[], SU>` is involved:
+ * **Why `CommandSignature` and not `C extends Command<any, any, any, infer BSL>`:** The
+ * heritage-clause pattern extracts `BSL` via structural method-signature matching, which
+ * creates a circular evaluation chain when `Template<C, any[], SU>` is involved:
  * `CommandSubjectUnion<C>` → structural match → `CommandSubjectStrategies` → `Visit`
  * → `Template` → `CommandSubjectUnion<C>`.
  * TypeScript detects the cycle and falls back to `any` for concrete subclasses.
- * The phantom `declare readonly _bsl: BSL` property on `Command` breaks the cycle by
- * providing a direct property-access path to `BSL` that bypasses method-signature traversal.
+ * `CommandSignature` breaks the cycle: it is a plain object type with no method signatures,
+ * so TypeScript resolves it directly without recursing through the class hierarchy.
+ * `any[]` (not `Subject[]`) avoids class-identity issues across package boundaries.
  */
 /** Extracts the Subject union from a Command — the set of Subjects the Command can dispatch to. Returns `never` for `any` or non-Command types. */
 export type CommandSubjectUnion<C> =
   // IsAny guard: mirrors the guards on CommandName and SubjectResolverName.
   0 extends 1 & C
     ? never
-    : // Reads the phantom `_bsl` property rather than pattern-matching on `Command<...infer BSL>`.
-      // Heritage-clause extraction triggers circular evaluation through CommandSubjectStrategies
-      // → Visit → Template → CommandSubjectUnion. Property access breaks the cycle.
-      // `any[]` (not `Subject[]`) avoids class-identity issues across package boundaries.
-      C extends CommandSignature<any, any, any, any, infer BSL extends any[]>
+    : C extends CommandSignature<any, any, any, infer BSL extends any[]>
       ? BSL[number]
       : never;
 
 /*
- * Extracts the BSL tuple from a Command's `_bsl` phantom property.
+ * Extracts the BSL tuple from a Command's `CommandSignature` carrier.
  *
  * Given `Command<B, O, R, [Student, Professor]>`, produces `[Student, Professor]`.
  * This is the ordered Subject tuple as declared on the Command — the same type
@@ -333,7 +331,7 @@ export type CommandSubjectUnion<C> =
 /** Extracts the BSL tuple from a Command — the original ordered Subject tuple declared on the Command. Returns `never` for `any` or non-Command types. */
 export type CommandBSL<C> = 0 extends 1 & C
   ? never
-  : C extends CommandSignature<any, any, any, any, infer BSL extends any[]>
+  : C extends CommandSignature<any, any, any, infer BSL extends any[]>
     ? BSL
     : never;
 
@@ -682,22 +680,19 @@ type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
  * Call `run(subject, object)` to dispatch.
  */
 export abstract class Command<B, O, R, BSL extends (B & Subject)[]> implements CommandSignature<
-  string,
   B,
   O,
   R,
   BSL
 > {
   abstract readonly commandName: string;
-  // Phantom properties — no JS emit. Must NOT use the JSDoc internal marker —
-  // stripInternal would strip them from .d.ts, breaking cross-package consumers.
-  // [_commandBrand]: nominal brand — makes CommandSignature unforgeable; only Command subclasses satisfy it.
-  // _b, _o, _r, _bsl: enable non-circular type extraction via CommandSignature.
-  declare readonly [_commandBrand]: typeof _commandBrand;
-  declare readonly _b: B;
-  declare readonly _o: O;
-  declare readonly _r: R;
-  declare readonly _bsl: BSL;
+  // Phantom carrier — no JS emit. Must NOT use the JSDoc internal marker —
+  // stripInternal would strip it from .d.ts, breaking cross-package consumers.
+  // Packs all four type parameters into the brand property's value type so that
+  // extractors (CommandObject, CommandReturn, CommandBase, CommandSubjectUnion,
+  // CommandBSL) can infer them via CommandSignature without named phantom fields
+  // (_b/_o/_r/_bsl) polluting the Command interface.
+  declare readonly [_commandBrand]: { b: B; o: O; r: R; bsl: BSL };
 
   /**
    * Optional catch-all Template. When assigned, subjects without a specific resolver
