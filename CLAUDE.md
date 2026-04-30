@@ -20,13 +20,12 @@ Only three sources authorize action: a step explicitly mandated by this document
 ### The active PROMPT thread is every recorded info in the file `PROMPT/<branch-name>.md` (where `/` in the branch name is replaced with `-`), at the repo root.
 
 1. **Thread Continuity**
-   - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo PROMPT thread resumes unchanged after a noop. Respond and return control flow to the user.
-   - Load the current branch's PROMPT file if it exists
+   - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: do not update the PROMPT file; respond naturally and return control flow to the user.
+   - Else if the prompt is repo-related, load the current branch's PROMPT file if it exists
 2. **Route**
    - **Prompt Choice** — You must be 100% sure whether the prompt is a Task, Question, Confirmation or Comment, before you proceed. Otherwise confirm and return control flow to the user.
-   - **Prompt Route** - If the prompt is a Task respond to it according to the _Task Protocol_ below, if it is a Question respond to it according to the _Question Protocol_ below, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Otherwise goto _Prompt Choice_.
+   - **Prompt Route** - If the prompt is a Task respond to it according to the _Task Protocol_, if it is a Question respond to it according to the _Question Protocol_, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Otherwise goto _Prompt Choice_.
 3. **Sign off**
-   If a protocol directs here after it has finished its steps, continue to the next steps.
    - **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
    - **Create or Update Workflows** - If certain workflows were created or followed in handling the Prompt, ensure that they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
    - **Create missing Skills** - In the above steps, if you wanted to record Lessons but found no Skill under which to record them, ask confirmation from the user to create a relevant Skill so that you can record these.
@@ -52,7 +51,7 @@ Every time you receive a Task, you MUST follow this protocol:
    - Once the user confirms the execution of a proposed plan of action, proceed in accordance with the _Execution Constraints_.
 5. **Post Task Execution**
    - If the user declined execution, or if execution aborted due to issues, record what was declined or what caused the abort in the PROMPT file and goto _Task Pushback Confirmation_ and proceed.
-   - Goto _Sign off_.
+   - Otherwise, goto _Sign off_.
 
 ## Question Prompt Protocol:
 
@@ -116,7 +115,7 @@ If the user's confirmation is in response to a context switch by a Task prompt g
 In case the _Confirmation Prompt Protocol_ redirects here based on the user's approval or disapproval of the execution of an irreversible action proceed as follows:
 
 - If the user approved it, execute the action and continue the ongoing execution according to the plan, if the user disapproved it, abort the execution. In both cases, once execution terminates, goto _Post Task Execution_ if the execution is in response to a planned Task, or _Post Question Execution_ if it is in response to a planned Question research.
-- Otherwise, goto _Prompt Protocol_.
+- Goto _Prompt Protocol_.
 
 ## Execution Constraints:
 
