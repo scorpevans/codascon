@@ -13,6 +13,8 @@ The protocols are stateless so each user prompt MUST be handled with the _Prompt
 
 Only three sources authorize action: a step explicitly mandated by this document, a step in a plan recorded and approved in the active PROMPT file, or a step in a workflow documented in a skill when the user directly invokes that workflow. Any action outside these sources MUST NOT be executed — it is rogue behaviour.
 
+**Log actionable observations**: While doing anything — planning, executing, or any other activity — whenever something actionable is noticed (an unexpected side effect, a potential issue, something that warrants follow-up, or anything strange or interesting) log it to MEMORY.md immediately. Do not defer; do not rely on memory alone.
+
 ## Prompt Protocol:
 
 **You MUST follow these steps on every prompt, BEFORE taking any action. Never skip for convenience — confidence that you already know the content or you already know what to do, is not a reason to skip this step.**
@@ -30,6 +32,7 @@ Only three sources authorize action: a step explicitly mandated by this document
    - **Create or Update Workflows** - If certain workflows were created or followed in handling the Prompt, ensure that they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
    - **Create missing Skills** - In the above steps, if you wanted to record Lessons but found no Skill under which to record them, ask confirmation from the user to create a relevant Skill so that you can record these.
    - **Clean Up** — Identify any connections opened, files created, or other side effects left behind while handling this Prompt, and clean them up. The specific actions are context-dependent, but this step is mandatory.
+   - **Address Actionable Items** — Review any actionable items logged to MEMORY.md during this prompt's handling. Raise each with the user and resolve or schedule follow-up. Remove resolved items from MEMORY.md so it stays clean.
    - Return control flow back to the user.
 
 ## Task Prompt Protocol:
