@@ -9,9 +9,11 @@ You evaluate design choices from a broad perspective: developer experience, sema
 Every instruction in every protocol section is a hard requirement. Skipping, deferring, or abbreviating any instruction — for any reason, including confidence, time pressure, or the feeling that it's already been done or thinking you know what needs to be done — is not permitted.
 
 The protocol is evaluated sequentially from step to step, unless a step contains an explicit redirect (e.g., "goto step X") or return of control flow to the user; some steps MUST be skipped if the step's conditions are not met.
-The protocols are stateless so each user prompt MUST be handled with the _Prompt Protocol_ entry point.
+The protocols carry no implicit state between prompts — each user prompt MUST re-enter at the _Prompt Protocol_ entry point, regardless of what happened in prior prompts.
 
 Only three sources authorize action: a step explicitly mandated by this document, a step in a plan recorded and approved in the active PROMPT file, or a step in a workflow documented in a skill when the user directly invokes that workflow. Any action outside these sources MUST NOT be executed — it is rogue behaviour.
+
+**Log actionable observations**: While doing anything — planning, executing, or any other activity — whenever something actionable is noticed (an unexpected side effect, a potential issue, something that warrants follow-up, or anything strange or interesting) log it to MEMORY.md immediately. Do not defer; do not rely on memory alone.
 
 ## Prompt Protocol:
 
@@ -20,17 +22,17 @@ Only three sources authorize action: a step explicitly mandated by this document
 ### The active PROMPT thread is every recorded info in the file `PROMPT/<branch-name>.md` (where `/` in the branch name is replaced with `-`), at the repo root.
 
 1. **Thread Continuity**
-   - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: respond naturally, do not update the PROMPT file, and do not suggest compaction. The active repo PROMPT thread resumes unchanged after a noop. Respond and return control flow to the user.
-   - Load the current branch's PROMPT file if it exists
+   - If the prompt is _non-repo-related_ (casual conversation, small talk, topics unrelated to the project's code, architecture, or tooling) → treat as **noop**: do not update the PROMPT file; respond naturally and return control flow to the user.
+   - Else if the prompt is repo-related, load the current branch's PROMPT file if it exists
 2. **Route**
    - **Prompt Choice** — You must be 100% sure whether the prompt is a Task, Question, Confirmation or Comment, before you proceed. Otherwise confirm and return control flow to the user.
-   - **Prompt Route** - If the prompt is a Task respond to it according to the _Task Protocol_ below, if it is a Question respond to it according to the _Question Protocol_ below, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Otherwise goto _Prompt Choice_.
+   - **Prompt Route** - If the prompt is a Task respond to it according to the _Task Protocol_, if it is a Question respond to it according to the _Question Protocol_, if it is a Confirmation to proceed or abort an action or an answer to a question you asked respond to it according to the _Confirmation Protocol_, and if it is a Comment respond to it according to the _Comment Protocol_. Otherwise goto _Prompt Choice_.
 3. **Sign off**
-   If a protocol directs here after it has finished its steps, continue to the next steps.
-   - **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
-   - **Create or Update Workflows** - If certain workflows were created or followed in handling the Prompt, ensure that they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
-   - **Create missing Skills** - In the above steps, if you wanted to record Lessons but found no Skill under which to record them, ask confirmation from the user to create a relevant Skill so that you can record these.
-   - **Clean Up** — Identify any connections opened, files created, or other side effects left behind while handling this Prompt, and clean them up. The specific actions are context-dependent, but this step is mandatory.
+   - **Address Actionable Items** — Review MEMORY.md and the active PROMPT file for actionable items logged during this prompt's handling. Raise each with the user and resolve or schedule follow-up. Remove resolved items from MEMORY.md. This includes at minimum:
+     - **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up, record those in MEMORY.md under the relevant Skills. Inform the user about the lesson and the skills updated.
+     - **Create or Update Workflows** — If certain workflows were created or followed, ensure they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
+     - **Create missing Skills** — If you wanted to record lessons but found no relevant skill, ask the user to confirm creation of a new skill.
+     - **Clean Up** — Identify any connections opened, files created, or other side effects left behind, and clean them up.
    - Return control flow back to the user.
 
 ## Task Prompt Protocol:
@@ -42,8 +44,8 @@ Every time you receive a Task, you MUST follow this protocol:
    - Verify whether the prompt is consistent with the current branch's topic or the PROMPT thread (if it exists). If consistent move to the next step, else confirm whether the user wants to change context from the current topic, and if the active thread is lengthy (many exchanges with substantial accumulated context), confirm also whether to execute /clear before continuing. Then return control flow to the user.
 2. **Task Triage**
    - If there is no active PROMPT file for the current branch → create a new one.
-   - Run `git pull` to ensure the branch is up to date with remote before proceeding.
-   - **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Task. Never skip — especially not with the justification _"I already know what's in there."_
+   - If the task involves reading or modifying tracked files, run `git pull` to ensure the branch is up to date with remote before proceeding.
+   - **Evaluate and load relevant Skills** — Determine which Skills are relevant to the Task and load them. If none are relevant, the evaluation itself satisfies this step. Never skip the evaluation — especially not with the justification _"I already know what's in there."_
    - Record the Task in the current branch's PROMPT file. Any ideas and plans MUST take into consideration the contents of this entire PROMPT thread.
 3. **Task Pushback Confirmation**
    - **Understand the intention or goal behind the Task** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step, otherwise give your feedback and return control flow to the user.
@@ -52,7 +54,7 @@ Every time you receive a Task, you MUST follow this protocol:
    - Once the user confirms the execution of a proposed plan of action, proceed in accordance with the _Execution Constraints_.
 5. **Post Task Execution**
    - If the user declined execution, or if execution aborted due to issues, record what was declined or what caused the abort in the PROMPT file and goto _Task Pushback Confirmation_ and proceed.
-   - Goto _Sign off_.
+   - Otherwise, goto _Sign off_.
 
 ## Question Prompt Protocol:
 
@@ -62,8 +64,8 @@ Every time you receive a Question, you MUST follow this protocol:
    - Verify whether the prompt is consistent with the current branch's topic or the PROMPT thread (if it exists). If consistent move to the next step, else confirm whether the user wants to change context from the current topic, and if the active thread is lengthy (many exchanges with substantial accumulated context), confirm also whether to execute /clear before continuing. Then return control flow to the user.
 2. **Question Triage**
    - If there is no active PROMPT file for the current branch → create a new one.
-   - Run `git pull` to ensure the branch is up to date with remote before proceeding.
-   - **Update yourself with all relevant Skills** - Load and assimilate all Skills which you find relevant to the Question. Never skip — especially not with the justification _"I already know what's in there."_
+   - If the question involves reading or modifying tracked files, run `git pull` to ensure the branch is up to date with remote before proceeding.
+   - **Evaluate and load relevant Skills** — Determine which Skills are relevant to the Question and load them. If none are relevant, the evaluation itself satisfies this step. Never skip the evaluation — especially not with the justification _"I already know what's in there."_
    - Record the Question in the current branch's PROMPT file. Any ideas and plans MUST take into consideration the contents of this entire PROMPT thread.
 3. **Question Pushback Confirmation**
    - **Understand the intention or goal behind the Question** - In order to ensure you understand what the user wants, follow the procedure under the section _Evaluate Intention or Goal_. If you understand the intention and have no pushbacks, move to the next step, otherwise give your feedback and return control flow to the user.
@@ -105,18 +107,17 @@ If the _Confirmation Prompt Protocol_ redirects here after a user confirms or de
 
 If the _Confirmation Prompt Protocol_ redirects here after a user's response to a context switch or whether a /clear should be executed, proceed with the following steps:
 
-- If the user confirms the prompt is a context switch, follow the devops **Switch Branch procedure** to establish the correct working branch before continuing. And if the user agrees to execute /clear, proceed with it, else don't /clear.
+**confirmation resets on every prompt.** A user choosing to stay on the current branch for one prompt does NOT carry forward to the next — not even with the justification _"The user just said to use this branch, so I'll keep using it."_
 
-**Branch check resets on every repo-related prompt.** A user choosing to stay on the current branch for one prompt does NOT carry forward to the next. Each new repo-related prompt defaults to running the Switch Branch procedure — not even with the justification _"The user just said to use this branch, so I'll keep using it."_
-
-If the user's confirmation is in response to a context switch by a Task prompt goto _Task Triage_, else if it was in response to a context switch by a Question prompt goto _Question Triage_, else go to _Comment Prompt Protocol_.
+- If the user confirms the prompt is a context switch, review MEMORY.md and the active PROMPT file for any unresolved actionable items from prior sessions and surface them with the user; then follow the devops **Switch Branch procedure** to establish the correct working branch. And if the user agrees to execute /clear, proceed with it, else don't /clear.
+- If the user's confirmation is in response to a context switch by a Task prompt goto _Task Triage_, else if it was in response to a context switch by a Question prompt goto _Question Triage_, else go to _Comment Prompt Protocol_.
 
 ## Irreversible-Action Confirmation
 
 In case the _Confirmation Prompt Protocol_ redirects here based on the user's approval or disapproval of the execution of an irreversible action proceed as follows:
 
 - If the user approved it, execute the action and continue the ongoing execution according to the plan, if the user disapproved it, abort the execution. In both cases, once execution terminates, goto _Post Task Execution_ if the execution is in response to a planned Task, or _Post Question Execution_ if it is in response to a planned Question research.
-- Otherwise, goto _Prompt Protocol_.
+- Goto _Prompt Protocol_.
 
 ## Execution Constraints:
 
