@@ -31,8 +31,8 @@ Only three sources authorize action: a step explicitly mandated by this document
    - **Create or Update Lessons** — If contradictions, mistakes or new lessons popped up during the handling of a Prompt, record those in the MEMORY.md file under the relevant Skills you can find. Inform the user about the Lesson and the list of Skills in which you are recording it to.
    - **Create or Update Workflows** - If certain workflows were created or followed in handling the Prompt, ensure that they are consistently recorded in the SKILL.md of the relevant Skills and inform the user.
    - **Create missing Skills** - In the above steps, if you wanted to record Lessons but found no Skill under which to record them, ask confirmation from the user to create a relevant Skill so that you can record these.
-   - **Clean Up** — Identify any connections opened, files created, or other side effects left behind while handling this Prompt, and clean them up. The specific actions are context-dependent, but this step is mandatory.
-   - **Address Actionable Items** — Review any actionable items logged to MEMORY.md during this prompt's handling. Raise each with the user and resolve or schedule follow-up. Remove resolved items from MEMORY.md so it stays clean.
+   - **Clean Up** — Identify any connections opened, files created, or other side effects left behind while handling this Prompt, and clean them up. Reading MEMORY.md and the active PROMPT file helps surface what was done and what may need undoing. The specific actions are context-dependent, but this step is mandatory.
+   - **Address Actionable Items** — Review any actionable items logged to MEMORY.md and the active PROMPT file. Raise each with the user and resolve or schedule follow-up. Remove resolved items from MEMORY.md so it stays clean.
    - Return control flow back to the user.
 
 ## Task Prompt Protocol:
