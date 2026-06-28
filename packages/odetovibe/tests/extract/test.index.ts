@@ -296,6 +296,16 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-moot");
   });
 
+  it("[defaultResolutions-ref] fails when a defaultResolutions entry is not in subjectUnion", () => {
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      defaultResolutions: ["Ghost"], // not in subjectUnion
+      defaultResolver: "GrantAccessDefault",
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolutions-ref");
+  });
+
   it("[dispatch-extra] fails when a dispatch key is not in subjectUnion", () => {
     const entry = makeCmd({
       dispatch: { Student: "GrantAccess", Professor: "GrantAccess" }, // Professor not in union
@@ -1289,6 +1299,43 @@ describe("MiddlewareCommandValidator", () => {
       defaultResolver: "TraceRockDefault",
     });
     expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
+  });
+
+  it("[resolution-partition] fails when a subject is in both dispatch and defaultResolutions", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+      defaultResolutions: ["Gem"], // also defaulted — violates disjointness
+      defaultResolver: "TraceGemDefault",
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("resolution-partition");
+  });
+
+  it("[defaultResolutions-resolver] fails when defaultResolutions is set but no defaultResolver", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      dispatch: { Rock: "TraceRockDefault" },
+      defaultResolutions: ["Gem"], // no defaultResolver declared
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolutions-resolver");
+  });
+
+  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultResolutions is empty", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig, // dispatch covers both Rock and Gem
+      defaultResolver: "TraceRockDefault", // moot — nothing is defaulted
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-moot");
+  });
+
+  it("[defaultResolutions-ref] fails when a defaultResolutions entry is not in subjectUnion", () => {
+    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...validMwConfig,
+      dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+      defaultResolutions: ["Ghost"], // not in subjectUnion
+      defaultResolver: "TraceRockDefault",
+    });
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolutions-ref");
   });
 
   it("[baseType-ref] fails when baseType is not a known domain type", () => {

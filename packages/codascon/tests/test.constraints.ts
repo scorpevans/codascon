@@ -981,6 +981,46 @@ describe("§14 compile-time constraint tests", () => {
   void _wide;
 }
 
+// §MC6 — A partitioned MiddlewareCommand (resolve some subjects, default the rest) registers
+// via the host's per-subject coverage: Rock is covered by resolveRock, Gem by the defaultResolver.
+{
+  class PartedMw extends MiddlewareCommand<object, Ctx, Res, [Rock], [Gem]> {
+    readonly commandName = "partedMw" as const;
+    resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<PartedMw, any[], Rock> {
+      return { execute: (s, o, inner) => inner.run(s, o) };
+    }
+    override readonly defaultResolver: MiddlewareTemplate<PartedMw, any[], Gem> = {
+      execute: (s, o, inner) => inner.run(s, o),
+    };
+  }
+  class _mc6Cmd extends MeasureCommand {
+    override get middleware() {
+      return [new PartedMw()]; // resolve-some/default-some covers [Rock, Gem] — must compile
+    }
+  }
+  void _mc6Cmd;
+}
+
+// §MC7 — A MiddlewareCommand whose roster includes a resolved subject (Gem ∈ BRS) but omits its
+// resolver, with no defaultResolver to cover it, is NOT registerable — the host's per-subject
+// coverage rejects it (the partition's anti-silent-absorption at the registration site).
+{
+  class UncoveredMw extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+    readonly commandName = "uncoveredMw" as const;
+    resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<UncoveredMw, any[], Rock> {
+      return { execute: (s, o, inner) => inner.run(s, o) };
+    }
+    // resolveGem omitted; BDS = [] so there is no defaultResolver able to cover Gem
+  }
+  class _mc7Cmd extends MeasureCommand {
+    // @ts-expect-error — UncoveredMw covers Rock but not Gem (no resolveGem, no covering default)
+    override get middleware() {
+      return [new UncoveredMw()];
+    }
+  }
+  void _mc7Cmd;
+}
+
 describe("§MC middleware compile-time constraints", () => {
   it("MC1: MiddlewareCommand missing resolver makes its own run() uncallable", () => void 0);
   it("MC1b: complete MiddlewareCommand run() is still uncallable — MiddlewareTemplate (3-arg) incompatible with CommandSubjectStrategies (2-arg) this-constraint", () =>
@@ -991,6 +1031,10 @@ describe("§MC middleware compile-time constraints", () => {
   it("MC4: MiddlewareCommand resolver returning wrong-SU MiddlewareTemplate rejected at return site", () =>
     void 0);
   it("MC5: full-union MiddlewareTemplate (SU=Rock|Gem) is assignable to narrow resolver return type (SU=Rock)", () =>
+    void 0);
+  it("MC6: partitioned MiddlewareCommand (resolve-some/default-some) registers via per-subject coverage", () =>
+    void 0);
+  it("MC7: MiddlewareCommand omitting a resolved subject's resolver (no covering default) is unregisterable", () =>
     void 0);
 
   it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () =>
