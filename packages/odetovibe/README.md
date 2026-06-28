@@ -63,9 +63,11 @@ middleware:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
-    defaultResolver: DefaultPolicy
+    subjectUnion: [Student, Professor]
     dispatch:
       Professor: ProfessorPolicy
+    defaultResolutions: [Student]
+    defaultResolver: DefaultPolicy
     templates:
       CheckoutMiddlewareTemplate:
         isParameterized: true
@@ -98,7 +100,7 @@ commands:
 **Key rules:**
 
 - `domainTypes` with `resolverName` become Subject classes; without become interfaces
-- Every entry in `subjectUnion` must appear in `dispatch`
+- Every Subject in `subjectUnion` must appear in exactly one of `dispatch` (resolved) or `defaultResolutions` (defaulted) — the two partition `subjectUnion` (total + disjoint). A Subject in neither is an error; `defaultResolutions` non-empty requires a `defaultResolver`
 - `dispatch` values are plain Strategy names, looked up across the Command's `templates`
 - All Templates generate as abstract classes, regardless of whether `strategies` is empty or not
 - Template `subjectSubset` must be a subset of the parent Command's `subjectUnion`

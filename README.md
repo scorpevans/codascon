@@ -285,7 +285,8 @@ class CheckoutMiddleware extends MiddlewareCommand<
   Person,
   Equipment,
   CheckoutResult,
-  [Student, Professor]
+  [Professor],
+  [Student]
 > {
   readonly commandName = "checkoutPolicy" as const;
   private readonly forProfessor = new ProfessorPolicy();
