@@ -998,11 +998,20 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     }
 
     const returnType = maybeAsync(config.returnType, config.returnAsync);
-    const subjectTuple = config.subjectUnion.join(", ");
+    // Resolution partition (same as Command): BRS (resolved) = subjectUnion minus
+    // defaultResolutions; BDS (defaulted) = defaultResolutions. 4-arg form when BDS is empty.
+    const defaultedSet = new Set(config.defaultResolutions ?? []);
+    const resolvedSubjects = config.subjectUnion.filter((s) => !defaultedSet.has(s));
+    const defaultedSubjects = config.subjectUnion.filter((s) => defaultedSet.has(s));
+    const brsTuple = resolvedSubjects.join(", ");
+    const heritage =
+      defaultedSubjects.length > 0
+        ? `MiddlewareCommand<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}], [${defaultedSubjects.join(", ")}]>`
+        : `MiddlewareCommand<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}]>`;
     const cls = sf.addClass({
       name: key,
       isExported: true,
-      extends: `MiddlewareCommand<${config.baseType}, ${config.objectType}, ${returnType}, [${subjectTuple}]>`,
+      extends: heritage,
     });
 
     cls.addProperty({
@@ -1028,9 +1037,8 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
     for (const subjectRef of config.subjectUnion) {
-      // When defaultResolver is declared, subjects without a dispatch entry are routed
-      // to defaultResolver at runtime — skip generating a specific resolver stub for them.
-      if (!config.dispatch[subjectRef] && config.defaultResolver) continue;
+      // Defaulted subjects (defaultResolutions / BDS) route to defaultResolver — no stub.
+      if (defaultedSet.has(subjectRef)) continue;
 
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {

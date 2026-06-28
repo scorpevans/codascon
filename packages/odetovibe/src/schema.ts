@@ -59,8 +59,8 @@
  *    specific Strategy; Subjects in `defaultResolutions` are routed to `defaultResolver`
  *    at runtime. A Subject in neither is a validation error (it would otherwise be
  *    silently absorbed). `defaultResolutions` non-empty ⟺ `defaultResolver` declared.
- *    (MiddlewareCommands are exempt — middleware is full-coverage and keeps the
- *    all-or-nothing `defaultResolver` form; `defaultResolutions` does not apply.)
+ *    This applies to MiddlewareCommands too — a middleware is a Command in the full
+ *    sense and partitions its subjects the same way.
  *
  * 2. **Dispatch target validity**: All dispatch targets must be plain Strategy
  *    names, looked up across the Templates of the same Command.

@@ -1280,11 +1280,12 @@ describe("MiddlewareCommandValidator", () => {
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-coverage");
   });
 
-  it("[dispatch-coverage] passes when a subject has no dispatch entry but defaultResolver is declared", () => {
-    // Gem is absent from dispatch — valid because defaultResolver handles it at runtime.
+  it("[resolution-partition] passes when a subject is defaulted via defaultResolutions", () => {
+    // Gem is absent from dispatch but listed in defaultResolutions — valid partition.
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
-      dispatch: { Rock: "TraceRockDefault" }, // Gem intentionally absent
+      dispatch: { Rock: "TraceRockDefault" },
+      defaultResolutions: ["Gem"],
       defaultResolver: "TraceRockDefault",
     });
     expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
@@ -1456,15 +1457,16 @@ describe("MiddlewareCommandValidator", () => {
 
   // Rule 12: defaultResolver-ref and defaultResolver-coverage on MiddlewareCommand
   it("passes when middleware defaultResolver references a strategy with no subjectSubset (covers full union)", () => {
-    // Strategy has no subjectSubset; parent template has no subjectSubset →
-    // effectiveStratSubset = full subject union = [Rock] → covers the only subject → passes
+    // Gem is defaulted; TraceRockDefault has no subjectSubset so its effective subset is the full
+    // union, which covers the defaulted Gem.
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       commandName: "trace",
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock"],
+      subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "TraceRockDefault" },
+      defaultResolutions: ["Gem"],
       templates: {
         TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
       },
@@ -1476,20 +1478,23 @@ describe("MiddlewareCommandValidator", () => {
   it("[defaultResolver-ref] fails when middleware defaultResolver names a strategy not found in templates", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
+      dispatch: { Rock: "TraceRockDefault" },
+      defaultResolutions: ["Gem"],
       defaultResolver: "NoSuchStrategy",
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-ref");
   });
 
-  it("[defaultResolver-coverage] fails when middleware defaultResolver strategy subjectSubset misses a subject", () => {
-    // Middleware dispatches both Rock and Gem; defaultResolver strategy only covers Rock
+  it("[defaultResolver-coverage] fails when middleware defaultResolver strategy subjectSubset misses a defaulted subject", () => {
+    // Gem is defaulted; the defaultResolver strategy (RockOnly) only covers Rock.
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       commandName: "trace",
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
       subjectUnion: ["Rock", "Gem"],
-      dispatch: { Rock: "RockOnly", Gem: "GemOnly" },
+      dispatch: { Rock: "RockOnly" },
+      defaultResolutions: ["Gem"],
       templates: {
         TraceTemplate: {
           isParameterized: true,
@@ -1499,19 +1504,20 @@ describe("MiddlewareCommandValidator", () => {
           },
         },
       },
-      defaultResolver: "RockOnly", // subjectSubset: [Rock] — misses Gem
+      defaultResolver: "RockOnly", // subjectSubset: [Rock] — misses defaulted Gem
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-coverage");
   });
 
-  it("passes when middleware defaultResolver strategy subjectSubset covers all subjects", () => {
+  it("passes when middleware defaultResolver strategy subjectSubset covers all defaulted subjects", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       commandName: "trace",
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
       subjectUnion: ["Rock", "Gem"],
-      dispatch: { Rock: "RockOnly", Gem: "CatchAll" },
+      dispatch: { Rock: "RockOnly" },
+      defaultResolutions: ["Gem"],
       templates: {
         TraceTemplate: {
           isParameterized: true,
