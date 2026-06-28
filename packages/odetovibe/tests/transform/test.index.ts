@@ -397,13 +397,14 @@ describe("CommandClassEmitter", () => {
     expect(drProp.getInitializer()?.getText()).toContain("this.sharedStrategy");
   });
 
-  it("skips resolver stub for subjects absent from dispatch when defaultResolver is declared", () => {
-    // Professor is in subjectUnion but NOT in dispatch — defaultResolver handles it.
+  it("skips resolver stub for defaulted subjects (defaultedSubjects)", () => {
+    // Professor is defaulted (in defaultedSubjects, not dispatch) — defaultResolver handles it.
     // The emitter must not generate a resolveProfessor stub; only resolveStudent is emitted.
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
       subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "DepartmentMatch" }, // Professor intentionally absent
+      dispatch: { Student: "DepartmentMatch" }, // Professor is defaulted instead
+      defaultedSubjects: ["Professor"],
       defaultResolver: "CatchAll",
       templates: {
         AccessTemplate: {
@@ -423,6 +424,8 @@ describe("CommandClassEmitter", () => {
     expect(cls.getMethod("resolveProfessor")).toBeUndefined();
     // defaultResolver property must still be emitted and be readonly
     expect(cls.getProperty("defaultResolver")?.isReadonly()).toBe(true);
+    // heritage uses the BRS/BDS partition form: resolved [Student], defaulted [Professor]
+    expect(cls.getExtends()?.getText()).toContain("[Student], [Professor]");
   });
 
   it("imports Command as value and Template as type from codascon", () => {
@@ -1622,12 +1625,13 @@ describe("MiddlewareCommandClassEmitter", () => {
     expect(singletonProps).toHaveLength(1);
   });
 
-  it("skips resolver stub for subjects absent from dispatch when defaultResolver is declared", () => {
-    // Gem is in subjectUnion but NOT in dispatch — defaultResolver handles it.
+  it("skips resolver stub for defaulted subjects (defaultedSubjects)", () => {
+    // Gem is defaulted (in defaultedSubjects, not dispatch) — defaultResolver handles it.
     // The emitter must not generate a resolveGem stub; only resolveRock is emitted.
     const drMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...traceMwEntry.config,
-      dispatch: { Rock: "TraceRockDefault" }, // Gem intentionally absent
+      dispatch: { Rock: "TraceRockDefault" }, // Gem is defaulted instead
+      defaultedSubjects: ["Gem"],
       defaultResolver: "TraceRockDefault",
     });
     const project = makeProject();
@@ -1637,10 +1641,12 @@ describe("MiddlewareCommandClassEmitter", () => {
       .getClassOrThrow("TraceMiddleware");
     // Rock has a dispatch entry — its resolver stub must be emitted
     expect(cls.getMethod("resolveRock")).toBeDefined();
-    // Gem has no dispatch entry — its resolver stub must NOT be emitted
+    // Gem is defaulted — its resolver stub must NOT be emitted
     expect(cls.getMethod("resolveGem")).toBeUndefined();
     // defaultResolver property must still be emitted and be readonly
     expect(cls.getProperty("defaultResolver")?.isReadonly()).toBe(true);
+    // heritage uses the BRS/BDS partition form: resolved [Rock], defaulted [Gem]
+    expect(cls.getExtends()?.getText()).toContain("[Rock], [Gem]");
   });
 });
 

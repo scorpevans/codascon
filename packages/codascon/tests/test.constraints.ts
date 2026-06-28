@@ -619,7 +619,8 @@ class SparseCoverageLogCommand extends Command<
   Person,
   { action: string },
   LogEntry,
-  [Dog, Cat, Bird]
+  [Dog],
+  [Cat, Bird]
 > {
   readonly commandName = "sparseCoverageLog" as const;
   private readonly entry = {
@@ -980,6 +981,46 @@ describe("§14 compile-time constraint tests", () => {
   void _wide;
 }
 
+// §MC6 — A partitioned MiddlewareCommand (resolve some subjects, default the rest) registers
+// via the host's per-subject coverage: Rock is covered by resolveRock, Gem by the defaultResolver.
+{
+  class PartedMw extends MiddlewareCommand<object, Ctx, Res, [Rock], [Gem]> {
+    readonly commandName = "partedMw" as const;
+    resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<PartedMw, any[], Rock> {
+      return { execute: (s, o, inner) => inner.run(s, o) };
+    }
+    override readonly defaultResolver: MiddlewareTemplate<PartedMw, any[], Gem> = {
+      execute: (s, o, inner) => inner.run(s, o),
+    };
+  }
+  class _mc6Cmd extends MeasureCommand {
+    override get middleware() {
+      return [new PartedMw()]; // resolve-some/default-some covers [Rock, Gem] — must compile
+    }
+  }
+  void _mc6Cmd;
+}
+
+// §MC7 — A MiddlewareCommand whose roster includes a resolved subject (Gem ∈ BRS) but omits its
+// resolver, with no defaultResolver to cover it, is NOT registerable — the host's per-subject
+// coverage rejects it (the partition's anti-silent-absorption at the registration site).
+{
+  class UncoveredMw extends MiddlewareCommand<object, Ctx, Res, [Rock, Gem]> {
+    readonly commandName = "uncoveredMw" as const;
+    resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<UncoveredMw, any[], Rock> {
+      return { execute: (s, o, inner) => inner.run(s, o) };
+    }
+    // resolveGem omitted; BDS = [] so there is no defaultResolver able to cover Gem
+  }
+  class _mc7Cmd extends MeasureCommand {
+    // @ts-expect-error — UncoveredMw covers Rock but not Gem (no resolveGem, no covering default)
+    override get middleware() {
+      return [new UncoveredMw()];
+    }
+  }
+  void _mc7Cmd;
+}
+
 describe("§MC middleware compile-time constraints", () => {
   it("MC1: MiddlewareCommand missing resolver makes its own run() uncallable", () => void 0);
   it("MC1b: complete MiddlewareCommand run() is still uncallable — MiddlewareTemplate (3-arg) incompatible with CommandSubjectStrategies (2-arg) this-constraint", () =>
@@ -990,6 +1031,10 @@ describe("§MC middleware compile-time constraints", () => {
   it("MC4: MiddlewareCommand resolver returning wrong-SU MiddlewareTemplate rejected at return site", () =>
     void 0);
   it("MC5: full-union MiddlewareTemplate (SU=Rock|Gem) is assignable to narrow resolver return type (SU=Rock)", () =>
+    void 0);
+  it("MC6: partitioned MiddlewareCommand (resolve-some/default-some) registers via per-subject coverage", () =>
+    void 0);
+  it("MC7: MiddlewareCommand omitting a resolved subject's resolver (no covering default) is unregisterable", () =>
     void 0);
 
   it("14j5: MiddlewareCommand.run() is always uncallable (this: never)", () =>
@@ -1053,10 +1098,10 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
   // block above proves the framework rejects the invalid usage — if the error
   // disappears, tsc fails. No runtime assertions are needed; compilation = proof.
 
-  it("14j2: defaultResolver present — run() callable without specific resolver methods", () => {
-    // A Command that declares defaultResolver but no specific resolver methods
-    // satisfies the run() this constraint via the defaultResolver branch of the union.
-    class DefaultCmd extends Command<Person, string, string, [Dog, Cat]> {
+  it("14j2: all subjects defaulted (BRS empty) — run() callable without specific resolver methods", () => {
+    // A Command with both subjects in BDS (BRS = []) requires no specific resolver
+    // methods; the run() this constraint is satisfied by the declared defaultResolver.
+    class DefaultCmd extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "defaultCmd" as const;
       readonly defaultResolver = { execute: (s: Dog | Cat, _o: string): string => s.name };
     }
@@ -1068,26 +1113,26 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     cmd.run(new Dog("Rex", "Lab"), ""); // must compile
   });
 
-  it("14j3: no resolver methods AND no defaultResolver — run() uncallable", () => {
+  it("14j3: resolved subject with no resolver method (BDS empty) — run() uncallable", () => {
     class EmptyCmd extends Command<Person, string, string, [Dog]> {
       readonly commandName = "emptyCmd" as const;
-      // No resolveDog, no defaultResolver
+      // Dog is in BRS but resolveDog is absent, and BDS is empty (no defaultResolver).
     }
 
     const cmd = new EmptyCmd();
     const _14j3 = () => {
-      // @ts-expect-error — neither CommandSubjectStrategies nor defaultResolver is satisfied
+      // @ts-expect-error — resolveDog is required for the resolved subject Dog
       cmd.run(new Dog("Rex", "Lab"), "");
     };
     void _14j3;
   });
 
   it("14j4: defaultResolver with wrong return type — compile error at implementation site", () => {
-    // DefaultResolverResult requires { execute(subject, object): R }.
-    // Returning a plain string (no execute method) must be rejected.
-    class BadDefaultCmd extends Command<Person, string, string, [Dog]> {
+    // The defaultResolver field requires a Template (with an `execute` method).
+    // Assigning a plain string must be rejected. Dog is in BDS so the field is operative.
+    class BadDefaultCmd extends Command<Person, string, string, [], [Dog]> {
       readonly commandName = "badDefault" as const;
-      // @ts-expect-error — `string` is not assignable to DefaultResolverResult
+      // @ts-expect-error — `string` is not assignable to the defaultResolver Template type
       readonly defaultResolver = "not a template";
     }
     void BadDefaultCmd;
@@ -1114,14 +1159,13 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     void _14j7;
   });
 
-  it("14j8: defaultResolver + wrong-typed resolver → run() uncallable", () => {
-    // Partial<CommandSubjectStrategies> in the defaultResolver branch ensures any
-    // specific resolver methods present on the class are still type-checked, even
-    // when defaultResolver is declared. Without this intersection, the defaultResolver
-    // branch would bypass all per-resolver type checking.
-    class BadResolverCmd extends Command<Subject, string, string, [Dog, Cat]> {
+  it("14j8: wrong-typed resolved resolver, with defaulting present → run() uncallable", () => {
+    // Declaring defaulted subjects (BDS) does NOT relax type-checking of the resolved
+    // half: a wrong-typed resolver for a BRS subject still makes run() uncallable, even
+    // when an unrelated subject is defaulted.
+    class BadResolverCmd extends Command<Subject, string, string, [Dog], [Cat]> {
       readonly commandName = "badResolverCmd" as const;
-      readonly defaultResolver = { execute: (_s: Dog | Cat, _o: string): string => "" };
+      readonly defaultResolver = { execute: (_s: Cat, _o: string): string => "" };
       resolveDog(_d: Dog) {
         // Returns wrong shape — missing execute method; run() must be uncallable.
         return { notATemplate: true };
@@ -1129,10 +1173,74 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     }
     const cmd = new BadResolverCmd();
     const _14j8 = () => {
-      // @ts-expect-error — resolveDog returns wrong type; even with defaultResolver,
-      // Partial<CommandSubjectStrategies> requires any present resolver to be correctly typed.
+      // @ts-expect-error — resolveDog returns wrong type; the resolved subject Dog is
+      // still type-checked despite Cat being defaulted.
       cmd.run(new Dog("Rex", "Lab"), "");
     };
     void _14j8;
+  });
+
+  it("14j9: resolved subject omitted while another is defaulted → run() uncallable (no silent absorption)", () => {
+    // The headline guarantee: declaring a defaultResolver/BDS does not absorb a forgotten
+    // resolved subject. Bird is defaulted; Dog has a resolver; Cat is in BRS but its
+    // resolver is absent — so run() is uncallable. (Under the old all-or-nothing
+    // defaultResolver, Cat would have been silently absorbed.)
+    class ForgotCatCmd extends Command<Person, string, string, [Dog, Cat], [Bird]> {
+      readonly commandName = "forgotCat" as const;
+      readonly defaultResolver = { execute: (_s: Bird, _o: string): string => "default" };
+      resolveDog(_d: Dog) {
+        return { execute: (_s: Dog, _o: string): string => "dog" };
+      }
+      // resolveCat intentionally absent — Cat is in BRS, so this must NOT compile away.
+    }
+    const cmd = new ForgotCatCmd();
+    const _14j9 = () => {
+      // @ts-expect-error — resolveCat is required (Cat is resolved, not defaulted)
+      cmd.run(new Cat("Whiskers", true), "");
+    };
+    void _14j9;
+  });
+
+  it("14j10: defaulted subjects declared (BDS non-empty) but no defaultResolver → run() uncallable", () => {
+    // When BDS is non-empty, run() requires a defaultResolver. Omitting it is a compile error.
+    class MissingDefaultCmd extends Command<Person, string, string, [Dog], [Cat]> {
+      readonly commandName = "missingDefault" as const;
+      resolveDog(_d: Dog) {
+        return { execute: (_s: Dog, _o: string): string => "dog" };
+      }
+      // Cat is defaulted but no defaultResolver is declared.
+    }
+    const cmd = new MissingDefaultCmd();
+    const _14j10 = () => {
+      // @ts-expect-error — defaultResolver is required because BDS = [Cat]
+      cmd.run(new Dog("Rex", "Lab"), "");
+    };
+    void _14j10;
+  });
+
+  it("14j11: defaultResolver must cover every defaulted subject (BDS) → too-narrow execute rejected", () => {
+    // defaultResolver is typed to CommandDefaultedSubjects<C> (= BDS[number]). An execute
+    // that accepts only a subset of BDS is rejected at the assignment site.
+    class NarrowDefaultCmd extends Command<Person, string, string, [], [Dog, Cat]> {
+      readonly commandName = "narrowDefault" as const;
+      // @ts-expect-error — execute accepts only Dog but BDS = [Dog, Cat]; must accept Dog | Cat
+      readonly defaultResolver = { execute: (_s: Dog, _o: string): string => "dog-only" };
+    }
+    void NarrowDefaultCmd;
+  });
+
+  it("14j12: full partition (some resolved, some defaulted, all provided) → run() callable", () => {
+    // Positive proof: a Command split across BRS and BDS with the resolved resolver(s)
+    // and a covering defaultResolver compiles and run() is callable for both halves.
+    class PartitionedCmd extends Command<Person, string, string, [Dog], [Cat]> {
+      readonly commandName = "partitioned" as const;
+      readonly defaultResolver = { execute: (_s: Cat, _o: string): string => "cat-default" };
+      resolveDog(_d: Dog) {
+        return { execute: (_s: Dog, _o: string): string => "dog" };
+      }
+    }
+    const cmd = new PartitionedCmd();
+    cmd.run(new Dog("Rex", "Lab"), ""); // resolved — must compile
+    cmd.run(new Cat("Whiskers", true), ""); // defaulted — must compile
   });
 });

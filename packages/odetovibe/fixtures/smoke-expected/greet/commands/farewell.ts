@@ -30,7 +30,8 @@ export class FarewellCommand extends Command<
   Person,
   Greeting,
   Greeting,
-  [User, Guest]
+  [User],
+  [Guest]
 > {
   readonly commandName = "farewell" as const;
   private readonly userFarewellDefault = new UserFarewellDefault();

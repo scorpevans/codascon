@@ -43,12 +43,15 @@ class Cat extends Subject implements Person {
 // ═══════════════════════════════════════════════════════════════════
 // §D · DEFAULT RESOLVER
 //
-//   When a Command declares `defaultResolver`, subjects without a
-//   specific resolver method fall through to it. Specific resolver
-//   methods take precedence when present.
+//   A Command's subjects are partitioned into BRS (resolved — handled
+//   by specific resolver methods) and BDS (defaulted — handled by
+//   `defaultResolver`). Subjects declared in BDS route to
+//   `defaultResolver` at runtime; a specific resolver method, if also
+//   present for a subject, takes precedence.
 //
-//   Declaring `defaultResolver` relaxes the exhaustiveness constraint:
-//   run() is callable even when specific resolver methods are absent.
+//   `run()` requires `defaultResolver` exactly when BDS is non-empty —
+//   the defaulted subjects are declared explicitly, so a forgotten
+//   subject is a compile error, not silently absorbed.
 // ═══════════════════════════════════════════════════════════════════
 
 class DefaultOnlyResult {
@@ -64,13 +67,13 @@ class DogSpecificResult {
 }
 
 // Command with only defaultResolver — no specific resolver methods
-class DefaultOnlyCommand extends Command<Person, string, string, [Dog, Cat]> {
+class DefaultOnlyCommand extends Command<Person, string, string, [], [Dog, Cat]> {
   readonly commandName = "defaultOnly" as const;
   readonly defaultResolver = new DefaultOnlyResult();
 }
 
 // Command with defaultResolver AND a specific resolver — specific takes precedence
-class MixedCommand extends Command<Person, string, string, [Dog, Cat]> {
+class MixedCommand extends Command<Person, string, string, [Dog], [Cat]> {
   readonly commandName = "mixed" as const;
   resolveDog(subject: Dog, object: string) {
     return new DogSpecificResult();
@@ -95,7 +98,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
 
   it("defaultResolver receives the object argument", () => {
     const received: string[] = [];
-    class ObservingCommand extends Command<Person, string, string, [Dog]> {
+    class ObservingCommand extends Command<Person, string, string, [], [Dog]> {
       readonly commandName = "observing" as const;
       readonly defaultResolver = {
         execute: (subject: Dog, object: string): string => {
@@ -109,9 +112,10 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     deepEqual(received, ["payload"]);
   });
 
-  it("run() is callable without any specific resolver methods when defaultResolver is declared", () => {
-    // Compile-time proof: DefaultOnlyCommand has no resolveDog / resolveCat,
-    // yet run() is callable because defaultResolver is declared.
+  it("run() is callable without any specific resolver methods when all subjects are defaulted", () => {
+    // Compile-time proof: DefaultOnlyCommand declares both subjects in BDS
+    // (BRS = []), so no resolveDog / resolveCat are required and run() is
+    // callable via the declared defaultResolver.
     const cmd = new DefaultOnlyCommand();
     const result = cmd.run(new Dog("Rex", "Lab"), "");
     strictEqual(result, "default:Rex");
@@ -146,7 +150,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       }
     }
 
-    class DefaultWithMiddlewareCommand extends Command<Person, string, string, [Dog, Cat]> {
+    class DefaultWithMiddlewareCommand extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "defaultWithMiddleware" as const;
       private readonly mw = new WrapMiddleware();
       override get middleware() {
@@ -173,7 +177,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     // falls through). Both paths must correctly invoke inner.run() to keep the chain intact.
     const log: string[] = [];
 
-    class MixedMw extends MiddlewareCommand<Person, string, string, [Dog, Cat]> {
+    class MixedMw extends MiddlewareCommand<Person, string, string, [Dog], [Cat]> {
       readonly commandName = "mixedMw" as const;
       resolveDog(_d: Dog) {
         return {
@@ -186,7 +190,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
         };
       }
       override readonly defaultResolver = {
-        execute: <T extends Dog | Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
+        execute: <T extends Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
           log.push("mw-default-before");
           const r = inner.run(s, o);
           log.push("mw-default-after");
@@ -276,7 +280,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       }
     }
 
-    class TwoLayerCmd extends Command<Person, string, string, [Dog, Cat]> {
+    class TwoLayerCmd extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "twoLayerDef" as const;
       private readonly outerMw = new OuterMw();
       private readonly innerMw = new InnerMw();

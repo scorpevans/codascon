@@ -61,7 +61,7 @@ abstract class LogTemplate implements Template<LogCommand> {
 
 class LogEntry extends LogTemplate {}
 
-class LogCommand extends Command<Person, { message: string }, void, [Student, Professor]> {
+class LogCommand extends Command<Person, { message: string }, void, [Student], [Professor]> {
   readonly commandName = "log" as const;
   private readonly entry = new LogEntry();
   readonly defaultResolver = this.entry; // fallback declared for resolver methods
@@ -149,7 +149,8 @@ class CheckoutMiddleware extends MiddlewareCommand<
   Person,
   Equipment,
   CheckoutResult,
-  [Student, Professor]
+  [Professor],
+  [Student]
 > {
   readonly commandName = "checkoutPolicy" as const;
   private readonly forProfessor = new ProfessorPolicy();

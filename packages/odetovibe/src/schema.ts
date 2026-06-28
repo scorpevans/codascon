@@ -53,10 +53,14 @@
  *
  * The following constraints should be enforced by tooling consuming this schema:
  *
- * 1. **Dispatch coverage**: Every Subject in a Command's `subjectUnion` must
- *    have an entry in its `dispatch` map, unless `defaultResolver` is declared —
- *    in which case subjects absent from `dispatch` are valid and will be routed
- *    to `defaultResolver` at runtime.
+ * 1. **Resolution partition**: A Command's `dispatch` keys and `defaultedSubjects`
+ *    form a typed partition of `subjectUnion` — every Subject must appear in exactly
+ *    one of the two (total and disjoint). Subjects in `dispatch` are resolved by a
+ *    specific Strategy; Subjects in `defaultedSubjects` are routed to `defaultResolver`
+ *    at runtime. A Subject in neither is a validation error (it would otherwise be
+ *    silently absorbed). `defaultedSubjects` non-empty ⟺ `defaultResolver` declared.
+ *    This applies to MiddlewareCommands too — a middleware is a Command in the full
+ *    sense and partitions its subjects the same way.
  *
  * 2. **Dispatch target validity**: All dispatch targets must be plain Strategy
  *    names, looked up across the Templates of the same Command.
@@ -299,20 +303,27 @@ export type DomainType = {
  *                            emits an `override get middleware()` getter on the
  *                            Command class returning the registered instances.
  *
- * @property defaultResolver — Optional catch-all resolver. When present,
- *                            subjects absent from `dispatch` are valid and
- *                            will be routed to `defaultResolver` at runtime
- *                            (validation rule 1 is relaxed). Subjects that
- *                            do appear in `dispatch` retain their specific
- *                            resolver stubs, which take precedence.
+ * @property defaultedSubjects — Optional list of Subjects that are intentionally
+ *                            default-resolved. These Subjects are NOT given a
+ *                            `dispatch` entry; instead they route to `defaultResolver`
+ *                            at runtime. Together with the `dispatch` keys they must
+ *                            partition `subjectUnion` (total + disjoint). Maps to the
+ *                            generated Command's `BDS` (Base Defaulted Subjects) type
+ *                            parameter: `Command<B, O, R, [dispatch keys], [defaultedSubjects]>`.
+ *                            When empty/absent, the Command is fully resolved and codegen
+ *                            emits the 4-argument `Command<B, O, R, [subjectUnion]>` form.
+ *
+ * @property defaultResolver — The catch-all Strategy handling the `defaultedSubjects`
+ *                            Subjects. Required exactly when `defaultedSubjects` is
+ *                            non-empty; declaring it without `defaultedSubjects` is a
+ *                            validation error (the defaulted Subjects must be explicit).
  *
  *                            Codegen emits a `readonly defaultResolver` property
  *                            on the Command class, typed as the referenced Strategy
  *                            class and initialized to the corresponding singleton
- *                            field (shared with the dispatch singleton pool).
- *                            Resolver stubs are only
- *                            generated for subjects present in `dispatch` —
- *                            subjects absent from `dispatch` route to
+ *                            field (shared with the dispatch singleton pool). Resolver
+ *                            stubs are generated only for the resolved Subjects (the
+ *                            `dispatch` keys) — the defaulted Subjects route to
  *                            `defaultResolver` via the runtime fallback.
  *
  *                            The referenced Strategy must exist within this
@@ -320,9 +331,8 @@ export type DomainType = {
  *                            `subjectSubset` — the Strategy's own
  *                            `subjectSubset` if declared, otherwise the parent
  *                            Template's `subjectSubset`, otherwise the full
- *                            command subject union — must cover every subject
- *                            in the Command's `subjectUnion` (validation
- *                            rule 12).
+ *                            command subject union — must cover every Subject
+ *                            in `defaultedSubjects` (validation rule 12).
  *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
@@ -347,6 +357,7 @@ export type Command = {
   returnAsync?: boolean;
   subjectUnion: SubjectRef[];
   middleware?: MiddlewareRef[];
+  defaultedSubjects?: SubjectRef[];
   defaultResolver?: StrategyRef;
   dispatch: {
     [subject: SubjectRef]: StrategyRef;
