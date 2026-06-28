@@ -64,13 +64,13 @@ class DogSpecificResult {
 }
 
 // Command with only defaultResolver — no specific resolver methods
-class DefaultOnlyCommand extends Command<Person, string, string, [Dog, Cat]> {
+class DefaultOnlyCommand extends Command<Person, string, string, [], [Dog, Cat]> {
   readonly commandName = "defaultOnly" as const;
   readonly defaultResolver = new DefaultOnlyResult();
 }
 
 // Command with defaultResolver AND a specific resolver — specific takes precedence
-class MixedCommand extends Command<Person, string, string, [Dog, Cat]> {
+class MixedCommand extends Command<Person, string, string, [Dog], [Cat]> {
   readonly commandName = "mixed" as const;
   resolveDog(subject: Dog, object: string) {
     return new DogSpecificResult();
@@ -95,7 +95,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
 
   it("defaultResolver receives the object argument", () => {
     const received: string[] = [];
-    class ObservingCommand extends Command<Person, string, string, [Dog]> {
+    class ObservingCommand extends Command<Person, string, string, [], [Dog]> {
       readonly commandName = "observing" as const;
       readonly defaultResolver = {
         execute: (subject: Dog, object: string): string => {
@@ -146,7 +146,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       }
     }
 
-    class DefaultWithMiddlewareCommand extends Command<Person, string, string, [Dog, Cat]> {
+    class DefaultWithMiddlewareCommand extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "defaultWithMiddleware" as const;
       private readonly mw = new WrapMiddleware();
       override get middleware() {
@@ -276,7 +276,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       }
     }
 
-    class TwoLayerCmd extends Command<Person, string, string, [Dog, Cat]> {
+    class TwoLayerCmd extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "twoLayerDef" as const;
       private readonly outerMw = new OuterMw();
       private readonly innerMw = new InnerMw();

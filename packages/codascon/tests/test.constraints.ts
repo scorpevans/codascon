@@ -619,7 +619,8 @@ class SparseCoverageLogCommand extends Command<
   Person,
   { action: string },
   LogEntry,
-  [Dog, Cat, Bird]
+  [Dog],
+  [Cat, Bird]
 > {
   readonly commandName = "sparseCoverageLog" as const;
   private readonly entry = {
@@ -1056,7 +1057,7 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
   it("14j2: defaultResolver present — run() callable without specific resolver methods", () => {
     // A Command that declares defaultResolver but no specific resolver methods
     // satisfies the run() this constraint via the defaultResolver branch of the union.
-    class DefaultCmd extends Command<Person, string, string, [Dog, Cat]> {
+    class DefaultCmd extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "defaultCmd" as const;
       readonly defaultResolver = { execute: (s: Dog | Cat, _o: string): string => s.name };
     }

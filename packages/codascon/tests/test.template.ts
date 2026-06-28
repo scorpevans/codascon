@@ -259,7 +259,7 @@ describe("§8 template with command hooks", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 // Hook Command: only resolveDog is explicit; resolveCat and resolveBird fall to defaultResolver
-class SparseLogCommand extends Command<Person, { action: string }, LogEntry, [Dog, Cat, Bird]> {
+class SparseLogCommand extends Command<Person, { action: string }, LogEntry, [Dog], [Cat, Bird]> {
   readonly commandName = "sparseLog" as const;
   private readonly fallbackEntry = {
     execute: (s: Dog | Cat | Bird, o: { action: string }): LogEntry => ({

@@ -22,7 +22,7 @@ import {
   type CommandReturn,
   type CommandBase,
   type CommandSubjectUnion,
-  type CommandBSL,
+  type CommandResolvedSubjects,
 } from "codascon";
 
 // ─── Type assertion helpers ──────────────────────────────────────────────────
@@ -82,7 +82,7 @@ type _CP4 = Expect<Equal<CommandObject<HandleRequest>, Ctx>>;
 type _CP5 = Expect<Equal<CommandReturn<HandleRequest>, Res>>;
 type _CP6 = Expect<Equal<CommandBase<HandleRequest>, object>>;
 type _CP7 = Expect<Equal<CommandSubjectUnion<HandleRequest>, User | Admin>>;
-type _CP8 = Expect<Equal<CommandBSL<HandleRequest>, [User, Admin]>>;
+type _CP8 = Expect<Equal<CommandResolvedSubjects<HandleRequest>, User | Admin>>;
 
 // ─── §CP9: CommandSubjectUnion as direct execute param (not generic constraint) ──
 
