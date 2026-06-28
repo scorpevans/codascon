@@ -89,6 +89,7 @@ class AuthnMiddleware extends MiddlewareCommand<
   object,
   ApiRequest,
   ApiResponse,
+  [],
   [PublicEndpoint, ProtectedEndpoint, AdminEndpoint]
 > {
   readonly commandName = "authn" as const;

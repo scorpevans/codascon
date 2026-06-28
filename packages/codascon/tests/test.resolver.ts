@@ -177,7 +177,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     // falls through). Both paths must correctly invoke inner.run() to keep the chain intact.
     const log: string[] = [];
 
-    class MixedMw extends MiddlewareCommand<Person, string, string, [Dog, Cat]> {
+    class MixedMw extends MiddlewareCommand<Person, string, string, [Dog], [Cat]> {
       readonly commandName = "mixedMw" as const;
       resolveDog(_d: Dog) {
         return {
@@ -190,7 +190,7 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
         };
       }
       override readonly defaultResolver = {
-        execute: <T extends Dog | Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
+        execute: <T extends Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
           log.push("mw-default-before");
           const r = inner.run(s, o);
           log.push("mw-default-after");
