@@ -102,15 +102,15 @@ class Professor extends Subject implements Person {
 
 ### Define a Command
 
-A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute. A `defaultResolver` can be provided as a fallback instead of listing all resolver methods.
+A **`Command`** is an operation. Codascon enforces at the call site that a `Command` implements a resolver method per `Subject` — the resolver method inspects the `Subject` and the context, then returns a `Template` to execute. Subjects can be partitioned into a _resolved_ tuple (each handled by a specific resolver method) and a _defaulted_ tuple (each routed to a single `defaultResolver`) — the Command's fourth and fifth type parameters. Because the defaulted subjects are listed explicitly, a forgotten subject is a compile error rather than being silently absorbed.
 
 ```typescript
 import { Command } from "codascon";
 
-class LogCommand extends Command<Person, { message: string }, void, [Student, Professor]> {
+class LogCommand extends Command<Person, { message: string }, void, [Student], [Professor]> {
   readonly commandName = "log" as const;
   private readonly entry = new LogEntry(); // Strategy — defined below
-  readonly defaultResolver = this.entry; // catch-all — fires for Professor and any other subject with no specific resolver
+  readonly defaultResolver = this.entry; // handles the defaulted subject Professor (the second tuple)
   resolveStudent(_s: Student) {
     return this.entry;
   }
@@ -499,7 +499,7 @@ Additional implementation rules:
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
 - Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
 - Use middleware for cross-cutting concerns such as logging, auditing, timing, and default enrichments — prefer a middleware Command over duplicating the same logic in individual Templates or Strategies
-- Prefer `defaultResolver` over repeating the same Strategy across multiple resolver methods — when a Command routes several subjects to the same catch-all, declare `readonly defaultResolver` on the Command instead of enumerating them in `dispatch`; in particular, when a Template defines a single default Strategy covering the full subject union, always set `defaultResolver` to it
+- Default-resolve subjects that share one catch-all Strategy instead of repeating it across resolver methods — list those subjects in the Command's defaulted-subjects tuple (the fifth type parameter; `defaultResolutions` in YAML) and assign `readonly defaultResolver`. The defaulted subjects are explicit, so a forgotten subject is a compile error rather than being silently absorbed; the `defaultResolver` Strategy need only cover the defaulted subjects, not the full union
 
 ### Step 4: Implement This Domain
 
