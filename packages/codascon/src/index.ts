@@ -193,7 +193,8 @@ export type SubjectResolverName<S> =
 // All five slots explicit — the 5th (BDS) MUST be `any`, not omitted: BDS defaults to
 // `[]`, which would make AnyCommand's BDS concrete and break it as a wildcard supertype.
 type AnyCommand = Command<any, any, any, any, any>;
-type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any>;
+// All five slots explicit — the 5th (BDS) MUST be `any`, not omitted (defaults to `[]`).
+type AnyMiddlewareCommand = MiddlewareCommand<any, any, any, any, any>;
 
 /*
  * Structural fingerprint for all Command subtypes. Used as the pattern in phantom-based
@@ -438,37 +439,41 @@ type CommandSubjectStrategies<
 };
 
 /*
- * Parallel to `Visit<C, BS>` but for `MiddlewareCommand` resolver methods.
- *
- * `Visit` requires resolvers to return `Template<C, any[], BS>` — a 2-arg execute.
- * `MiddlewareVisit` requires resolvers to return `MiddlewareTemplate<C, any[], BS>` —
- * a 3-arg execute that includes the `inner` continuation. The two types are otherwise
- * structurally symmetric.
+ * Structural execute-shape used by middleware coverage checks. Parameterized by `O`/`R`/`SU`
+ * directly — NOT a `MiddlewareCommand` class `C`. Using a class `C` here would drag in class
+ * invariance via the `_mwCache` field, making a concrete middleware's `MiddlewareTemplate`
+ * incompatible with the host-roster form. The structural form normalizes that.
+ * (ts-hack: "structural type at return sites".)
  */
-type MiddlewareVisit<C extends AnyMiddlewareCommand, BS extends CommandSubjectUnion<C>> = {
-  [K in SubjectResolverName<BS>]: (
-    subject: BS,
-    object: Readonly<CommandObject<C>>,
-  ) => MiddlewareTemplate<C, any[], BS>;
+type MwExec<O, R, SU> = {
+  execute: <T extends SU>(subject: T, object: O, inner: Runnable<T, O, R>) => R;
 };
 
 /*
- * Parallel to `CommandSubjectStrategies<C>` but for `MiddlewareCommand` coverage.
- *
- * Iterates over `CommandSubjectUnion<MiddlewareCommand<B, O, R, BSL>>` and checks that each
- * Subject's resolver method is present and returns a `MiddlewareTemplate`-shaped
- * value. Used as the coverage constraint in `MiddlewareElement` — a
- * `MiddlewareCommand<B, O, R, SupersetBSL>` with resolver methods for all subjects
- * in BSL satisfies this type even if its own BSL is wider.
+ * Per-subject middleware coverage for a single host Subject `S`: the middleware either declares
+ * a resolver method (`resolveS`) returning a `MiddlewareTemplate`-shaped value, OR declares a
+ * REQUIRED `defaultResolver` whose `execute` covers `S`. The `defaultResolver` branch requires
+ * the property to be present (not optional) — a middleware only gets the default escape when it
+ * actually declares one (mirrors the `CommandHooks` defaultResolver opt-out). `defaultResolver`
+ * is typed to the middleware's `BDS`, so it covers `S` only when `S` was declared defaulted.
  */
-type MiddlewareSubjectStrategies<B, O, R, BSL extends (B & Subject)[]> = {
-  [SU in CommandSubjectUnion<
-    MiddlewareCommand<B, O, R, BSL>
-  > as SubjectResolverName<SU>]: MiddlewareVisit<
-    MiddlewareCommand<B, O, R, BSL>,
-    SU
-  >[SubjectResolverName<SU>];
-};
+type CoverOne<O, R, S extends Subject> =
+  | { [K in SubjectResolverName<S>]: (subject: S, object: Readonly<O>) => MwExec<O, R, S> }
+  | { readonly defaultResolver: MwExec<O, R, S> };
+
+/*
+ * Intersects `CoverOne` over a tuple of host Subjects — the coverage requirement on a middleware
+ * registered in a host with that roster. Recurses over the TUPLE, not the union: distributing
+ * `CoverOne` over a union and folding with `UnionToIntersection` would flatten the per-subject
+ * `(resolve | default)` unions and wrongly demand ALL branches. Tuple recursion preserves each
+ * subject's independent OR.
+ */
+type CoverAll<O, R, Subjects extends Subject[]> = Subjects extends [
+  infer Head extends Subject,
+  ...infer Tail extends Subject[],
+]
+  ? CoverOne<O, R, Head> & CoverAll<O, R, Tail>
+  : unknown;
 
 /*
  * Enforces that every Subject in `BSL` declares a valid `resolverName`.
@@ -593,14 +598,15 @@ export abstract class Subject {
 /*
  * Element type for `Command.middleware` arrays.
  *
- * Enforces two constraints on each middleware entry:
+ * Enforces two constraints on each middleware entry, given the host Command's resolved (`HBRS`)
+ * and defaulted (`HBDS`) subject tuples:
  *
- * 1. **Coverage** — checked via `MiddlewareSubjectStrategies`, the middleware
- *    analog of `CommandSubjectStrategies`. Requires a resolver method for every
- *    Subject in the host Command's BSL, each returning a value with a 3-arg
- *    execute (subject, object, inner). A `MiddlewareCommand<B, O, R, SupersetBSL>`
- *    satisfies this if it has resolver methods for every Subject in BSL — even if
- *    its own BSL is wider.
+ * 1. **Per-subject coverage** — `CoverAll` over both host tuples requires, for every host
+ *    Subject `S`, that the middleware either declares `resolveS` (returning a 3-arg execute) OR a
+ *    `defaultResolver` whose execute covers `S`. This is the per-subject `(resolve | default)`
+ *    partition — so a middleware that resolves some subjects and defaults others is accepted,
+ *    while a middleware that omits a resolver for a subject its `defaultResolver` cannot cover is
+ *    rejected. The host passes its two tuples directly — no `[...HBRS, ...HBDS]` concat.
  *
  * 2. **Callable shape** — exposes `_runChain` with a required continuation so
  *    `Command._runChain` can thread each step through the chain.
@@ -608,18 +614,20 @@ export abstract class Subject {
  * Not exported — TypeScript inlines type aliases in `.d.ts`; TS4055 only fires
  * for unexported class/interface names.
  */
-type MiddlewareElement<B, O, R, BSL extends (B & Subject)[]> = (
-  | MiddlewareSubjectStrategies<B, O, R, BSL>
-  | ({
-      readonly defaultResolver: MiddlewareTemplate<
-        MiddlewareCommand<B, O, R, BSL>,
-        any[],
-        BSL[number]
-      >;
-    } & Partial<MiddlewareSubjectStrategies<B, O, R, BSL>>)
-) & {
-  _runChain(subject: BSL[number], object: O, continuation: Runnable<BSL[number], O, R>): R;
-};
+type MiddlewareElement<
+  B,
+  O,
+  R,
+  HBRS extends (B & Subject)[],
+  HBDS extends (B & Subject)[],
+> = CoverAll<O, R, HBRS> &
+  CoverAll<O, R, HBDS> & {
+    _runChain(
+      subject: HBRS[number] | HBDS[number],
+      object: O,
+      continuation: Runnable<HBRS[number] | HBDS[number], O, R>,
+    ): R;
+  };
 
 /*
  * Abstract base class for all Commands.
@@ -754,8 +762,9 @@ export abstract class Command<
   // `this.middleware` so that override getters returning array literals allocate
   // exactly once per instance rather than on every `run()` call.
   // Protected (not private) so that MiddlewareCommand._runChain can access it.
-  // Middleware covers the FULL roster — resolved plus defaulted: `[...BRS, ...BDS]`.
-  protected _mwCache?: MiddlewareElement<B, O, R, [...BRS, ...BDS]>[];
+  // `MiddlewareElement` takes the host's two tuples directly and covers the full roster
+  // per-subject — no `[...BRS, ...BDS]` concat needed.
+  protected _mwCache?: MiddlewareElement<B, O, R, BRS, BDS>[];
 
   /**
    * Command-level middleware applied to every dispatch through this Command.
@@ -780,7 +789,7 @@ export abstract class Command<
    *
    * Defaults to `[]`.
    */
-  get middleware(): MiddlewareElement<B, O, R, [...BRS, ...BDS]>[] {
+  get middleware(): MiddlewareElement<B, O, R, BRS, BDS>[] {
     return [];
   }
 
@@ -1221,10 +1230,10 @@ export type MiddlewareTemplate<
  * no `?`). Bivariance on class methods permits this override (`never extends Runnable`).
  *
  * **`_dispatch`** — The cast from `Template<C, any[], SU>` (3-arg execute with `inner: never`) to
- * `MiddlewareTemplate<MiddlewareCommand<B, O, R, BSL>, any[], SU>` (3-arg execute with `inner: Runnable`) is
+ * `MiddlewareTemplate<MiddlewareCommand<B, O, R, BRS, BDS>, any[], SU>` (3-arg execute with `inner: Runnable`) is
  * required because `getCommandStrategy` returns the base-template form. This is safe because
- * `MiddlewareSubjectStrategies` (enforced at `Command.middleware` assignment) guarantees
- * any registered middleware's resolvers return `MiddlewareTemplate`-compatible values.
+ * `MiddlewareElement`'s per-subject coverage (enforced at `Command.middleware` assignment)
+ * guarantees any registered middleware's resolvers/`defaultResolver` return `MiddlewareTemplate`-compatible values.
  * Do not call directly — only safe when called from `_runChain`, which always passes
  * a valid `Runnable` continuation.
  */
@@ -1236,44 +1245,45 @@ export type MiddlewareTemplate<
  * that executes for each dispatch. Keep `MiddlewareCommand` subclasses stateless — all
  * execution logic and per-dispatch state belong in those templates.
  *
- * The type parameters mirror `Command` but keep a single subject list `BSL` —
- * middleware is full-coverage by nature, so it extends `Command<B, O, R, BSL, []>`
- * (all subjects resolved, none defaulted; the partition does not apply to middleware).
- * Declare `BSL` as a superset of any Command's subjects you intend to register this
- * middleware in. The compiler enforces coverage: if a Command's full roster is
- * `[Student, Professor]` and the middleware only handles `[Student]`, the assignment
- * is rejected.
+ * The type parameters mirror `Command` exactly — a `MiddlewareCommand` is a `Command` whose
+ * resolvers return `MiddlewareTemplate`s. Its subjects partition into resolved (`BRS`) and
+ * defaulted (`BDS`) just like any Command. A middleware's full roster (`BRS ∪ BDS`) must be a
+ * superset of any Command's roster you register it in: the compiler checks, per host Subject,
+ * that the middleware either resolves it or covers it with `defaultResolver`. If a host's roster
+ * is `[Student, Professor]` and the middleware handles only `[Student]`, the registration is
+ * rejected.
  */
-export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> extends Command<
+export abstract class MiddlewareCommand<
   B,
   O,
   R,
-  BSL,
-  []
-> {
+  BRS extends (B & Subject)[],
+  BDS extends (B & Subject)[] = [],
+> extends Command<B, O, R, BRS, BDS> {
   /**
    * Narrows `Command.defaultResolver?` to `MiddlewareTemplate`, surfacing the `inner`
-   * continuation as a required third argument in the `execute` signature.
-   * `inner` is always defined when dispatched via the middleware chain.
+   * continuation as a required third argument in the `execute` signature, and typed to the
+   * middleware's defaulted subjects (`BDS`). `inner` is always defined when dispatched via the
+   * middleware chain.
    *
    * The implementation must call `inner.run(subject, object)` to forward control down
    * the chain. The signature makes this requirement explicit; TypeScript cannot enforce it.
    */
   declare readonly defaultResolver?: MiddlewareTemplate<
-    MiddlewareCommand<B, O, R, BSL>,
+    MiddlewareCommand<B, O, R, BRS, BDS>,
     any[],
-    BSL[number]
+    BDS[number]
   >;
 
   /** @internal */
   override run(
     this: never,
-    subject: CommandSubjectUnion<MiddlewareCommand<B, O, R, BSL>>,
+    subject: CommandSubjectUnion<MiddlewareCommand<B, O, R, BRS, BDS>>,
     object: O,
   ): R {
     // Body is unreachable in well-typed TypeScript (this: never).
     // Defense-in-depth for JavaScript callers or any-typed bypasses.
-    const self = this as unknown as MiddlewareCommand<B, O, R, BSL>;
+    const self = this as unknown as MiddlewareCommand<B, O, R, BRS, BDS>;
     throw new Error(
       `MiddlewareCommand "${self.commandName}" cannot be invoked directly. ` +
         `Register it in a Command's middleware array instead.`,
@@ -1282,13 +1292,13 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
 
   /** Runs this middleware command's own registered middleware chain, then delegates to `_dispatch` with the continuation. Called exclusively by `Command._runChain`. */
   override _runChain(
-    subject: BSL[number],
+    subject: CommandSubjectUnion<MiddlewareCommand<B, O, R, BRS, BDS>>,
     object: O,
-    continuation: Runnable<BSL[number], O, R>,
+    continuation: Runnable<CommandSubjectUnion<MiddlewareCommand<B, O, R, BRS, BDS>>, O, R>,
   ): R {
     const mw = this._mwCache ?? (this._mwCache = this.middleware);
     if (mw.length === 0) return this._dispatch(subject, object, continuation);
-    type SU = BSL[number];
+    type SU = CommandSubjectUnion<MiddlewareCommand<B, O, R, BRS, BDS>>;
     return mw
       .reduceRight((next, m) => ({ run: (s: SU, o: O): R => m._runChain(s, o, next) }), {
         run: (s: SU, o: O): R => this._dispatch(s, o, continuation),
@@ -1298,13 +1308,13 @@ export abstract class MiddlewareCommand<B, O, R, BSL extends (B & Subject)[]> ex
 
   /** @internal */
   protected override _dispatch(
-    subject: BSL[number],
+    subject: CommandSubjectUnion<MiddlewareCommand<B, O, R, BRS, BDS>>,
     object: O,
-    continuation: Runnable<BSL[number], O, R>,
+    continuation: Runnable<CommandSubjectUnion<MiddlewareCommand<B, O, R, BRS, BDS>>, O, R>,
   ): R {
-    type SU = BSL[number];
+    type SU = CommandSubjectUnion<MiddlewareCommand<B, O, R, BRS, BDS>>;
     const strategy = subject.getCommandStrategy(this, object) as MiddlewareTemplate<
-      MiddlewareCommand<B, O, R, BSL>,
+      MiddlewareCommand<B, O, R, BRS, BDS>,
       any[],
       SU
     >;
