@@ -43,12 +43,15 @@ class Cat extends Subject implements Person {
 // ═══════════════════════════════════════════════════════════════════
 // §D · DEFAULT RESOLVER
 //
-//   When a Command declares `defaultResolver`, subjects without a
-//   specific resolver method fall through to it. Specific resolver
-//   methods take precedence when present.
+//   A Command's subjects are partitioned into BRS (resolved — handled
+//   by specific resolver methods) and BDS (defaulted — handled by
+//   `defaultResolver`). Subjects declared in BDS route to
+//   `defaultResolver` at runtime; a specific resolver method, if also
+//   present for a subject, takes precedence.
 //
-//   Declaring `defaultResolver` relaxes the exhaustiveness constraint:
-//   run() is callable even when specific resolver methods are absent.
+//   `run()` requires `defaultResolver` exactly when BDS is non-empty —
+//   the defaulted subjects are declared explicitly, so a forgotten
+//   subject is a compile error, not silently absorbed.
 // ═══════════════════════════════════════════════════════════════════
 
 class DefaultOnlyResult {
@@ -109,9 +112,10 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     deepEqual(received, ["payload"]);
   });
 
-  it("run() is callable without any specific resolver methods when defaultResolver is declared", () => {
-    // Compile-time proof: DefaultOnlyCommand has no resolveDog / resolveCat,
-    // yet run() is callable because defaultResolver is declared.
+  it("run() is callable without any specific resolver methods when all subjects are defaulted", () => {
+    // Compile-time proof: DefaultOnlyCommand declares both subjects in BDS
+    // (BRS = []), so no resolveDog / resolveCat are required and run() is
+    // callable via the declared defaultResolver.
     const cmd = new DefaultOnlyCommand();
     const result = cmd.run(new Dog("Rex", "Lab"), "");
     strictEqual(result, "default:Rex");
