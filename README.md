@@ -391,9 +391,11 @@ middleware:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
-    defaultResolver: DefaultPolicy
+    subjectUnion: [Student, Professor]
     dispatch:
       Professor: ProfessorPolicy
+    defaultResolutions: [Student]
+    defaultResolver: DefaultPolicy
     templates:
       CheckoutMiddlewareTemplate:
         isParameterized: true
