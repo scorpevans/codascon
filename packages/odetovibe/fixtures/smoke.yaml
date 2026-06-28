@@ -36,6 +36,8 @@ commands:
       - Guest
     dispatch:
       User: UserFarewellDefault
+    defaultResolutions:
+      - Guest
     defaultResolver: GuestFarewellDefault
     templates:
       UserFarewell:

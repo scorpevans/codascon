@@ -208,21 +208,92 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-coverage");
   });
 
-  it("[dispatch-coverage] passes when a subjectUnion member has no dispatch entry but defaultResolver is declared", () => {
-    // Professor is absent from dispatch — valid because defaultResolver handles it at runtime.
+  it("[resolution-partition] passes when a subjectUnion member is defaulted via defaultResolutions", () => {
+    // Professor is absent from dispatch but listed in defaultResolutions — the partition is
+    // total and disjoint, so this is valid; defaultResolver handles Professor at runtime.
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault" }, // Professor intentionally absent
+      dispatch: { Student: "GrantAccessDefault" },
+      defaultResolutions: ["Professor"],
       defaultResolver: "GrantAccessDefault",
       templates: {
         GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
       },
     });
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("[dispatch-coverage] fails when a subject is in neither dispatch nor defaultResolutions", () => {
+    // Professor is absent from dispatch and not defaulted — a forgotten subject.
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault" },
+      defaultResolver: "GrantAccessDefault",
+      templates: {
+        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+      },
+    });
+    const result = validateCmd.run(entry, indexWithCmd(entry));
+    expect(rules(result)).toContain("dispatch-coverage");
+  });
+
+  it("[resolution-partition] fails when a subject is in both dispatch and defaultResolutions", () => {
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      defaultResolutions: ["Professor"], // also defaulted — violates disjointness
+      defaultResolver: "GrantAccessDefault",
+      templates: {
+        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolution-partition");
+  });
+
+  it("[defaultResolutions-resolver] fails when defaultResolutions is set but no defaultResolver", () => {
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault" },
+      defaultResolutions: ["Professor"], // no defaultResolver declared
+      templates: {
+        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
+      "defaultResolutions-resolver",
+    );
+  });
+
+  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultResolutions is empty", () => {
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      defaultResolver: "GrantAccessDefault", // moot — nothing is defaulted
+      templates: {
+        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-moot");
   });
 
   it("[dispatch-extra] fails when a dispatch key is not in subjectUnion", () => {
@@ -411,26 +482,39 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, withTypes))).toContain("dispatch-target-ref");
   });
 
-  // Rule 12: defaultResolver-ref and defaultResolver-coverage
+  // Rule 12: defaultResolver-ref and defaultResolver-coverage (over defaultResolutions)
   it("passes when defaultResolver references a strategy with no subjectSubset (covers full union)", () => {
-    const entry = makeCmd({ defaultResolver: "GrantAccessDefault" });
+    // Professor is defaulted; GrantAccessDefault has no subjectSubset so its effective
+    // subset is the full union, which covers the defaulted Professor.
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault" },
+      defaultResolutions: ["Professor"],
+      defaultResolver: "GrantAccessDefault",
+    });
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
   it("[defaultResolver-ref] fails when defaultResolver names a strategy not found in templates", () => {
-    const entry = makeCmd({ defaultResolver: "NoSuchStrategy" });
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: { Student: "GrantAccessDefault" },
+      defaultResolutions: ["Professor"],
+      defaultResolver: "NoSuchStrategy",
+    });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-ref");
   });
 
-  it("[defaultResolver-coverage] fails when defaultResolver strategy subjectSubset misses a subject", () => {
-    // Command dispatches both Student and Professor; defaultResolver strategy only covers Student
+  it("[defaultResolver-coverage] fails when defaultResolver strategy subjectSubset misses a defaulted subject", () => {
+    // Professor is defaulted; the defaultResolver strategy (StudentOnly) only covers Student.
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "StudentOnly", Professor: "ProfOnly" },
+      dispatch: { Student: "StudentOnly" },
+      defaultResolutions: ["Professor"],
       templates: {
         AccessTemplate: {
           isParameterized: true,
@@ -440,28 +524,29 @@ describe("CommandValidator", () => {
           },
         },
       },
-      defaultResolver: "StudentOnly", // subjectSubset: [Student] — misses Professor
+      defaultResolver: "StudentOnly", // subjectSubset: [Student] — misses defaulted Professor
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
       "defaultResolver-coverage",
     );
   });
 
-  it("passes when defaultResolver strategy subjectSubset covers all subjects", () => {
-    // CatchAll strategy explicitly declares both subjects in its subjectSubset
+  it("passes when defaultResolver strategy subjectSubset covers all defaulted subjects", () => {
+    // CatchAll covers the defaulted Professor.
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "StudentOnly", Professor: "CatchAll" },
+      dispatch: { Student: "StudentOnly" },
+      defaultResolutions: ["Professor"],
       templates: {
         AccessTemplate: {
           isParameterized: true,
           strategies: {
             StudentOnly: { subjectSubset: ["Student"] },
-            CatchAll: { subjectSubset: ["Student", "Professor"] }, // covers both
+            CatchAll: { subjectSubset: ["Student", "Professor"] }, // covers the defaulted Professor
           },
         },
       },

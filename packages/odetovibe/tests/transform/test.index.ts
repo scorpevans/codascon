@@ -397,13 +397,14 @@ describe("CommandClassEmitter", () => {
     expect(drProp.getInitializer()?.getText()).toContain("this.sharedStrategy");
   });
 
-  it("skips resolver stub for subjects absent from dispatch when defaultResolver is declared", () => {
-    // Professor is in subjectUnion but NOT in dispatch — defaultResolver handles it.
+  it("skips resolver stub for defaulted subjects (defaultResolutions)", () => {
+    // Professor is defaulted (in defaultResolutions, not dispatch) — defaultResolver handles it.
     // The emitter must not generate a resolveProfessor stub; only resolveStudent is emitted.
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
       subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "DepartmentMatch" }, // Professor intentionally absent
+      dispatch: { Student: "DepartmentMatch" }, // Professor is defaulted instead
+      defaultResolutions: ["Professor"],
       defaultResolver: "CatchAll",
       templates: {
         AccessTemplate: {
@@ -423,6 +424,8 @@ describe("CommandClassEmitter", () => {
     expect(cls.getMethod("resolveProfessor")).toBeUndefined();
     // defaultResolver property must still be emitted and be readonly
     expect(cls.getProperty("defaultResolver")?.isReadonly()).toBe(true);
+    // heritage uses the BRS/BDS partition form: resolved [Student], defaulted [Professor]
+    expect(cls.getExtends()?.getText()).toContain("[Student], [Professor]");
   });
 
   it("imports Command as value and Template as type from codascon", () => {

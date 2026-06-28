@@ -186,18 +186,44 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // dispatch coverage: every subject in subjectUnion must have a dispatch entry,
-    // unless defaultResolver is declared (which acts as the catch-all for uncovered subjects).
+    // Resolution partition: dispatch keys ∪ defaultResolutions must partition subjectUnion
+    // (total + disjoint). A subject in neither is a forgotten subject (no silent absorption);
+    // a subject in both violates disjointness.
     const dispatchKeys = new Set(Object.keys(config.dispatch));
     const unionSet = new Set(config.subjectUnion);
+    const defaultResolutions = config.defaultResolutions ?? [];
+    const defaultedSet = new Set(defaultResolutions);
+
+    // defaultResolutions entries must reference subjects in subjectUnion
+    for (const dr of defaultResolutions) {
+      if (!unionSet.has(dr)) {
+        errors.push(
+          err(
+            key,
+            "defaultResolutions-ref",
+            `defaultResolutions entry "${dr}" is not in subjectUnion`,
+          ),
+        );
+      }
+    }
 
     for (const subjectRef of config.subjectUnion) {
-      if (!dispatchKeys.has(subjectRef) && !config.defaultResolver) {
+      const inDispatch = dispatchKeys.has(subjectRef);
+      const inDefault = defaultedSet.has(subjectRef);
+      if (inDispatch && inDefault) {
+        errors.push(
+          err(
+            key,
+            "resolution-partition",
+            `Subject "${subjectRef}" is in both dispatch and defaultResolutions — the resolution partition must be disjoint`,
+          ),
+        );
+      } else if (!inDispatch && !inDefault) {
         errors.push(
           err(
             key,
             "dispatch-coverage",
-            `Subject "${subjectRef}" is in subjectUnion but missing from dispatch`,
+            `Subject "${subjectRef}" is in subjectUnion but in neither dispatch nor defaultResolutions`,
           ),
         );
       }
@@ -206,6 +232,26 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       if (!unionSet.has(dk)) {
         errors.push(err(key, "dispatch-extra", `dispatch key "${dk}" is not in subjectUnion`));
       }
+    }
+
+    // defaultResolutions non-empty ⟺ defaultResolver declared
+    if (defaultResolutions.length > 0 && !config.defaultResolver) {
+      errors.push(
+        err(
+          key,
+          "defaultResolutions-resolver",
+          `defaultResolutions is non-empty but no defaultResolver strategy is declared`,
+        ),
+      );
+    }
+    if (defaultResolutions.length === 0 && config.defaultResolver) {
+      errors.push(
+        err(
+          key,
+          "defaultResolver-moot",
+          `defaultResolver is declared but defaultResolutions is empty — list the defaulted subjects in defaultResolutions`,
+        ),
+      );
     }
 
     // dispatch values must be plain strategy names unique across this Command's templates
@@ -344,13 +390,13 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
         const stratConfig = tplConfig.strategies[stratName];
         const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
         const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of config.subjectUnion) {
+        for (const subjectRef of defaultResolutions) {
           if (!stratSubjectSet.has(subjectRef)) {
             errors.push(
               err(
                 key,
                 "defaultResolver-coverage",
-                `defaultResolver strategy "${stratName}" does not cover subject "${subjectRef}" — its effective subjectSubset must cover all subjects in "${key}"`,
+                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultResolutions`,
               ),
             );
           }
