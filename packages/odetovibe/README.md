@@ -66,7 +66,7 @@ middleware:
     subjectUnion: [Student, Professor]
     dispatch:
       Professor: ProfessorPolicy
-    defaultResolutions: [Student]
+    defaultedSubjects: [Student]
     defaultResolver: DefaultPolicy
     templates:
       CheckoutMiddlewareTemplate:
@@ -100,7 +100,7 @@ commands:
 **Key rules:**
 
 - `domainTypes` with `resolverName` become Subject classes; without become interfaces
-- Every Subject in `subjectUnion` must appear in exactly one of `dispatch` (resolved) or `defaultResolutions` (defaulted) — the two partition `subjectUnion` (total + disjoint). A Subject in neither is an error; `defaultResolutions` non-empty requires a `defaultResolver`
+- Every Subject in `subjectUnion` must appear in exactly one of `dispatch` (resolved) or `defaultedSubjects` (defaulted) — the two partition `subjectUnion` (total + disjoint). A Subject in neither is an error; `defaultedSubjects` non-empty requires a `defaultResolver`
 - `dispatch` values are plain Strategy names, looked up across the Command's `templates`
 - All Templates generate as abstract classes, regardless of whether `strategies` is empty or not
 - Template `subjectSubset` must be a subset of the parent Command's `subjectUnion`

@@ -208,8 +208,8 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-coverage");
   });
 
-  it("[resolution-partition] passes when a subjectUnion member is defaulted via defaultResolutions", () => {
-    // Professor is absent from dispatch but listed in defaultResolutions — the partition is
+  it("[resolution-partition] passes when a subjectUnion member is defaulted via defaultedSubjects", () => {
+    // Professor is absent from dispatch but listed in defaultedSubjects — the partition is
     // total and disjoint, so this is valid; defaultResolver handles Professor at runtime.
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
@@ -218,7 +218,7 @@ describe("CommandValidator", () => {
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "GrantAccessDefault" },
-      defaultResolutions: ["Professor"],
+      defaultedSubjects: ["Professor"],
       defaultResolver: "GrantAccessDefault",
       templates: {
         GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
@@ -227,7 +227,7 @@ describe("CommandValidator", () => {
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
-  it("[dispatch-coverage] fails when a subject is in neither dispatch nor defaultResolutions", () => {
+  it("[dispatch-coverage] fails when a subject is in neither dispatch nor defaultedSubjects", () => {
     // Professor is absent from dispatch and not defaulted — a forgotten subject.
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
@@ -245,7 +245,7 @@ describe("CommandValidator", () => {
     expect(rules(result)).toContain("dispatch-coverage");
   });
 
-  it("[resolution-partition] fails when a subject is in both dispatch and defaultResolutions", () => {
+  it("[resolution-partition] fails when a subject is in both dispatch and defaultedSubjects", () => {
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
       baseType: "Person",
@@ -253,7 +253,7 @@ describe("CommandValidator", () => {
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
-      defaultResolutions: ["Professor"], // also defaulted — violates disjointness
+      defaultedSubjects: ["Professor"], // also defaulted — violates disjointness
       defaultResolver: "GrantAccessDefault",
       templates: {
         GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
@@ -262,7 +262,7 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolution-partition");
   });
 
-  it("[defaultResolutions-resolver] fails when defaultResolutions is set but no defaultResolver", () => {
+  it("[defaultedSubjects-resolver] fails when defaultedSubjects is set but no defaultResolver", () => {
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
       baseType: "Person",
@@ -270,17 +270,17 @@ describe("CommandValidator", () => {
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "GrantAccessDefault" },
-      defaultResolutions: ["Professor"], // no defaultResolver declared
+      defaultedSubjects: ["Professor"], // no defaultResolver declared
       templates: {
         GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
       },
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
-      "defaultResolutions-resolver",
+      "defaultedSubjects-resolver",
     );
   });
 
-  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultResolutions is empty", () => {
+  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultedSubjects is empty", () => {
     const entry = new CommandEntry("Cmd", {
       commandName: "accessBuilding",
       baseType: "Person",
@@ -296,14 +296,14 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-moot");
   });
 
-  it("[defaultResolutions-ref] fails when a defaultResolutions entry is not in subjectUnion", () => {
+  it("[defaultedSubjects-ref] fails when a defaultedSubjects entry is not in subjectUnion", () => {
     const entry = makeCmd({
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
-      defaultResolutions: ["Ghost"], // not in subjectUnion
+      defaultedSubjects: ["Ghost"], // not in subjectUnion
       defaultResolver: "GrantAccessDefault",
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolutions-ref");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultedSubjects-ref");
   });
 
   it("[dispatch-extra] fails when a dispatch key is not in subjectUnion", () => {
@@ -492,14 +492,14 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, withTypes))).toContain("dispatch-target-ref");
   });
 
-  // Rule 12: defaultResolver-ref and defaultResolver-coverage (over defaultResolutions)
+  // Rule 12: defaultResolver-ref and defaultResolver-coverage (over defaultedSubjects)
   it("passes when defaultResolver references a strategy with no subjectSubset (covers full union)", () => {
     // Professor is defaulted; GrantAccessDefault has no subjectSubset so its effective
     // subset is the full union, which covers the defaulted Professor.
     const entry = makeCmd({
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "GrantAccessDefault" },
-      defaultResolutions: ["Professor"],
+      defaultedSubjects: ["Professor"],
       defaultResolver: "GrantAccessDefault",
     });
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
@@ -509,7 +509,7 @@ describe("CommandValidator", () => {
     const entry = makeCmd({
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "GrantAccessDefault" },
-      defaultResolutions: ["Professor"],
+      defaultedSubjects: ["Professor"],
       defaultResolver: "NoSuchStrategy",
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-ref");
@@ -524,7 +524,7 @@ describe("CommandValidator", () => {
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "StudentOnly" },
-      defaultResolutions: ["Professor"],
+      defaultedSubjects: ["Professor"],
       templates: {
         AccessTemplate: {
           isParameterized: true,
@@ -550,7 +550,7 @@ describe("CommandValidator", () => {
       returnType: "AccessResult",
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "StudentOnly" },
-      defaultResolutions: ["Professor"],
+      defaultedSubjects: ["Professor"],
       templates: {
         AccessTemplate: {
           isParameterized: true,
@@ -1290,37 +1290,37 @@ describe("MiddlewareCommandValidator", () => {
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-coverage");
   });
 
-  it("[resolution-partition] passes when a subject is defaulted via defaultResolutions", () => {
-    // Gem is absent from dispatch but listed in defaultResolutions — valid partition.
+  it("[resolution-partition] passes when a subject is defaulted via defaultedSubjects", () => {
+    // Gem is absent from dispatch but listed in defaultedSubjects — valid partition.
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
       dispatch: { Rock: "TraceRockDefault" },
-      defaultResolutions: ["Gem"],
+      defaultedSubjects: ["Gem"],
       defaultResolver: "TraceRockDefault",
     });
     expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
   });
 
-  it("[resolution-partition] fails when a subject is in both dispatch and defaultResolutions", () => {
+  it("[resolution-partition] fails when a subject is in both dispatch and defaultedSubjects", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
       dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
-      defaultResolutions: ["Gem"], // also defaulted — violates disjointness
+      defaultedSubjects: ["Gem"], // also defaulted — violates disjointness
       defaultResolver: "TraceGemDefault",
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("resolution-partition");
   });
 
-  it("[defaultResolutions-resolver] fails when defaultResolutions is set but no defaultResolver", () => {
+  it("[defaultedSubjects-resolver] fails when defaultedSubjects is set but no defaultResolver", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
       dispatch: { Rock: "TraceRockDefault" },
-      defaultResolutions: ["Gem"], // no defaultResolver declared
+      defaultedSubjects: ["Gem"], // no defaultResolver declared
     });
-    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolutions-resolver");
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultedSubjects-resolver");
   });
 
-  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultResolutions is empty", () => {
+  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultedSubjects is empty", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig, // dispatch covers both Rock and Gem
       defaultResolver: "TraceRockDefault", // moot — nothing is defaulted
@@ -1328,14 +1328,14 @@ describe("MiddlewareCommandValidator", () => {
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-moot");
   });
 
-  it("[defaultResolutions-ref] fails when a defaultResolutions entry is not in subjectUnion", () => {
+  it("[defaultedSubjects-ref] fails when a defaultedSubjects entry is not in subjectUnion", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
       dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
-      defaultResolutions: ["Ghost"], // not in subjectUnion
+      defaultedSubjects: ["Ghost"], // not in subjectUnion
       defaultResolver: "TraceRockDefault",
     });
-    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolutions-ref");
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultedSubjects-ref");
   });
 
   it("[baseType-ref] fails when baseType is not a known domain type", () => {
@@ -1513,7 +1513,7 @@ describe("MiddlewareCommandValidator", () => {
       returnType: "Res",
       subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "TraceRockDefault" },
-      defaultResolutions: ["Gem"],
+      defaultedSubjects: ["Gem"],
       templates: {
         TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
       },
@@ -1526,7 +1526,7 @@ describe("MiddlewareCommandValidator", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
       dispatch: { Rock: "TraceRockDefault" },
-      defaultResolutions: ["Gem"],
+      defaultedSubjects: ["Gem"],
       defaultResolver: "NoSuchStrategy",
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-ref");
@@ -1541,7 +1541,7 @@ describe("MiddlewareCommandValidator", () => {
       returnType: "Res",
       subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "RockOnly" },
-      defaultResolutions: ["Gem"],
+      defaultedSubjects: ["Gem"],
       templates: {
         TraceTemplate: {
           isParameterized: true,
@@ -1564,7 +1564,7 @@ describe("MiddlewareCommandValidator", () => {
       returnType: "Res",
       subjectUnion: ["Rock", "Gem"],
       dispatch: { Rock: "RockOnly" },
-      defaultResolutions: ["Gem"],
+      defaultedSubjects: ["Gem"],
       templates: {
         TraceTemplate: {
           isParameterized: true,

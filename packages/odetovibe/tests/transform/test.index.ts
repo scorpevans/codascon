@@ -397,14 +397,14 @@ describe("CommandClassEmitter", () => {
     expect(drProp.getInitializer()?.getText()).toContain("this.sharedStrategy");
   });
 
-  it("skips resolver stub for defaulted subjects (defaultResolutions)", () => {
-    // Professor is defaulted (in defaultResolutions, not dispatch) — defaultResolver handles it.
+  it("skips resolver stub for defaulted subjects (defaultedSubjects)", () => {
+    // Professor is defaulted (in defaultedSubjects, not dispatch) — defaultResolver handles it.
     // The emitter must not generate a resolveProfessor stub; only resolveStudent is emitted.
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
       subjectUnion: ["Student", "Professor"],
       dispatch: { Student: "DepartmentMatch" }, // Professor is defaulted instead
-      defaultResolutions: ["Professor"],
+      defaultedSubjects: ["Professor"],
       defaultResolver: "CatchAll",
       templates: {
         AccessTemplate: {
@@ -1625,13 +1625,13 @@ describe("MiddlewareCommandClassEmitter", () => {
     expect(singletonProps).toHaveLength(1);
   });
 
-  it("skips resolver stub for defaulted subjects (defaultResolutions)", () => {
-    // Gem is defaulted (in defaultResolutions, not dispatch) — defaultResolver handles it.
+  it("skips resolver stub for defaulted subjects (defaultedSubjects)", () => {
+    // Gem is defaulted (in defaultedSubjects, not dispatch) — defaultResolver handles it.
     // The emitter must not generate a resolveGem stub; only resolveRock is emitted.
     const drMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...traceMwEntry.config,
       dispatch: { Rock: "TraceRockDefault" }, // Gem is defaulted instead
-      defaultResolutions: ["Gem"],
+      defaultedSubjects: ["Gem"],
       defaultResolver: "TraceRockDefault",
     });
     const project = makeProject();

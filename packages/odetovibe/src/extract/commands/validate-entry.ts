@@ -186,22 +186,22 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // Resolution partition: dispatch keys ∪ defaultResolutions must partition subjectUnion
+    // Resolution partition: dispatch keys ∪ defaultedSubjects must partition subjectUnion
     // (total + disjoint). A subject in neither is a forgotten subject (no silent absorption);
     // a subject in both violates disjointness.
     const dispatchKeys = new Set(Object.keys(config.dispatch));
     const unionSet = new Set(config.subjectUnion);
-    const defaultResolutions = config.defaultResolutions ?? [];
-    const defaultedSet = new Set(defaultResolutions);
+    const defaultedSubjects = config.defaultedSubjects ?? [];
+    const defaultedSet = new Set(defaultedSubjects);
 
-    // defaultResolutions entries must reference subjects in subjectUnion
-    for (const dr of defaultResolutions) {
+    // defaultedSubjects entries must reference subjects in subjectUnion
+    for (const dr of defaultedSubjects) {
       if (!unionSet.has(dr)) {
         errors.push(
           err(
             key,
-            "defaultResolutions-ref",
-            `defaultResolutions entry "${dr}" is not in subjectUnion`,
+            "defaultedSubjects-ref",
+            `defaultedSubjects entry "${dr}" is not in subjectUnion`,
           ),
         );
       }
@@ -215,7 +215,7 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
           err(
             key,
             "resolution-partition",
-            `Subject "${subjectRef}" is in both dispatch and defaultResolutions — the resolution partition must be disjoint`,
+            `Subject "${subjectRef}" is in both dispatch and defaultedSubjects — the resolution partition must be disjoint`,
           ),
         );
       } else if (!inDispatch && !inDefault) {
@@ -223,7 +223,7 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
           err(
             key,
             "dispatch-coverage",
-            `Subject "${subjectRef}" is in subjectUnion but in neither dispatch nor defaultResolutions`,
+            `Subject "${subjectRef}" is in subjectUnion but in neither dispatch nor defaultedSubjects`,
           ),
         );
       }
@@ -234,22 +234,22 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // defaultResolutions non-empty ⟺ defaultResolver declared
-    if (defaultResolutions.length > 0 && !config.defaultResolver) {
+    // defaultedSubjects non-empty ⟺ defaultResolver declared
+    if (defaultedSubjects.length > 0 && !config.defaultResolver) {
       errors.push(
         err(
           key,
-          "defaultResolutions-resolver",
-          `defaultResolutions is non-empty but no defaultResolver strategy is declared`,
+          "defaultedSubjects-resolver",
+          `defaultedSubjects is non-empty but no defaultResolver strategy is declared`,
         ),
       );
     }
-    if (defaultResolutions.length === 0 && config.defaultResolver) {
+    if (defaultedSubjects.length === 0 && config.defaultResolver) {
       errors.push(
         err(
           key,
           "defaultResolver-moot",
-          `defaultResolver is declared but defaultResolutions is empty — list the defaulted subjects in defaultResolutions`,
+          `defaultResolver is declared but defaultedSubjects is empty — list the defaulted subjects in defaultedSubjects`,
         ),
       );
     }
@@ -390,13 +390,13 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
         const stratConfig = tplConfig.strategies[stratName];
         const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
         const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of defaultResolutions) {
+        for (const subjectRef of defaultedSubjects) {
           if (!stratSubjectSet.has(subjectRef)) {
             errors.push(
               err(
                 key,
                 "defaultResolver-coverage",
-                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultResolutions`,
+                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultedSubjects`,
               ),
             );
           }
@@ -604,20 +604,20 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    // Resolution partition (same as Command): dispatch keys ∪ defaultResolutions partition
-    // subjectUnion (total + disjoint); defaultResolutions ⟺ defaultResolver.
+    // Resolution partition (same as Command): dispatch keys ∪ defaultedSubjects partition
+    // subjectUnion (total + disjoint); defaultedSubjects ⟺ defaultResolver.
     const dispatchKeys = new Set(Object.keys(config.dispatch));
     const unionSet = new Set(config.subjectUnion);
-    const defaultResolutions = config.defaultResolutions ?? [];
-    const defaultedSet = new Set(defaultResolutions);
+    const defaultedSubjects = config.defaultedSubjects ?? [];
+    const defaultedSet = new Set(defaultedSubjects);
 
-    for (const dr of defaultResolutions) {
+    for (const dr of defaultedSubjects) {
       if (!unionSet.has(dr)) {
         errors.push(
           err(
             key,
-            "defaultResolutions-ref",
-            `defaultResolutions entry "${dr}" is not in subjectUnion`,
+            "defaultedSubjects-ref",
+            `defaultedSubjects entry "${dr}" is not in subjectUnion`,
           ),
         );
       }
@@ -631,7 +631,7 @@ abstract class MiddlewareCommandValidator implements Template<
           err(
             key,
             "resolution-partition",
-            `Subject "${subjectRef}" is in both dispatch and defaultResolutions — the resolution partition must be disjoint`,
+            `Subject "${subjectRef}" is in both dispatch and defaultedSubjects — the resolution partition must be disjoint`,
           ),
         );
       } else if (!inDispatch && !inDefault) {
@@ -639,7 +639,7 @@ abstract class MiddlewareCommandValidator implements Template<
           err(
             key,
             "dispatch-coverage",
-            `Subject "${subjectRef}" is in subjectUnion but in neither dispatch nor defaultResolutions`,
+            `Subject "${subjectRef}" is in subjectUnion but in neither dispatch nor defaultedSubjects`,
           ),
         );
       }
@@ -650,21 +650,21 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    if (defaultResolutions.length > 0 && !config.defaultResolver) {
+    if (defaultedSubjects.length > 0 && !config.defaultResolver) {
       errors.push(
         err(
           key,
-          "defaultResolutions-resolver",
-          `defaultResolutions is non-empty but no defaultResolver strategy is declared`,
+          "defaultedSubjects-resolver",
+          `defaultedSubjects is non-empty but no defaultResolver strategy is declared`,
         ),
       );
     }
-    if (defaultResolutions.length === 0 && config.defaultResolver) {
+    if (defaultedSubjects.length === 0 && config.defaultResolver) {
       errors.push(
         err(
           key,
           "defaultResolver-moot",
-          `defaultResolver is declared but defaultResolutions is empty — list the defaulted subjects in defaultResolutions`,
+          `defaultResolver is declared but defaultedSubjects is empty — list the defaulted subjects in defaultedSubjects`,
         ),
       );
     }
@@ -775,13 +775,13 @@ abstract class MiddlewareCommandValidator implements Template<
         const stratConfig = tplConfig.strategies[stratName];
         const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
         const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of defaultResolutions) {
+        for (const subjectRef of defaultedSubjects) {
           if (!stratSubjectSet.has(subjectRef)) {
             errors.push(
               err(
                 key,
                 "defaultResolver-coverage",
-                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultResolutions`,
+                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultedSubjects`,
               ),
             );
           }

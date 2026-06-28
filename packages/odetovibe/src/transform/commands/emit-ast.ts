@@ -306,10 +306,10 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
     }
 
     const returnType = maybeAsync(config.returnType, config.returnAsync);
-    // Resolution partition: BRS (resolved) = subjectUnion minus defaultResolutions; BDS
-    // (defaulted) = defaultResolutions. Both preserve subjectUnion order. When BDS is empty,
+    // Resolution partition: BRS (resolved) = subjectUnion minus defaultedSubjects; BDS
+    // (defaulted) = defaultedSubjects. Both preserve subjectUnion order. When BDS is empty,
     // emit the 4-arg form so fully-resolved commands are unchanged.
-    const defaultedSet = new Set(config.defaultResolutions ?? []);
+    const defaultedSet = new Set(config.defaultedSubjects ?? []);
     const resolvedSubjects = config.subjectUnion.filter((s) => !defaultedSet.has(s));
     const defaultedSubjects = config.subjectUnion.filter((s) => defaultedSet.has(s));
     const brsTuple = resolvedSubjects.join(", ");
@@ -357,7 +357,7 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
     for (const subjectRef of config.subjectUnion) {
-      // Defaulted subjects (defaultResolutions / BDS) route to defaultResolver at runtime —
+      // Defaulted subjects (defaultedSubjects / BDS) route to defaultResolver at runtime —
       // no specific resolver stub is generated for them.
       if (defaultedSet.has(subjectRef)) continue;
 
@@ -999,8 +999,8 @@ abstract class MiddlewareCommandClassEmitter implements Template<
 
     const returnType = maybeAsync(config.returnType, config.returnAsync);
     // Resolution partition (same as Command): BRS (resolved) = subjectUnion minus
-    // defaultResolutions; BDS (defaulted) = defaultResolutions. 4-arg form when BDS is empty.
-    const defaultedSet = new Set(config.defaultResolutions ?? []);
+    // defaultedSubjects; BDS (defaulted) = defaultedSubjects. 4-arg form when BDS is empty.
+    const defaultedSet = new Set(config.defaultedSubjects ?? []);
     const resolvedSubjects = config.subjectUnion.filter((s) => !defaultedSet.has(s));
     const defaultedSubjects = config.subjectUnion.filter((s) => defaultedSet.has(s));
     const brsTuple = resolvedSubjects.join(", ");
@@ -1037,7 +1037,7 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
     for (const subjectRef of config.subjectUnion) {
-      // Defaulted subjects (defaultResolutions / BDS) route to defaultResolver — no stub.
+      // Defaulted subjects (defaultedSubjects / BDS) route to defaultResolver — no stub.
       if (defaultedSet.has(subjectRef)) continue;
 
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);

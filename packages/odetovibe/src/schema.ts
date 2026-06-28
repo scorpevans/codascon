@@ -53,12 +53,12 @@
  *
  * The following constraints should be enforced by tooling consuming this schema:
  *
- * 1. **Resolution partition**: A Command's `dispatch` keys and `defaultResolutions`
+ * 1. **Resolution partition**: A Command's `dispatch` keys and `defaultedSubjects`
  *    form a typed partition of `subjectUnion` — every Subject must appear in exactly
  *    one of the two (total and disjoint). Subjects in `dispatch` are resolved by a
- *    specific Strategy; Subjects in `defaultResolutions` are routed to `defaultResolver`
+ *    specific Strategy; Subjects in `defaultedSubjects` are routed to `defaultResolver`
  *    at runtime. A Subject in neither is a validation error (it would otherwise be
- *    silently absorbed). `defaultResolutions` non-empty ⟺ `defaultResolver` declared.
+ *    silently absorbed). `defaultedSubjects` non-empty ⟺ `defaultResolver` declared.
  *    This applies to MiddlewareCommands too — a middleware is a Command in the full
  *    sense and partitions its subjects the same way.
  *
@@ -303,19 +303,19 @@ export type DomainType = {
  *                            emits an `override get middleware()` getter on the
  *                            Command class returning the registered instances.
  *
- * @property defaultResolutions — Optional list of Subjects that are intentionally
+ * @property defaultedSubjects — Optional list of Subjects that are intentionally
  *                            default-resolved. These Subjects are NOT given a
  *                            `dispatch` entry; instead they route to `defaultResolver`
  *                            at runtime. Together with the `dispatch` keys they must
  *                            partition `subjectUnion` (total + disjoint). Maps to the
  *                            generated Command's `BDS` (Base Defaulted Subjects) type
- *                            parameter: `Command<B, O, R, [dispatch keys], [defaultResolutions]>`.
+ *                            parameter: `Command<B, O, R, [dispatch keys], [defaultedSubjects]>`.
  *                            When empty/absent, the Command is fully resolved and codegen
  *                            emits the 4-argument `Command<B, O, R, [subjectUnion]>` form.
  *
- * @property defaultResolver — The catch-all Strategy handling the `defaultResolutions`
- *                            Subjects. Required exactly when `defaultResolutions` is
- *                            non-empty; declaring it without `defaultResolutions` is a
+ * @property defaultResolver — The catch-all Strategy handling the `defaultedSubjects`
+ *                            Subjects. Required exactly when `defaultedSubjects` is
+ *                            non-empty; declaring it without `defaultedSubjects` is a
  *                            validation error (the defaulted Subjects must be explicit).
  *
  *                            Codegen emits a `readonly defaultResolver` property
@@ -332,7 +332,7 @@ export type DomainType = {
  *                            `subjectSubset` if declared, otherwise the parent
  *                            Template's `subjectSubset`, otherwise the full
  *                            command subject union — must cover every Subject
- *                            in `defaultResolutions` (validation rule 12).
+ *                            in `defaultedSubjects` (validation rule 12).
  *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
@@ -357,7 +357,7 @@ export type Command = {
   returnAsync?: boolean;
   subjectUnion: SubjectRef[];
   middleware?: MiddlewareRef[];
-  defaultResolutions?: SubjectRef[];
+  defaultedSubjects?: SubjectRef[];
   defaultResolver?: StrategyRef;
   dispatch: {
     [subject: SubjectRef]: StrategyRef;
