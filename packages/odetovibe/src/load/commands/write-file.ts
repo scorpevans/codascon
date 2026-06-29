@@ -754,7 +754,10 @@ const overwriteWriter = new OverwriteWriterDefault();
 const mergeWriter = new MergeWriterDefault();
 const strictMergeWriter = new StrictMergeWriterDefault();
 
-const WRITER_BY_MODE: Record<WriteMode, Template<WriteFileCommand, [], SourceFileEntry>> = {
+const WRITER_BY_MODE: Record<
+  WriteMode,
+  OverwriteWriterDefault | MergeWriterDefault | StrictMergeWriterDefault
+> = {
   overwrite: overwriteWriter,
   merge: mergeWriter,
   strict: strictMergeWriter,
@@ -772,7 +775,7 @@ export class WriteFileCommand extends Command<
   resolveSourceFile(
     subject: SourceFileEntry,
     object: Readonly<WriteContext>,
-  ): Template<WriteFileCommand, [], SourceFileEntry> {
+  ): OverwriteWriterDefault | MergeWriterDefault | StrictMergeWriterDefault {
     return WRITER_BY_MODE[object.mode];
   }
 }

@@ -1166,13 +1166,13 @@ export class EmitAstCommand extends Command<
   resolveAbstractTemplate(
     subject: AbstractTemplateEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], AbstractTemplateEntry> {
+  ): ParameterizedTemplateEmitter | FixedTemplateEmitter {
     return subject.config.isParameterized ? parameterizedTemplateEmitter : fixedTemplateEmitter;
   }
   resolveStrategy(
     subject: StrategyEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], StrategyEntry> {
+  ): ParameterizedParentStrategyEmitter | FixedParentStrategyEmitter {
     const tplEntry = object.configIndex.abstractTemplates.get(
       `${subject.commandKey}.${subject.templateKey}`,
     )!;
@@ -1189,7 +1189,7 @@ export class EmitAstCommand extends Command<
   resolveMiddlewareTemplate(
     subject: MiddlewareTemplateEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], MiddlewareTemplateEntry> {
+  ): MiddlewareParameterizedTemplateEmitter | MiddlewareFixedTemplateEmitter {
     return subject.config.isParameterized
       ? middlewareParameterizedTemplateEmitter
       : middlewareFixedTemplateEmitter;
@@ -1197,7 +1197,7 @@ export class EmitAstCommand extends Command<
   resolveMiddlewareStrategy(
     subject: MiddlewareStrategyEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], MiddlewareStrategyEntry> {
+  ): MiddlewareParameterizedParentStrategyEmitter | MiddlewareFixedParentStrategyEmitter {
     const tplEntry = object.configIndex.middlewareTemplates.get(
       `${subject.commandKey}.${subject.templateKey}`,
     )!;

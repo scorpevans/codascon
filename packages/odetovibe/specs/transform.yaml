@@ -2,12 +2,14 @@
 # odetovibe — Transform Domain
 #
 # Responsible for converting a validated ConfigIndex into TypeScript
-# code using ts-morph. Each Subject type dispatches to a distinct
-# emitter — no runtime branching in resolver methods.
+# code using ts-morph. Most entry types map 1:1 to an emitter; the
+# abstract-template and strategy entries (and their middleware variants)
+# legally route to a parameterized OR fixed emitter, chosen at runtime by
+# isParameterized — declared as multi-candidate dispatch.
 #
-# The structural split made in the Extract domain ensures that
-# EmitAstCommand's dispatch is fully exhaustive: every entry type
-# maps to exactly one emitter family.
+# The structural split made in the Extract domain ensures EmitAstCommand's
+# dispatch is exhaustive: every entry type appears in exactly one dispatch
+# entry, whose codomain may list several candidate emitters.
 #
 # Subjects are the ConfigEntry types produced by Extract.
 # They are imported from the extract domain — codegen should import,
@@ -71,11 +73,14 @@ commands:
       SubjectTypeEntry: SubjectClassEmitterDefault
       PlainTypeEntry: InterfaceEmitterDefault
       CommandEntry: CommandClassEmitterDefault
-      AbstractTemplateEntry: FixedTemplateEmitter
-      StrategyEntry: FixedParentStrategyEmitter
+      # The next four route at runtime on isParameterized — declare the real codomain.
+      AbstractTemplateEntry: [ParameterizedTemplateEmitter, FixedTemplateEmitter]
+      StrategyEntry: [ParameterizedParentStrategyEmitter, FixedParentStrategyEmitter]
       MiddlewareCommandEntry: MiddlewareCommandClassEmitterDefault
-      MiddlewareTemplateEntry: MiddlewareFixedTemplateEmitter
-      MiddlewareStrategyEntry: MiddlewareFixedParentStrategyEmitter
+      MiddlewareTemplateEntry:
+        [MiddlewareParameterizedTemplateEmitter, MiddlewareFixedTemplateEmitter]
+      MiddlewareStrategyEntry:
+        [MiddlewareParameterizedParentStrategyEmitter, MiddlewareFixedParentStrategyEmitter]
     templates:
       # Emits: class Foo extends Subject { readonly resolverName = "resolveFoo" as const; ... }
       # Target: domain-types.ts
