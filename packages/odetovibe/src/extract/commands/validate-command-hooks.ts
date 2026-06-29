@@ -137,7 +137,7 @@ export class ValidateCommandHooksCommand extends Command<
   ConfigEntry,
   ConfigIndex,
   ValidationResult,
-  [AbstractTemplateEntry, StrategyEntry, MiddlewareTemplateEntry, MiddlewareStrategyEntry]
+  [AbstractTemplateEntry, MiddlewareStrategyEntry, MiddlewareTemplateEntry, StrategyEntry]
 > {
   readonly commandName = "validateCommandHooks" as const;
 

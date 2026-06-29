@@ -1139,14 +1139,14 @@ export class EmitAstCommand extends Command<
   EmitContext,
   EmitResult,
   [
-    SubjectTypeEntry,
-    PlainTypeEntry,
-    CommandEntry,
     AbstractTemplateEntry,
-    StrategyEntry,
+    CommandEntry,
     MiddlewareCommandEntry,
-    MiddlewareTemplateEntry,
     MiddlewareStrategyEntry,
+    MiddlewareTemplateEntry,
+    PlainTypeEntry,
+    StrategyEntry,
+    SubjectTypeEntry,
   ]
 > {
   readonly commandName = "emitAst" as const;

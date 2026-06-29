@@ -912,14 +912,14 @@ export class ValidateEntryCommand extends Command<
   ConfigIndex,
   ValidationResult,
   [
-    SubjectTypeEntry,
-    PlainTypeEntry,
-    CommandEntry,
     AbstractTemplateEntry,
-    StrategyEntry,
+    CommandEntry,
     MiddlewareCommandEntry,
-    MiddlewareTemplateEntry,
     MiddlewareStrategyEntry,
+    MiddlewareTemplateEntry,
+    PlainTypeEntry,
+    StrategyEntry,
+    SubjectTypeEntry,
   ]
 > {
   readonly commandName = "validateEntry" as const;
