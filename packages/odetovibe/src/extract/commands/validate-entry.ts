@@ -990,49 +990,43 @@ export class ValidateEntryCommand extends Command<
   resolveSubjectType(
     subject: SubjectTypeEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], SubjectTypeEntry> {
+  ): SubjectTypeValidatorDefault {
     return subjectTypeValidator;
   }
   resolvePlainType(
     subject: PlainTypeEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], PlainTypeEntry> {
+  ): PlainTypeValidatorDefault {
     return plainTypeValidator;
   }
-  resolveCommand(
-    subject: CommandEntry,
-    object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], CommandEntry> {
+  resolveCommand(subject: CommandEntry, object: Readonly<ConfigIndex>): CommandValidatorDefault {
     return commandValidator;
   }
   resolveAbstractTemplate(
     subject: AbstractTemplateEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], AbstractTemplateEntry> {
+  ): AbstractTemplateValidatorDefault {
     return abstractTemplateValidator;
   }
-  resolveStrategy(
-    subject: StrategyEntry,
-    object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], StrategyEntry> {
+  resolveStrategy(subject: StrategyEntry, object: Readonly<ConfigIndex>): StrategyValidatorDefault {
     return strategyValidator;
   }
   resolveMiddlewareCommand(
     subject: MiddlewareCommandEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], MiddlewareCommandEntry> {
+  ): MiddlewareCommandValidatorDefault {
     return middlewareCommandValidator;
   }
   resolveMiddlewareTemplate(
     subject: MiddlewareTemplateEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], MiddlewareTemplateEntry> {
+  ): MiddlewareTemplateValidatorDefault {
     return middlewareTemplateValidator;
   }
   resolveMiddlewareStrategy(
     subject: MiddlewareStrategyEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], MiddlewareStrategyEntry> {
+  ): MiddlewareStrategyValidatorDefault {
     return middlewareStrategyValidator;
   }
 }

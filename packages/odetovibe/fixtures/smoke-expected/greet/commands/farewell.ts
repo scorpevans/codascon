@@ -37,10 +37,7 @@ export class FarewellCommand extends Command<
   private readonly userFarewellDefault = new UserFarewellDefault();
   private readonly guestFarewellDefault = new GuestFarewellDefault();
 
-  resolveUser(
-    subject: User,
-    object: Readonly<Greeting>,
-  ): Template<FarewellCommand, [], User> {
+  resolveUser(subject: User, object: Readonly<Greeting>): UserFarewellDefault {
     return this.userFarewellDefault; // @odetovibe-generated
   }
 

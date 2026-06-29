@@ -381,24 +381,26 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
         type: `Readonly<${config.objectType}>`,
       });
 
-      if (candidates.length > 1) {
-        // Multi-candidate: declare the legal codomain as the union of the candidate
-        // Strategy classes and stub the body. The union narrows the return so tsc rejects
-        // routing to a non-candidate; the developer fills in the runtime choice.
-        method.setReturnType(candidates.map(dispatchTargetClass).join(" | "));
-        method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
-      } else {
-        method.setReturnType(`Template<${key}, [], ${subjectRef}>`);
-        const fieldName =
-          candidates.length === 1
-            ? singletonMap.get(dispatchTargetClass(candidates[0]))
-            : undefined;
-        method.addStatements([
-          fieldName
-            ? `return this.${fieldName}; // @odetovibe-generated`
-            : `throw new Error("Not implemented"); // @odetovibe-generated`,
-        ]);
-      }
+      // Return type is the dispatch codomain — the union of the candidate Strategy classes
+      // (a single class for a singleton). Codegen owns it; the developer narrows/extends the
+      // codomain by editing the spec dispatch. Fall back to the wide Template contract when a
+      // candidate is an abstract (possibly generic) template — it can't be a bare type name —
+      // or when a subject has no candidates (an invalid config otherwise caught by validation).
+      const candidateClasses = candidates.map(dispatchTargetClass);
+      const allConcrete =
+        candidateClasses.length > 0 &&
+        candidateClasses.every((c) => !configIndex.abstractTemplates.has(`${key}.${c}`));
+      method.setReturnType(
+        allConcrete ? candidateClasses.join(" | ") : `Template<${key}, [], ${subjectRef}>`,
+      );
+      // A single concrete candidate → complete resolver returning its singleton; else a stub.
+      const fieldName =
+        candidates.length === 1 ? singletonMap.get(dispatchTargetClass(candidates[0])) : undefined;
+      method.addStatements([
+        fieldName
+          ? `return this.${fieldName}; // @odetovibe-generated`
+          : `throw new Error("Not implemented"); // @odetovibe-generated`,
+      ]);
     }
 
     if (config.defaultResolver) {
@@ -1072,24 +1074,28 @@ abstract class MiddlewareCommandClassEmitter implements Template<
         type: `Readonly<${config.objectType}>`,
       });
 
-      if (candidates.length > 1) {
-        // Multi-candidate: declare the legal codomain as the union of the candidate
-        // Strategy classes and stub the body. The union narrows the return so tsc rejects
-        // routing to a non-candidate; the developer fills in the runtime choice.
-        method.setReturnType(candidates.map(dispatchTargetClass).join(" | "));
-        method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
-      } else {
-        method.setReturnType(`MiddlewareTemplate<${key}, [], ${subjectRef}>`);
-        const fieldName =
-          candidates.length === 1
-            ? singletonMap.get(dispatchTargetClass(candidates[0]))
-            : undefined;
-        method.addStatements([
-          fieldName
-            ? `return this.${fieldName}; // @odetovibe-generated`
-            : `throw new Error("Not implemented"); // @odetovibe-generated`,
-        ]);
-      }
+      // Return type is the dispatch codomain — the union of the candidate Strategy classes
+      // (a single class for a singleton). Codegen owns it; the developer narrows/extends the
+      // codomain by editing the spec dispatch. Fall back to the wide MiddlewareTemplate contract
+      // when a candidate is an abstract (possibly generic) template — it can't be a bare type
+      // name — or when a subject has no candidates (an invalid config caught by validation).
+      const candidateClasses = candidates.map(dispatchTargetClass);
+      const allConcrete =
+        candidateClasses.length > 0 &&
+        candidateClasses.every((c) => !configIndex.middlewareTemplates.has(`${key}.${c}`));
+      method.setReturnType(
+        allConcrete
+          ? candidateClasses.join(" | ")
+          : `MiddlewareTemplate<${key}, [], ${subjectRef}>`,
+      );
+      // A single concrete candidate → complete resolver returning its singleton; else a stub.
+      const fieldName =
+        candidates.length === 1 ? singletonMap.get(dispatchTargetClass(candidates[0])) : undefined;
+      method.addStatements([
+        fieldName
+          ? `return this.${fieldName}; // @odetovibe-generated`
+          : `throw new Error("Not implemented"); // @odetovibe-generated`,
+      ]);
     }
 
     if (config.defaultResolver) {
@@ -1148,19 +1154,16 @@ export class EmitAstCommand extends Command<
   resolveSubjectType(
     subject: SubjectTypeEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], SubjectTypeEntry> {
+  ): SubjectClassEmitterDefault {
     return subjectClassEmitter;
   }
   resolvePlainType(
     subject: PlainTypeEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], PlainTypeEntry> {
+  ): InterfaceEmitterDefault {
     return interfaceEmitter;
   }
-  resolveCommand(
-    subject: CommandEntry,
-    object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], CommandEntry> {
+  resolveCommand(subject: CommandEntry, object: Readonly<EmitContext>): CommandClassEmitterDefault {
     return commandClassEmitter;
   }
   resolveAbstractTemplate(
@@ -1183,7 +1186,7 @@ export class EmitAstCommand extends Command<
   resolveMiddlewareCommand(
     subject: MiddlewareCommandEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], MiddlewareCommandEntry> {
+  ): MiddlewareCommandClassEmitterDefault {
     return middlewareCommandClassEmitter;
   }
   resolveMiddlewareTemplate(
