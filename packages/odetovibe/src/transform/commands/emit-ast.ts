@@ -340,17 +340,19 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       ]);
     }
 
-    // Only emit singletons for subjects that will receive a resolver stub:
+    // Singleton field pool — only SINGLE-candidate dispatch entries get a private field:
+    //   - multi-candidate resolvers are stubs that reference candidates by class, not field
     //   - exclude abstract template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
     // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
-    const concreteDispatch = Object.fromEntries(
-      Object.entries(config.dispatch).filter(
-        ([subjectRef, v]) =>
-          !configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(v)}`) &&
-          configIndex.subjectTypes.has(subjectRef),
-      ),
-    );
+    const concreteDispatch: Record<string, string> = {};
+    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+      if (targets.length !== 1) continue;
+      const target = targets[0];
+      if (configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(target)}`)) continue;
+      if (!configIndex.subjectTypes.has(subjectRef)) continue;
+      concreteDispatch[subjectRef] = target;
+    }
     if (config.defaultResolver) {
       concreteDispatch["defaultResolver"] = config.defaultResolver;
     }
@@ -371,22 +373,32 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
         continue;
       }
       const resolverName = subjectEntry.config.resolverName;
+      const candidates = subject.dispatch[subjectRef] ?? [];
       const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });
       method.addParameter({
         name: "object",
         type: `Readonly<${config.objectType}>`,
       });
-      method.setReturnType(`Template<${key}, [], ${subjectRef}>`);
-      const dispatchValue = config.dispatch[subjectRef];
-      const fieldName = dispatchValue
-        ? singletonMap.get(dispatchTargetClass(dispatchValue))
-        : undefined;
-      method.addStatements([
-        fieldName
-          ? `return this.${fieldName}; // @odetovibe-generated`
-          : `throw new Error("Not implemented"); // @odetovibe-generated`,
-      ]);
+
+      if (candidates.length > 1) {
+        // Multi-candidate: declare the legal codomain as the union of the candidate
+        // Strategy classes and stub the body. The union narrows the return so tsc rejects
+        // routing to a non-candidate; the developer fills in the runtime choice.
+        method.setReturnType(candidates.map(dispatchTargetClass).join(" | "));
+        method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
+      } else {
+        method.setReturnType(`Template<${key}, [], ${subjectRef}>`);
+        const fieldName =
+          candidates.length === 1
+            ? singletonMap.get(dispatchTargetClass(candidates[0]))
+            : undefined;
+        method.addStatements([
+          fieldName
+            ? `return this.${fieldName}; // @odetovibe-generated`
+            : `throw new Error("Not implemented"); // @odetovibe-generated`,
+        ]);
+      }
     }
 
     if (config.defaultResolver) {
@@ -1020,17 +1032,19 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       initializer: `"${config.commandName}" as const`,
     });
 
-    // Only emit singletons for subjects that will receive a resolver stub:
+    // Singleton field pool — only SINGLE-candidate dispatch entries get a private field:
+    //   - multi-candidate resolvers are stubs that reference candidates by class, not field
     //   - exclude abstract middleware template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
     // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
-    const concreteDispatch = Object.fromEntries(
-      Object.entries(config.dispatch).filter(
-        ([subjectRef, v]) =>
-          !configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(v)}`) &&
-          configIndex.subjectTypes.has(subjectRef),
-      ),
-    );
+    const concreteDispatch: Record<string, string> = {};
+    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+      if (targets.length !== 1) continue;
+      const target = targets[0];
+      if (configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(target)}`)) continue;
+      if (!configIndex.subjectTypes.has(subjectRef)) continue;
+      concreteDispatch[subjectRef] = target;
+    }
     if (config.defaultResolver) {
       concreteDispatch["defaultResolver"] = config.defaultResolver;
     }
@@ -1050,22 +1064,32 @@ abstract class MiddlewareCommandClassEmitter implements Template<
         continue;
       }
       const resolverName = subjectEntry.config.resolverName;
+      const candidates = subject.dispatch[subjectRef] ?? [];
       const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });
       method.addParameter({
         name: "object",
         type: `Readonly<${config.objectType}>`,
       });
-      method.setReturnType(`MiddlewareTemplate<${key}, [], ${subjectRef}>`);
-      const dispatchValue = config.dispatch[subjectRef];
-      const fieldName = dispatchValue
-        ? singletonMap.get(dispatchTargetClass(dispatchValue))
-        : undefined;
-      method.addStatements([
-        fieldName
-          ? `return this.${fieldName}; // @odetovibe-generated`
-          : `throw new Error("Not implemented"); // @odetovibe-generated`,
-      ]);
+
+      if (candidates.length > 1) {
+        // Multi-candidate: declare the legal codomain as the union of the candidate
+        // Strategy classes and stub the body. The union narrows the return so tsc rejects
+        // routing to a non-candidate; the developer fills in the runtime choice.
+        method.setReturnType(candidates.map(dispatchTargetClass).join(" | "));
+        method.addStatements([`throw new Error("Not implemented"); // @odetovibe-generated`]);
+      } else {
+        method.setReturnType(`MiddlewareTemplate<${key}, [], ${subjectRef}>`);
+        const fieldName =
+          candidates.length === 1
+            ? singletonMap.get(dispatchTargetClass(candidates[0]))
+            : undefined;
+        method.addStatements([
+          fieldName
+            ? `return this.${fieldName}; // @odetovibe-generated`
+            : `throw new Error("Not implemented"); // @odetovibe-generated`,
+        ]);
+      }
     }
 
     if (config.defaultResolver) {

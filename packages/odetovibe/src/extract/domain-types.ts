@@ -18,6 +18,20 @@ export interface ConfigEntry {
   readonly key: string;
 }
 
+/**
+ * Normalize each dispatch value to a candidate list: a scalar Strategy name
+ * becomes a one-element list; an existing list is copied and deduped. Gives all
+ * downstream extract/validate/emit logic a uniform `string[]` codomain per Subject.
+ */
+function normalizeDispatch(dispatch: Command["dispatch"] | undefined): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [subject, target] of Object.entries(dispatch ?? {})) {
+    const list = Array.isArray(target) ? target : [target];
+    out[subject] = [...new Set(list)];
+  }
+  return out;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // SUBJECTS
 // ═══════════════════════════════════════════════════════════════════
@@ -53,11 +67,14 @@ export class PlainTypeEntry extends Subject implements ConfigEntry {
 /** A parsed `commands` entry from the YAML config. */
 export class CommandEntry extends Subject implements ConfigEntry {
   readonly resolverName = "resolveCommand" as const;
+  /** Dispatch codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
+  readonly dispatch: Record<string, string[]>;
   constructor(
     public readonly key: string,
     public readonly config: Command,
   ) {
     super();
+    this.dispatch = normalizeDispatch(config.dispatch);
   }
 }
 
@@ -95,11 +112,14 @@ export class StrategyEntry extends Subject implements ConfigEntry {
 /** A parsed `middleware` map entry from the YAML config. */
 export class MiddlewareCommandEntry extends Subject implements ConfigEntry {
   readonly resolverName = "resolveMiddlewareCommand" as const;
+  /** Dispatch codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
+  readonly dispatch: Record<string, string[]>;
   constructor(
     public readonly key: string,
     public readonly config: Command,
   ) {
     super();
+    this.dispatch = normalizeDispatch(config.dispatch);
   }
 }
 

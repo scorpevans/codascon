@@ -1244,3 +1244,57 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     cmd.run(new Cat("Whiskers", true), ""); // defaulted — must compile
   });
 });
+
+describe("§14k candidate-set: multi-candidate resolver union return type (odetovibe codegen)", () => {
+  // odetovibe emits a multi-candidate resolver whose declared return type is the union of
+  // the candidate Strategy classes (e.g. `GrantAccess | DenyAccess`). Once a candidate
+  // Strategy carries distinguishing implementation, tsc enforces candidate membership at
+  // the return site — returning a non-candidate is a compile error.
+  //
+  // Note: empty, structurally-identical stub classes (`class X extends Tpl {}`) stay
+  // mutually assignable under TypeScript structural typing, so the union does not reject a
+  // bare sibling stub. The guarantee bites as soon as strategies gain real members — which
+  // is the realistic case. This proof uses strategies with distinct members.
+
+  abstract class AccessTemplate implements Template<CandidateCommand, [], Dog> {
+    execute(_s: Dog, _o: string): string {
+      return "access";
+    }
+  }
+  class GrantAccess extends AccessTemplate {
+    grant(): boolean {
+      return true;
+    }
+  }
+  class DenyAccess extends AccessTemplate {
+    readonly reason: string = "denied";
+  }
+  class AuditOnly extends AccessTemplate {
+    audit(): void {}
+  }
+
+  class CandidateCommand extends Command<Person, string, string, [Dog]> {
+    readonly commandName = "candidate" as const;
+    // Multi-candidate resolver: declared codomain is the union of the candidates.
+    resolveDog(_d: Dog): GrantAccess | DenyAccess {
+      return new GrantAccess(); // a candidate — compiles
+    }
+  }
+
+  it("14k1: a non-candidate strategy with distinct implementation is rejected by the union return", () => {
+    class CandidateCommandBad extends Command<Person, string, string, [Dog]> {
+      readonly commandName = "candidateBad" as const;
+      resolveDog(_d: Dog): GrantAccess | DenyAccess {
+        // @ts-expect-error — AuditOnly is neither GrantAccess (lacks grant()) nor DenyAccess
+        // (lacks reason): not assignable to the declared candidate union.
+        return new AuditOnly();
+      }
+    }
+    void CandidateCommandBad;
+  });
+
+  it("14k2: a candidate strategy is accepted and run() is callable through the union return", () => {
+    const cmd = new CandidateCommand();
+    strictEqual(typeof cmd.run(new Dog("Rex", "Lab"), ""), "string");
+  });
+});
