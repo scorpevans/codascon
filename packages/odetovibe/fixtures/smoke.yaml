@@ -15,9 +15,7 @@ commands:
     objectType: Greeting
     returnType: Greeting
     returnAsync: True
-    subjectUnion:
-      - User
-    dispatch:
+    resolvers:
       User: [UserGreeterCasual, UserGreeterFormal]
     templates:
       UserGreeter:
@@ -32,12 +30,9 @@ commands:
     baseType: Person
     objectType: Greeting
     returnType: Greeting
-    subjectUnion:
-      - User
-      - Guest
-    dispatch:
+    resolvers:
       User: UserFarewellDefault
-    defaultedSubjects:
+    defaultSubjects:
       - Guest
     defaultResolver: GuestFarewellDefault
     templates:

@@ -1075,8 +1075,7 @@ describe("TypeScript diagnostics", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "AccessTemplate" },
+      resolvers: { Student: "AccessTemplate" },
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },

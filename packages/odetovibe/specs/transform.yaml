@@ -60,16 +60,7 @@ commands:
     baseType: ConfigEntry
     objectType: EmitContext
     returnType: EmitResult
-    subjectUnion:
-      - SubjectTypeEntry
-      - PlainTypeEntry
-      - CommandEntry
-      - AbstractTemplateEntry
-      - StrategyEntry
-      - MiddlewareCommandEntry
-      - MiddlewareTemplateEntry
-      - MiddlewareStrategyEntry
-    dispatch:
+    resolvers:
       SubjectTypeEntry: SubjectClassEmitterDefault
       PlainTypeEntry: InterfaceEmitterDefault
       CommandEntry: CommandClassEmitterDefault

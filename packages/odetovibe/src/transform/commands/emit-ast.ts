@@ -27,6 +27,7 @@ import type {
   MiddlewareStrategyEntry,
 } from "../../extract/domain-types.js";
 import type { EmitContext, EmitResult } from "../domain-types.js";
+import { commandSubjects } from "../../command-subjects.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS
@@ -300,22 +301,20 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }
-    for (const ref of config.subjectUnion) {
+    const subjects = commandSubjects(config);
+    for (const ref of subjects.all) {
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }
 
     const returnType = maybeAsync(config.returnType, config.returnAsync);
-    // Resolution partition: BRS (resolved) = subjectUnion minus defaultedSubjects; BDS
-    // (defaulted) = defaultedSubjects. Both preserve subjectUnion order. When BDS is empty,
-    // emit the 4-arg form so fully-resolved commands are unchanged.
-    const defaultedSet = new Set(config.defaultedSubjects ?? []);
-    const resolvedSubjects = config.subjectUnion.filter((s) => !defaultedSet.has(s));
-    const defaultedSubjects = config.subjectUnion.filter((s) => defaultedSet.has(s));
-    const brsTuple = resolvedSubjects.join(", ");
+    // Resolution partition: BRS (resolved) = the resolvers keys; BDS (defaulted) =
+    // defaultSubjects. Each half is sorted alphabetically (commandSubjects). When BDS is
+    // empty, emit the 4-arg form so fully-resolved commands are unchanged.
+    const brsTuple = subjects.resolved.join(", ");
     const heritage =
-      defaultedSubjects.length > 0
-        ? `Command<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}], [${defaultedSubjects.join(", ")}]>`
+      subjects.defaulted.length > 0
+        ? `Command<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}], [${subjects.defaulted.join(", ")}]>`
         : `Command<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}]>`;
     const cls = sf.addClass({
       name: key,
@@ -340,13 +339,14 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       ]);
     }
 
-    // Singleton field pool — only SINGLE-candidate dispatch entries get a private field:
+    // Singleton field pool — only SINGLE-candidate resolvers entries get a private field:
     //   - multi-candidate resolvers are stubs that reference candidates by class, not field
     //   - exclude abstract template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
-    // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
+    // Include defaultResolver target so it shares the same pool (deduplication with resolvers).
     const concreteDispatch: Record<string, string> = {};
-    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+    for (const subjectRef of subjects.resolved) {
+      const targets = subject.resolvers[subjectRef] ?? [];
       if (targets.length !== 1) continue;
       const target = targets[0];
       if (configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(target)}`)) continue;
@@ -358,22 +358,20 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
     }
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
-    for (const subjectRef of config.subjectUnion) {
-      // Defaulted subjects (defaultedSubjects / BDS) route to defaultResolver at runtime —
-      // no specific resolver stub is generated for them.
-      if (defaultedSet.has(subjectRef)) continue;
-
+    // Only resolved subjects (resolvers keys) get a specific resolver method; defaulted
+    // subjects route to defaultResolver at runtime. Emitted in sorted order.
+    for (const subjectRef of subjects.resolved) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {
           console.info(
-            `[odetovibe] INFO: typeImport "${subjectRef}" in subjectUnion of "${key}" — no resolver stub generated; compiler will enforce implementation`,
+            `[odetovibe] INFO: typeImport "${subjectRef}" as a resolved subject of "${key}" — no resolver stub generated; compiler will enforce implementation`,
           );
         }
         continue;
       }
       const resolverName = subjectEntry.config.resolverName;
-      const candidates = subject.dispatch[subjectRef] ?? [];
+      const candidates = subject.resolvers[subjectRef] ?? [];
       const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });
       method.addParameter({
@@ -475,7 +473,9 @@ abstract class AbstractTemplateEmitter implements Template<
 
     const cmdEntry = configIndex.commands.get(commandKey)!;
     const isFullUnion = !config.subjectSubset?.length;
-    const subjectSubset = isFullUnion ? cmdEntry.config.subjectUnion : config.subjectSubset!;
+    const subjectSubset = isFullUnion
+      ? commandSubjects(cmdEntry.config).all
+      : config.subjectSubset!;
     const subsetUnion = subjectSubset.join(" | ");
     const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
 
@@ -620,7 +620,7 @@ abstract class StrategyClassEmitter implements Template<EmitAstCommand, [], Stra
       ? config.subjectSubset!
       : templateHasSubset
         ? tplEntry.config.subjectSubset!
-        : cmdEntry.config.subjectUnion;
+        : commandSubjects(cmdEntry.config).all;
 
     this.ensureSubjectImports(sf, isFullUnion, subjectSubset, importSrc, dtPath);
 
@@ -746,7 +746,9 @@ abstract class MiddlewareAbstractTemplateEmitter implements Template<
 
     const cmdEntry = configIndex.middlewareCommands.get(commandKey)!;
     const isFullUnion = !config.subjectSubset?.length;
-    const subjectSubset = isFullUnion ? cmdEntry.config.subjectUnion : config.subjectSubset!;
+    const subjectSubset = isFullUnion
+      ? commandSubjects(cmdEntry.config).all
+      : config.subjectSubset!;
     const subsetUnion = subjectSubset.join(" | ");
     const suRef = isFullUnion ? `CommandSubjectUnion<${commandKey}>` : subsetUnion;
 
@@ -883,7 +885,7 @@ abstract class MiddlewareStrategyClassEmitter implements Template<
       ? config.subjectSubset!
       : templateHasSubset
         ? tplEntry.config.subjectSubset!
-        : cmdEntry.config.subjectUnion;
+        : commandSubjects(cmdEntry.config).all;
 
     this.ensureSubjectImports(sf, isFullUnion, subjectSubset, importSrc, dtPath);
 
@@ -1006,21 +1008,19 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }
-    for (const ref of config.subjectUnion) {
+    const subjects = commandSubjects(config);
+    for (const ref of subjects.all) {
       const src = importSrc.has(ref) ? toCommandDepth(importSrc.get(ref)!) : dtPath;
       ensureTypeImport(sf, src, ref);
     }
 
     const returnType = maybeAsync(config.returnType, config.returnAsync);
-    // Resolution partition (same as Command): BRS (resolved) = subjectUnion minus
-    // defaultedSubjects; BDS (defaulted) = defaultedSubjects. 4-arg form when BDS is empty.
-    const defaultedSet = new Set(config.defaultedSubjects ?? []);
-    const resolvedSubjects = config.subjectUnion.filter((s) => !defaultedSet.has(s));
-    const defaultedSubjects = config.subjectUnion.filter((s) => defaultedSet.has(s));
-    const brsTuple = resolvedSubjects.join(", ");
+    // Resolution partition (same as Command): BRS (resolved) = the resolvers keys; BDS
+    // (defaulted) = defaultSubjects. Each half sorted (commandSubjects). 4-arg form when BDS empty.
+    const brsTuple = subjects.resolved.join(", ");
     const heritage =
-      defaultedSubjects.length > 0
-        ? `MiddlewareCommand<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}], [${defaultedSubjects.join(", ")}]>`
+      subjects.defaulted.length > 0
+        ? `MiddlewareCommand<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}], [${subjects.defaulted.join(", ")}]>`
         : `MiddlewareCommand<${config.baseType}, ${config.objectType}, ${returnType}, [${brsTuple}]>`;
     const cls = sf.addClass({
       name: key,
@@ -1034,13 +1034,14 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       initializer: `"${config.commandName}" as const`,
     });
 
-    // Singleton field pool — only SINGLE-candidate dispatch entries get a private field:
+    // Singleton field pool — only SINGLE-candidate resolvers entries get a private field:
     //   - multi-candidate resolvers are stubs that reference candidates by class, not field
     //   - exclude abstract middleware template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
-    // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
+    // Include defaultResolver target so it shares the same pool (deduplication with resolvers).
     const concreteDispatch: Record<string, string> = {};
-    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+    for (const subjectRef of subjects.resolved) {
+      const targets = subject.resolvers[subjectRef] ?? [];
       if (targets.length !== 1) continue;
       const target = targets[0];
       if (configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(target)}`)) continue;
@@ -1052,21 +1053,20 @@ abstract class MiddlewareCommandClassEmitter implements Template<
     }
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
-    for (const subjectRef of config.subjectUnion) {
-      // Defaulted subjects (defaultedSubjects / BDS) route to defaultResolver — no stub.
-      if (defaultedSet.has(subjectRef)) continue;
-
+    // Only resolved subjects (resolvers keys) get a specific resolver method; defaulted
+    // subjects route to defaultResolver. Emitted in sorted order.
+    for (const subjectRef of subjects.resolved) {
       const subjectEntry = configIndex.subjectTypes.get(subjectRef);
       if (!subjectEntry) {
         if (importSrc.has(subjectRef)) {
           console.info(
-            `[odetovibe] INFO: typeImport "${subjectRef}" in subject list of middleware "${key}" — no resolver stub generated; compiler will enforce implementation`,
+            `[odetovibe] INFO: typeImport "${subjectRef}" as a resolved subject of middleware "${key}" — no resolver stub generated; compiler will enforce implementation`,
           );
         }
         continue;
       }
       const resolverName = subjectEntry.config.resolverName;
-      const candidates = subject.dispatch[subjectRef] ?? [];
+      const candidates = subject.resolvers[subjectRef] ?? [];
       const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });
       method.addParameter({

@@ -79,12 +79,7 @@ commands:
     baseType: ConfigEntry
     objectType: ConfigIndex
     returnType: ValidationResult
-    subjectUnion:
-      - AbstractTemplateEntry
-      - StrategyEntry
-      - MiddlewareTemplateEntry
-      - MiddlewareStrategyEntry
-    dispatch:
+    resolvers:
       AbstractTemplateEntry: AbstractTemplateHooksValidatorDefault
       StrategyEntry: StrategyHooksValidatorDefault
       MiddlewareTemplateEntry: AbstractTemplateHooksValidatorDefault
@@ -115,16 +110,7 @@ commands:
     baseType: ConfigEntry
     objectType: ConfigIndex
     returnType: ValidationResult
-    subjectUnion:
-      - SubjectTypeEntry
-      - PlainTypeEntry
-      - CommandEntry
-      - AbstractTemplateEntry
-      - StrategyEntry
-      - MiddlewareCommandEntry
-      - MiddlewareTemplateEntry
-      - MiddlewareStrategyEntry
-    dispatch:
+    resolvers:
       SubjectTypeEntry: SubjectTypeValidatorDefault
       PlainTypeEntry: PlainTypeValidatorDefault
       CommandEntry: CommandValidatorDefault
@@ -148,7 +134,7 @@ commands:
         strategies:
           PlainTypeValidatorDefault: {}
 
-      # Checks type refs, subjectUnion validity, dispatch coverage and targets, middleware refs and coverage
+      # Checks type refs, resolvers/defaultSubjects validity, resolver targets, middleware refs and coverage
       CommandValidator:
         isParameterized: false
         subjectSubset: [CommandEntry]
@@ -156,7 +142,7 @@ commands:
           CommandValidatorDefault: {}
 
       # Checks subjectSubset, delegates commandHooks to ValidateCommandHooksCommand hook,
-      # and that it is not in dispatch directly
+      # and that it is not in resolvers directly
       AbstractTemplateValidator:
         isParameterized: false
         subjectSubset: [AbstractTemplateEntry]
