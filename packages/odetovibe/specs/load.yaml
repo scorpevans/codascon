@@ -46,10 +46,10 @@ commands:
     returnAsync: true
     subjectUnion:
       - SourceFileEntry
-    # Routing is mode-based (WriteContext.mode), not subject-type-based.
-    # The dispatch entry below names the default template (mode: "merge").
+    # Routing is mode-based (WriteContext.mode), not subject-type-based: the one
+    # subject legally resolves to any of the three writers. Declare the real codomain.
     dispatch:
-      SourceFileEntry: MergeWriterDefault
+      SourceFileEntry: [OverwriteWriterDefault, MergeWriterDefault, StrictMergeWriterDefault]
     templates:
       # Unconditionally overwrites the output file.
       # Prepends /* @odetovibe-generated */ header, creates parent dirs.

@@ -43,11 +43,29 @@
  *
  * ## Dispatch Reference Format
  *
- * The `dispatch` map on a Command maps Subject names to resolution targets.
- * The only valid format is a plain Strategy name:
+ * The `dispatch` map on a Command maps each Subject to the set of Strategies it
+ * may legally route to. A value is either a single plain Strategy name or a list
+ * of them — both are plain (unqualified) Strategy names looked up across the
+ * Templates of the same Command:
  *
- * - `"StrategyName"` — Dispatches to a Strategy by its unqualified name,
- *   looked up across the Templates of the same Command
+ * - `"StrategyName"` (scalar) — the Subject always resolves to this one Strategy.
+ * - `["StrategyA", "StrategyB"]` (list) — the Subject's legal codomain is this
+ *   set; the runtime choice between them is made in the generated resolver body.
+ *
+ * A scalar is exactly equivalent to a one-element list — tooling normalizes
+ * `scalar → [scalar]` internally, so all downstream logic is uniform. Codegen
+ * then diverges on cardinality:
+ *
+ * - **Singleton** (scalar, or 1-element list) → a COMPLETE resolver returning
+ *   that Strategy (`return this.<singleton>;`).
+ * - **Multi-entry list** → a resolver STUB whose declared return type is the
+ *   union of the candidate Strategy classes (`StrategyA | StrategyB`), with body
+ *   `throw new Error("Not implemented")`. The union narrows the codomain: once a
+ *   candidate Strategy carries distinguishing implementation, returning a Strategy
+ *   outside the declared set is a compile error. (TypeScript matches structurally,
+ *   so empty, identical stub classes stay mutually assignable until they gain
+ *   real members — the constraint bites as soon as it has something to bite on.)
+ *   The developer fills in the runtime choice.
  *
  * ## Validation Rules
  *
@@ -62,8 +80,12 @@
  *    This applies to MiddlewareCommands too — a middleware is a Command in the full
  *    sense and partitions its subjects the same way.
  *
- * 2. **Dispatch target validity**: All dispatch targets must be plain Strategy
- *    names, looked up across the Templates of the same Command.
+ * 2. **Dispatch target validity**: Every candidate in a dispatch value must be a
+ *    plain Strategy name, looked up across the Templates of the same Command. The
+ *    check is per-candidate over the (normalized) list — a single bad candidate
+ *    in an otherwise valid list is an error. A candidate's parent template's
+ *    effective `subjectSubset` must cover the dispatched Subject. An empty
+ *    candidate list is invalid (a dispatch entry must name at least one Strategy).
  *
  * 3. **Subject identity**: A `domainTypes` entry with a `resolverName` property
  *    is a Subject; without it, a plain type. All entries in a Command's
@@ -283,11 +305,16 @@ export type DomainType = {
  *                            on the Command class, enforced at compile time
  *                            by `CommandSubjectStrategies<C>`.
  *
- * @property dispatch       — Maps each Subject to its resolution target.
+ * @property dispatch       — Maps each Subject to its legal resolution codomain.
  *                            Keys are Subject type references (must match
- *                            entries in `subjectUnion`). Values must be
- *                            plain Strategy names, looked up across the
- *                            Templates of the same Command.
+ *                            entries in `subjectUnion`). A value is either a
+ *                            single plain Strategy name or a list of them,
+ *                            looked up across the Templates of the same Command.
+ *                            A scalar is equivalent to a one-element list; a
+ *                            single candidate generates a complete resolver, a
+ *                            multi-candidate list generates a resolver stub whose
+ *                            return type is the union of the candidate Strategy
+ *                            classes (see "Dispatch Reference Format").
  *                            The resolverName for each Subject key is derived
  *                            from the Subject's `resolverName` in `domainTypes`.
  *
@@ -360,7 +387,7 @@ export type Command = {
   defaultedSubjects?: SubjectRef[];
   defaultResolver?: StrategyRef;
   dispatch: {
-    [subject: SubjectRef]: StrategyRef;
+    [subject: SubjectRef]: StrategyRef | StrategyRef[];
   };
   templates: {
     [key: string]: Template;

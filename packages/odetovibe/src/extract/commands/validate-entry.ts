@@ -294,39 +294,53 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    for (const [subjectRef, target] of Object.entries(config.dispatch)) {
-      if (!target.includes(".")) {
-        // Only plain strategy names are valid dispatch targets — all templates are abstract
-        const owningTplName = stratNameToTpl.get(target);
-        if (owningTplName === undefined) {
-          errors.push(
-            err(
-              key,
-              "dispatch-target-ref",
-              `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
-            ),
-          );
-        } else {
-          const tplConfig = ownTemplates[owningTplName];
-          const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
-          if (!effectiveSubset.includes(subjectRef)) {
-            errors.push(
-              err(
-                key,
-                "dispatch-subjectsubset",
-                `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
-              ),
-            );
-          }
-        }
-      } else {
+    // Each dispatch value is a candidate list (normalized scalar → [scalar]).
+    // Validate every candidate; the codomain of a multi-entry list must be fully valid.
+    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+      if (targets.length === 0) {
         errors.push(
           err(
             key,
-            "dispatch-target-format",
-            `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
+            "dispatch-empty",
+            `dispatch for "${subjectRef}" has no candidate strategies — name at least one`,
           ),
         );
+        continue;
+      }
+      for (const target of targets) {
+        if (!target.includes(".")) {
+          // Only plain strategy names are valid dispatch targets — all templates are abstract
+          const owningTplName = stratNameToTpl.get(target);
+          if (owningTplName === undefined) {
+            errors.push(
+              err(
+                key,
+                "dispatch-target-ref",
+                `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
+              ),
+            );
+          } else {
+            const tplConfig = ownTemplates[owningTplName];
+            const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+            if (!effectiveSubset.includes(subjectRef)) {
+              errors.push(
+                err(
+                  key,
+                  "dispatch-subjectsubset",
+                  `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+                ),
+              );
+            }
+          }
+        } else {
+          errors.push(
+            err(
+              key,
+              "dispatch-target-format",
+              `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
+            ),
+          );
+        }
       }
     }
 
@@ -455,9 +469,9 @@ abstract class AbstractTemplateValidator implements Template<
 
     errors.push(...this.validateCommandHooks.run(subject, object).errors);
 
-    // Abstract templates must not appear directly in dispatch
-    for (const [, target] of Object.entries(cmdEntry.config.dispatch)) {
-      if (target === key) {
+    // Abstract templates must not appear directly in dispatch — check every candidate
+    for (const targets of Object.values(cmdEntry.dispatch)) {
+      if (targets.includes(key)) {
         errors.push(
           err(
             key,
@@ -708,38 +722,52 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    for (const [subjectRef, target] of Object.entries(config.dispatch)) {
-      if (!target.includes(".")) {
-        const owningTplName = stratNameToTpl.get(target);
-        if (owningTplName === undefined) {
-          errors.push(
-            err(
-              key,
-              "dispatch-target-ref",
-              `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
-            ),
-          );
-        } else {
-          const tplConfig = ownTemplates[owningTplName];
-          const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
-          if (!effectiveSubset.includes(subjectRef)) {
-            errors.push(
-              err(
-                key,
-                "dispatch-subjectsubset",
-                `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
-              ),
-            );
-          }
-        }
-      } else {
+    // Each dispatch value is a candidate list (normalized scalar → [scalar]).
+    // Validate every candidate; the codomain of a multi-entry list must be fully valid.
+    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+      if (targets.length === 0) {
         errors.push(
           err(
             key,
-            "dispatch-target-format",
-            `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
+            "dispatch-empty",
+            `dispatch for "${subjectRef}" has no candidate strategies — name at least one`,
           ),
         );
+        continue;
+      }
+      for (const target of targets) {
+        if (!target.includes(".")) {
+          const owningTplName = stratNameToTpl.get(target);
+          if (owningTplName === undefined) {
+            errors.push(
+              err(
+                key,
+                "dispatch-target-ref",
+                `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
+              ),
+            );
+          } else {
+            const tplConfig = ownTemplates[owningTplName];
+            const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+            if (!effectiveSubset.includes(subjectRef)) {
+              errors.push(
+                err(
+                  key,
+                  "dispatch-subjectsubset",
+                  `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+                ),
+              );
+            }
+          }
+        } else {
+          errors.push(
+            err(
+              key,
+              "dispatch-target-format",
+              `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
+            ),
+          );
+        }
       }
     }
 
@@ -842,9 +870,9 @@ abstract class MiddlewareTemplateValidator implements Template<
 
     errors.push(...this.validateCommandHooks.run(subject, object).errors);
 
-    // Abstract templates must not appear directly in dispatch
-    for (const [, target] of Object.entries(cmdEntry.config.dispatch)) {
-      if (target === key) {
+    // Abstract templates must not appear directly in dispatch — check every candidate
+    for (const targets of Object.values(cmdEntry.dispatch)) {
+      if (targets.includes(key)) {
         errors.push(
           err(
             key,
@@ -962,49 +990,43 @@ export class ValidateEntryCommand extends Command<
   resolveSubjectType(
     subject: SubjectTypeEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], SubjectTypeEntry> {
+  ): SubjectTypeValidatorDefault {
     return subjectTypeValidator;
   }
   resolvePlainType(
     subject: PlainTypeEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], PlainTypeEntry> {
+  ): PlainTypeValidatorDefault {
     return plainTypeValidator;
   }
-  resolveCommand(
-    subject: CommandEntry,
-    object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], CommandEntry> {
+  resolveCommand(subject: CommandEntry, object: Readonly<ConfigIndex>): CommandValidatorDefault {
     return commandValidator;
   }
   resolveAbstractTemplate(
     subject: AbstractTemplateEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], AbstractTemplateEntry> {
+  ): AbstractTemplateValidatorDefault {
     return abstractTemplateValidator;
   }
-  resolveStrategy(
-    subject: StrategyEntry,
-    object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], StrategyEntry> {
+  resolveStrategy(subject: StrategyEntry, object: Readonly<ConfigIndex>): StrategyValidatorDefault {
     return strategyValidator;
   }
   resolveMiddlewareCommand(
     subject: MiddlewareCommandEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], MiddlewareCommandEntry> {
+  ): MiddlewareCommandValidatorDefault {
     return middlewareCommandValidator;
   }
   resolveMiddlewareTemplate(
     subject: MiddlewareTemplateEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], MiddlewareTemplateEntry> {
+  ): MiddlewareTemplateValidatorDefault {
     return middlewareTemplateValidator;
   }
   resolveMiddlewareStrategy(
     subject: MiddlewareStrategyEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateEntryCommand, [], MiddlewareStrategyEntry> {
+  ): MiddlewareStrategyValidatorDefault {
     return middlewareStrategyValidator;
   }
 }

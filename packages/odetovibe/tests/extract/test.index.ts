@@ -102,6 +102,55 @@ const validCmdConfig = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// CommandEntry — dispatch normalization (scalar | list → string[])
+// ═══════════════════════════════════════════════════════════════════
+
+describe("CommandEntry dispatch normalization", () => {
+  it("normalizes a scalar dispatch value to a one-element candidate list", () => {
+    const entry = new CommandEntry("Cmd", { ...validCmdConfig, dispatch: { Student: "X" } });
+    expect(entry.dispatch).toEqual({ Student: ["X"] });
+  });
+
+  it("preserves a multi-candidate list and dedups repeats", () => {
+    const entry = new CommandEntry("Cmd", {
+      ...validCmdConfig,
+      dispatch: { Student: ["A", "B", "A"] },
+    });
+    expect(entry.dispatch).toEqual({ Student: ["A", "B"] });
+  });
+
+  it("treats a scalar and its one-element list form identically", () => {
+    const scalar = new CommandEntry("Cmd", { ...validCmdConfig, dispatch: { Student: "X" } });
+    const list = new CommandEntry("Cmd", { ...validCmdConfig, dispatch: { Student: ["X"] } });
+    expect(scalar.dispatch).toEqual(list.dispatch);
+  });
+
+  it("parses both scalar and list dispatch forms into normalized candidate lists", () => {
+    const index = parseYamlString(
+      [
+        "domainTypes:",
+        "  User: { resolverName: resolveUser }",
+        "  Admin: { resolverName: resolveAdmin }",
+        "commands:",
+        "  C:",
+        "    commandName: c",
+        "    baseType: User",
+        "    objectType: User",
+        "    returnType: User",
+        "    subjectUnion: [User, Admin]",
+        "    dispatch:",
+        "      User: A",
+        "      Admin: [A, B]",
+        "    templates:",
+        "      T: { isParameterized: false, strategies: { A: {}, B: {} } }",
+      ].join("\n"),
+    );
+    const c = index.commands.get("C")!;
+    expect(c.dispatch).toEqual({ User: ["A"], Admin: ["A", "B"] });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // SubjectTypeValidator
 // ═══════════════════════════════════════════════════════════════════
 
@@ -380,6 +429,73 @@ describe("CommandValidator", () => {
       },
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-subjectsubset");
+  });
+
+  // ── Dispatch candidate sets (StrategyRef | StrategyRef[]) ──────────────────
+
+  it("accepts a multi-candidate dispatch list when every candidate is valid", () => {
+    const entry = makeCmd({
+      dispatch: { Student: ["DepartmentMatch", "DenyAccess"] },
+      templates: {
+        AccessTemplate: {
+          isParameterized: true,
+          strategies: { DepartmentMatch: {}, DenyAccess: {} },
+        },
+      },
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("[dispatch-target-ref] fails when one candidate in a multi-list is not a known strategy", () => {
+    const entry = makeCmd({
+      dispatch: { Student: ["DepartmentMatch", "NoSuchStrategy"] },
+      templates: {
+        AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
+  });
+
+  it("[dispatch-target-format] fails when one candidate in a multi-list uses dot notation", () => {
+    const entry = makeCmd({
+      dispatch: { Student: ["DepartmentMatch", "AccessTemplate.DenyAccess"] },
+      templates: {
+        AccessTemplate: {
+          isParameterized: true,
+          strategies: { DepartmentMatch: {}, DenyAccess: {} },
+        },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
+  });
+
+  it("[dispatch-subjectsubset] fails per-candidate when a candidate's template does not cover the subject", () => {
+    // Professor routes to a two-candidate list; StudentOnly's template covers only Student.
+    const entry = makeCmd({
+      subjectUnion: ["Student", "Professor"],
+      dispatch: {
+        Student: "StudentOnly",
+        Professor: ["ProfessorOnly", "StudentOnly"],
+      },
+      templates: {
+        StudentTemplate: {
+          isParameterized: true,
+          subjectSubset: ["Student"],
+          strategies: { StudentOnly: {} },
+        },
+        ProfessorTemplate: {
+          isParameterized: true,
+          subjectSubset: ["Professor"],
+          strategies: { ProfessorOnly: {} },
+        },
+      },
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-subjectsubset");
+  });
+
+  it("[dispatch-empty] fails when a dispatch entry has an empty candidate list", () => {
+    const entry = makeCmd({ dispatch: { Student: [] } });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-empty");
   });
 
   it("passes when dispatch routes a subject to a strategy under a template with no subjectSubset (full union coverage)", () => {

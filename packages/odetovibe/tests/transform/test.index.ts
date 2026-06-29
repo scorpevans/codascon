@@ -265,13 +265,20 @@ describe("CommandClassEmitter", () => {
     expect(methodNames).toContain("resolveProfessor");
   });
 
-  it("resolver methods have the correct return type and @odetovibe-generated stub", () => {
+  it("resolver methods narrow the return type to the dispatch target and carry the @odetovibe-generated stub", () => {
     const project = makeProject();
     emitCmd.run(cmdEntry, ctx(withTypes, project));
-    const t = text(project, "commands/access-building.ts");
-    expect(t).toContain("Template<AccessBuildingCommand, [], Student>");
-    expect(t).toContain("Template<AccessBuildingCommand, [], Professor>");
-    expect(t).toContain("@odetovibe-generated");
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    // Singleton dispatch → return type is the concrete dispatch-target class, not wide Template.
+    expect(cls.getMethodOrThrow("resolveStudent").getReturnTypeNode()?.getText()).toBe(
+      "DepartmentMatch",
+    );
+    expect(cls.getMethodOrThrow("resolveProfessor").getReturnTypeNode()?.getText()).toBe(
+      "GrantAccess",
+    );
+    expect(text(project, "commands/access-building.ts")).toContain("@odetovibe-generated");
   });
 
   it("emits a private readonly singleton for a strategy dispatch target", () => {
@@ -323,6 +330,68 @@ describe("CommandClassEmitter", () => {
       "return this.departmentMatch",
     );
     expect(cls.getMethodOrThrow("resolveProfessor").getBodyText()).toContain("throw new Error");
+  });
+
+  // ── Dispatch candidate sets (multi-candidate stub vs singleton complete) ───────
+
+  const multiCandidateCmd = new CommandEntry("AccessBuildingCommand", {
+    ...cmdEntry.config,
+    subjectUnion: ["Student"],
+    dispatch: { Student: ["DepartmentMatch", "DenyAccess"] },
+    templates: {
+      AccessTemplate: {
+        isParameterized: false,
+        subjectSubset: ["Student"],
+        strategies: { DepartmentMatch: {}, DenyAccess: {} },
+      },
+    },
+  });
+
+  it("multi-candidate dispatch: resolver return type is the union of candidate classes, body throws", () => {
+    const project = makeProject();
+    emitCmd.run(multiCandidateCmd, ctx(withTypes, project));
+    const method = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand")
+      .getMethodOrThrow("resolveStudent");
+    const returnType = method.getReturnTypeNode()?.getText() ?? "";
+    expect(returnType).toContain("DepartmentMatch");
+    expect(returnType).toContain("DenyAccess");
+    expect(method.getBodyText()).toContain("throw new Error");
+  });
+
+  it("multi-candidate dispatch emits no singleton fields for the candidates", () => {
+    const project = makeProject();
+    emitCmd.run(multiCandidateCmd, ctx(withTypes, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    expect(cls.getProperty("departmentMatch")).toBeUndefined();
+    expect(cls.getProperty("denyAccess")).toBeUndefined();
+  });
+
+  it("single-element list behaves like a scalar: complete resolver returning the singleton", () => {
+    const singleListCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      subjectUnion: ["Student"],
+      dispatch: { Student: ["DepartmentMatch"] },
+      templates: {
+        AccessTemplate: {
+          isParameterized: false,
+          subjectSubset: ["Student"],
+          strategies: { DepartmentMatch: {} },
+        },
+      },
+    });
+    const project = makeProject();
+    emitCmd.run(singleListCmd, ctx(withTypes, project));
+    const method = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand")
+      .getMethodOrThrow("resolveStudent");
+    expect(method.getBodyText()).toContain("return this.departmentMatch");
+    // Singleton (incl. 1-element list) narrows to the concrete dispatch-target class.
+    expect(method.getReturnTypeNode()?.getText()).toBe("DepartmentMatch");
   });
 
   it("deduplicates singleton fields when multiple subjects share the same dispatch target", () => {
@@ -1547,19 +1616,46 @@ describe("MiddlewareCommandClassEmitter", () => {
     expect(prop.getInitializer()?.getText()).toBe('"trace" as const');
   });
 
-  it("emits one resolver method per subject with MiddlewareTemplate return type", () => {
+  it("emits one resolver method per subject narrowed to its dispatch-target strategy", () => {
     const project = makeProject();
     emitCmd.run(traceMwEntry, ctx(withMwCmd, project));
     const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
     const cls = sf.getClassOrThrow("TraceMiddleware");
+    // Singleton dispatch → return type is the concrete strategy class, not wide MiddlewareTemplate.
     const resolveRock = cls.getMethodOrThrow("resolveRock");
-    expect(resolveRock.getReturnTypeNode()?.getText()).toBe(
-      "MiddlewareTemplate<TraceMiddleware, [], Rock>",
-    );
+    expect(resolveRock.getReturnTypeNode()?.getText()).toBe("TraceRockDefault");
     const resolveGem = cls.getMethodOrThrow("resolveGem");
-    expect(resolveGem.getReturnTypeNode()?.getText()).toBe(
-      "MiddlewareTemplate<TraceMiddleware, [], Gem>",
-    );
+    expect(resolveGem.getReturnTypeNode()?.getText()).toBe("TraceGemDefault");
+  });
+
+  it("multi-candidate dispatch: resolver return is the union of candidate classes, body throws, no singleton", () => {
+    const multiMw = new MiddlewareCommandEntry("TraceMiddleware", {
+      ...traceMwEntry.config,
+      subjectUnion: ["Rock"],
+      dispatch: { Rock: ["TraceRockDefault", "TraceRockVerbose"] },
+      templates: {
+        TraceRock: {
+          isParameterized: false,
+          strategies: { TraceRockDefault: {}, TraceRockVerbose: {} },
+        },
+      },
+    });
+    const project = makeProject();
+    emitCmd.run(multiMw, ctx(withMwTypes, project));
+    const method = project
+      .getSourceFileOrThrow("commands/trace-middleware.ts")
+      .getClassOrThrow("TraceMiddleware")
+      .getMethodOrThrow("resolveRock");
+    const returnType = method.getReturnTypeNode()?.getText() ?? "";
+    expect(returnType).toContain("TraceRockDefault");
+    expect(returnType).toContain("TraceRockVerbose");
+    expect(method.getBodyText()).toContain("throw new Error");
+    expect(
+      project
+        .getSourceFileOrThrow("commands/trace-middleware.ts")
+        .getClassOrThrow("TraceMiddleware")
+        .getProperty("traceRockDefault"),
+    ).toBeUndefined();
   });
 
   it("imports MiddlewareCommand as value and MiddlewareTemplate as type from codascon", () => {

@@ -18,13 +18,14 @@ commands:
     subjectUnion:
       - User
     dispatch:
-      User: UserGreeterDefault
+      User: [UserGreeterCasual, UserGreeterFormal]
     templates:
       UserGreeter:
         isParameterized: false
         subjectSubset: [User]
         strategies:
-          UserGreeterDefault: {}
+          UserGreeterCasual: {}
+          UserGreeterFormal: {}
 
   FarewellCommand:
     commandName: farewell

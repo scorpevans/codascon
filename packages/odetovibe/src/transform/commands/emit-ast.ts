@@ -340,17 +340,19 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       ]);
     }
 
-    // Only emit singletons for subjects that will receive a resolver stub:
+    // Singleton field pool — only SINGLE-candidate dispatch entries get a private field:
+    //   - multi-candidate resolvers are stubs that reference candidates by class, not field
     //   - exclude abstract template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
     // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
-    const concreteDispatch = Object.fromEntries(
-      Object.entries(config.dispatch).filter(
-        ([subjectRef, v]) =>
-          !configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(v)}`) &&
-          configIndex.subjectTypes.has(subjectRef),
-      ),
-    );
+    const concreteDispatch: Record<string, string> = {};
+    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+      if (targets.length !== 1) continue;
+      const target = targets[0];
+      if (configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(target)}`)) continue;
+      if (!configIndex.subjectTypes.has(subjectRef)) continue;
+      concreteDispatch[subjectRef] = target;
+    }
     if (config.defaultResolver) {
       concreteDispatch["defaultResolver"] = config.defaultResolver;
     }
@@ -371,17 +373,29 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
         continue;
       }
       const resolverName = subjectEntry.config.resolverName;
+      const candidates = subject.dispatch[subjectRef] ?? [];
       const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });
       method.addParameter({
         name: "object",
         type: `Readonly<${config.objectType}>`,
       });
-      method.setReturnType(`Template<${key}, [], ${subjectRef}>`);
-      const dispatchValue = config.dispatch[subjectRef];
-      const fieldName = dispatchValue
-        ? singletonMap.get(dispatchTargetClass(dispatchValue))
-        : undefined;
+
+      // Return type is the dispatch codomain — the union of the candidate Strategy classes
+      // (a single class for a singleton). Codegen owns it; the developer narrows/extends the
+      // codomain by editing the spec dispatch. Fall back to the wide Template contract when a
+      // candidate is an abstract (possibly generic) template — it can't be a bare type name —
+      // or when a subject has no candidates (an invalid config otherwise caught by validation).
+      const candidateClasses = candidates.map(dispatchTargetClass);
+      const allConcrete =
+        candidateClasses.length > 0 &&
+        candidateClasses.every((c) => !configIndex.abstractTemplates.has(`${key}.${c}`));
+      method.setReturnType(
+        allConcrete ? candidateClasses.join(" | ") : `Template<${key}, [], ${subjectRef}>`,
+      );
+      // A single concrete candidate → complete resolver returning its singleton; else a stub.
+      const fieldName =
+        candidates.length === 1 ? singletonMap.get(dispatchTargetClass(candidates[0])) : undefined;
       method.addStatements([
         fieldName
           ? `return this.${fieldName}; // @odetovibe-generated`
@@ -1020,17 +1034,19 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       initializer: `"${config.commandName}" as const`,
     });
 
-    // Only emit singletons for subjects that will receive a resolver stub:
+    // Singleton field pool — only SINGLE-candidate dispatch entries get a private field:
+    //   - multi-candidate resolvers are stubs that reference candidates by class, not field
     //   - exclude abstract middleware template targets (cannot be instantiated)
     //   - exclude typeImport subjects (no stub generated → singleton would be unreferenced)
     // Include defaultResolver target so it shares the same pool (deduplication with dispatch).
-    const concreteDispatch = Object.fromEntries(
-      Object.entries(config.dispatch).filter(
-        ([subjectRef, v]) =>
-          !configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(v)}`) &&
-          configIndex.subjectTypes.has(subjectRef),
-      ),
-    );
+    const concreteDispatch: Record<string, string> = {};
+    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+      if (targets.length !== 1) continue;
+      const target = targets[0];
+      if (configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(target)}`)) continue;
+      if (!configIndex.subjectTypes.has(subjectRef)) continue;
+      concreteDispatch[subjectRef] = target;
+    }
     if (config.defaultResolver) {
       concreteDispatch["defaultResolver"] = config.defaultResolver;
     }
@@ -1050,17 +1066,31 @@ abstract class MiddlewareCommandClassEmitter implements Template<
         continue;
       }
       const resolverName = subjectEntry.config.resolverName;
+      const candidates = subject.dispatch[subjectRef] ?? [];
       const method = cls.addMethod({ name: resolverName });
       method.addParameter({ name: "subject", type: subjectRef });
       method.addParameter({
         name: "object",
         type: `Readonly<${config.objectType}>`,
       });
-      method.setReturnType(`MiddlewareTemplate<${key}, [], ${subjectRef}>`);
-      const dispatchValue = config.dispatch[subjectRef];
-      const fieldName = dispatchValue
-        ? singletonMap.get(dispatchTargetClass(dispatchValue))
-        : undefined;
+
+      // Return type is the dispatch codomain — the union of the candidate Strategy classes
+      // (a single class for a singleton). Codegen owns it; the developer narrows/extends the
+      // codomain by editing the spec dispatch. Fall back to the wide MiddlewareTemplate contract
+      // when a candidate is an abstract (possibly generic) template — it can't be a bare type
+      // name — or when a subject has no candidates (an invalid config caught by validation).
+      const candidateClasses = candidates.map(dispatchTargetClass);
+      const allConcrete =
+        candidateClasses.length > 0 &&
+        candidateClasses.every((c) => !configIndex.middlewareTemplates.has(`${key}.${c}`));
+      method.setReturnType(
+        allConcrete
+          ? candidateClasses.join(" | ")
+          : `MiddlewareTemplate<${key}, [], ${subjectRef}>`,
+      );
+      // A single concrete candidate → complete resolver returning its singleton; else a stub.
+      const fieldName =
+        candidates.length === 1 ? singletonMap.get(dispatchTargetClass(candidates[0])) : undefined;
       method.addStatements([
         fieldName
           ? `return this.${fieldName}; // @odetovibe-generated`
@@ -1124,31 +1154,28 @@ export class EmitAstCommand extends Command<
   resolveSubjectType(
     subject: SubjectTypeEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], SubjectTypeEntry> {
+  ): SubjectClassEmitterDefault {
     return subjectClassEmitter;
   }
   resolvePlainType(
     subject: PlainTypeEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], PlainTypeEntry> {
+  ): InterfaceEmitterDefault {
     return interfaceEmitter;
   }
-  resolveCommand(
-    subject: CommandEntry,
-    object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], CommandEntry> {
+  resolveCommand(subject: CommandEntry, object: Readonly<EmitContext>): CommandClassEmitterDefault {
     return commandClassEmitter;
   }
   resolveAbstractTemplate(
     subject: AbstractTemplateEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], AbstractTemplateEntry> {
+  ): ParameterizedTemplateEmitter | FixedTemplateEmitter {
     return subject.config.isParameterized ? parameterizedTemplateEmitter : fixedTemplateEmitter;
   }
   resolveStrategy(
     subject: StrategyEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], StrategyEntry> {
+  ): ParameterizedParentStrategyEmitter | FixedParentStrategyEmitter {
     const tplEntry = object.configIndex.abstractTemplates.get(
       `${subject.commandKey}.${subject.templateKey}`,
     )!;
@@ -1159,13 +1186,13 @@ export class EmitAstCommand extends Command<
   resolveMiddlewareCommand(
     subject: MiddlewareCommandEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], MiddlewareCommandEntry> {
+  ): MiddlewareCommandClassEmitterDefault {
     return middlewareCommandClassEmitter;
   }
   resolveMiddlewareTemplate(
     subject: MiddlewareTemplateEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], MiddlewareTemplateEntry> {
+  ): MiddlewareParameterizedTemplateEmitter | MiddlewareFixedTemplateEmitter {
     return subject.config.isParameterized
       ? middlewareParameterizedTemplateEmitter
       : middlewareFixedTemplateEmitter;
@@ -1173,7 +1200,7 @@ export class EmitAstCommand extends Command<
   resolveMiddlewareStrategy(
     subject: MiddlewareStrategyEntry,
     object: Readonly<EmitContext>,
-  ): Template<EmitAstCommand, [], MiddlewareStrategyEntry> {
+  ): MiddlewareParameterizedParentStrategyEmitter | MiddlewareFixedParentStrategyEmitter {
     const tplEntry = object.configIndex.middlewareTemplates.get(
       `${subject.commandKey}.${subject.templateKey}`,
     )!;

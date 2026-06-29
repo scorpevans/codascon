@@ -1,24 +1,7 @@
 /* @odetovibe-generated */
-import { Command } from "codascon";
 import type { Template } from "codascon";
-import type { Person, Greeting, User } from "../domain-types.js";
-
-export class GreetCommand extends Command<
-  Person,
-  Greeting,
-  Promise<Greeting>,
-  [User]
-> {
-  readonly commandName = "greet" as const;
-  private readonly userGreeterDefault = new UserGreeterDefault();
-
-  resolveUser(
-    subject: User,
-    object: Readonly<Greeting>,
-  ): Template<GreetCommand, [], User> {
-    return this.userGreeterDefault; // @odetovibe-generated
-  }
-}
+import type { User, Greeting, Person } from "../domain-types.js";
+import { Command } from "codascon";
 
 export abstract class UserGreeter implements Template<GreetCommand, [], User> {
   /*
@@ -36,4 +19,22 @@ export abstract class UserGreeter implements Template<GreetCommand, [], User> {
   }
 }
 
-export class UserGreeterDefault extends UserGreeter {}
+export class UserGreeterCasual extends UserGreeter {}
+
+export class UserGreeterFormal extends UserGreeter {}
+
+export class GreetCommand extends Command<
+  Person,
+  Greeting,
+  Promise<Greeting>,
+  [User]
+> {
+  readonly commandName = "greet" as const;
+
+  resolveUser(
+    subject: User,
+    object: Readonly<Greeting>,
+  ): UserGreeterCasual | UserGreeterFormal {
+    throw new Error("Not implemented"); // @odetovibe-generated
+  }
+}

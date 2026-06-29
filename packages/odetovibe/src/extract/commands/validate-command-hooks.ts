@@ -144,28 +144,28 @@ export class ValidateCommandHooksCommand extends Command<
   resolveAbstractTemplate(
     subject: AbstractTemplateEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateCommandHooksCommand, [], AbstractTemplateEntry> {
+  ): AbstractTemplateHooksValidatorDefault {
     return abstractTemplateHooksValidator;
   }
 
   resolveStrategy(
     subject: StrategyEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateCommandHooksCommand, [], StrategyEntry> {
+  ): StrategyHooksValidatorDefault {
     return strategyHooksValidator;
   }
 
   resolveMiddlewareTemplate(
     subject: MiddlewareTemplateEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateCommandHooksCommand, [], MiddlewareTemplateEntry> {
+  ): AbstractTemplateHooksValidatorDefault {
     return abstractTemplateHooksValidator;
   }
 
   resolveMiddlewareStrategy(
     subject: MiddlewareStrategyEntry,
     object: Readonly<ConfigIndex>,
-  ): Template<ValidateCommandHooksCommand, [], MiddlewareStrategyEntry> {
+  ): StrategyHooksValidatorDefault {
     return strategyHooksValidator;
   }
 }
