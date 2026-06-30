@@ -168,19 +168,20 @@ class _HandleRequestWithMiddleware extends Command<object, Ctx, Res, [User, Admi
 
 // ─── §CP13: MiddlewareCommand defaultResolver without annotation (inference) ──
 
-/* Correct pattern: let TypeScript infer the type of defaultResolver from the object
-   literal. The inferred type satisfies MiddlewareTemplate<C, [], SU> structurally.
-   execute must be generic (<T extends SU>) to match the required shape. */
+/* Correct pattern: let TypeScript infer the type of defaultResolver from the callable.
+   defaultResolver is a `(subject, object) => MiddlewareTemplate<C, [], SU>` — the returned
+   object literal satisfies MiddlewareTemplate<C, [], SU> structurally. execute must be
+   generic (<T extends SU>) to match the required shape. */
 
 class _AuthnMiddlewareDefault extends MiddlewareCommand<object, Ctx, Res, [User, Admin]> {
   readonly commandName = "authnDefault" as const;
-  override readonly defaultResolver = {
+  override readonly defaultResolver = (subject: User | Admin, object: Ctx) => ({
     execute: <T extends User | Admin>(_s: T, _o: Ctx, inner: Runnable<T, Ctx, Res>) =>
       inner.run(_s, _o),
-  };
+  });
 }
 
-// ─── §CP14: MiddlewareTemplate as defaultResolver annotation ─────────────────
+// ─── §CP14: MiddlewareTemplate as defaultResolver return-type annotation ──────
 /*
  * Previously §CN1 — was a TS2589 failure before the phantom _o/_r fix.
  *
@@ -189,29 +190,33 @@ class _AuthnMiddlewareDefault extends MiddlewareCommand<object, Ctx, Res, [User,
  * members — including defaultResolver itself — creating a circular evaluation.
  * After the fix CommandObject/CommandReturn use phantom property lookup (_o, _r),
  * which reads the type directly without traversing other members. Cycle broken.
+ * defaultResolver is now a callable; the MiddlewareTemplate annotates its return type.
  */
 
 class _AuthnMiddlewareAnnotated extends MiddlewareCommand<object, Ctx, Res, [User, Admin]> {
   readonly commandName = "authnAnnotated" as const;
-  override readonly defaultResolver: MiddlewareTemplate<
-    _AuthnMiddlewareAnnotated,
-    [],
-    User | Admin
-  > = {
+  override readonly defaultResolver: (
+    subject: User | Admin,
+    object: Ctx,
+  ) => MiddlewareTemplate<_AuthnMiddlewareAnnotated, [], User | Admin> = (subject, object) => ({
     execute: <T extends User | Admin>(_s: T, _o: Ctx, inner: Runnable<T, Ctx, Res>) =>
       inner.run(_s, _o),
-  };
+  });
 }
 
-// ─── §CP15: Template as Command.defaultResolver annotation ───────────────────
+// ─── §CP15: Template as Command.defaultResolver return-type annotation ────────
 /*
- * Same fix applies to regular Commands: Template<C, H, SU> as a defaultResolver
- * annotation previously caused TS2589 for the same reason. Now compiles cleanly.
+ * Same fix applies to regular Commands: Template<C, H, SU> as defaultResolver's
+ * return-type annotation previously caused TS2589 for the same reason. Now compiles
+ * cleanly. defaultResolver is a `(subject, object) => Template<C, [], SU>` callable.
  */
 
 class _HandleRequestWithDefault extends Command<object, Ctx, Res, [User, Admin]> {
   readonly commandName = "handleRequestWithDefault" as const;
-  override readonly defaultResolver: Template<_HandleRequestWithDefault, [], User | Admin> = {
+  override readonly defaultResolver: (
+    subject: User | Admin,
+    object: Ctx,
+  ) => Template<_HandleRequestWithDefault, [], User | Admin> = (subject, object) => ({
     execute: (_s: User | Admin, _o: Ctx): Res => ({ status: 200, body: "default" }),
-  };
+  });
 }

@@ -192,6 +192,47 @@ function emitDispatchSingletons(
   return classToField;
 }
 
+/**
+ * Emits the callable `defaultResolver` field — `(subject, object) => Template` — mirroring
+ * the `resolvers` cardinality split. codascon requires `defaultResolver` to be a field (a
+ * subclass method triggers TS2425), so it is emitted as an arrow field whose body the merge
+ * logic treats as user-owned (signature codegen-owned), exactly like a resolver method.
+ *
+ *   - single concrete candidate → complete resolver returning its singleton (`=> this.<field>`);
+ *   - multi-candidate (or single abstract-template fallback) → a stub whose return type is the
+ *     union of the candidate Strategy classes (or the wide `Template`/`MiddlewareTemplate`
+ *     contract when a candidate is an abstract template), with a throw body for the developer.
+ */
+function emitDefaultResolverField(
+  cls: ClassDeclaration,
+  candidates: string[],
+  bdsUnion: string,
+  objectType: string,
+  commandKey: string,
+  templateTypeName: "Template" | "MiddlewareTemplate",
+  isAbstractTarget: (className: string) => boolean,
+  singletonMap: Map<string, string>,
+): void {
+  if (candidates.length === 0) return;
+  const candidateClasses = candidates.map(dispatchTargetClass);
+  const allConcrete = candidateClasses.every((c) => !isAbstractTarget(c));
+  const returnType = allConcrete
+    ? candidateClasses.join(" | ")
+    : `${templateTypeName}<${commandKey}, [], ${bdsUnion}>`;
+  const singleField =
+    candidates.length === 1 && allConcrete ? singletonMap.get(candidateClasses[0]) : undefined;
+  const body = singleField
+    ? `this.${singleField}`
+    : `{
+      throw new Error("Not implemented"); // @odetovibe-generated
+    }`;
+  cls.addProperty({
+    name: "defaultResolver",
+    isReadonly: true,
+    initializer: `(subject: ${bdsUnion}, object: Readonly<${objectType}>): ${returnType} => ${body}`,
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATE: SubjectClassEmitter
 //
@@ -353,8 +394,14 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       if (!configIndex.subjectTypes.has(subjectRef)) continue;
       concreteDispatch[subjectRef] = target;
     }
-    if (config.defaultResolver) {
-      concreteDispatch["defaultResolver"] = config.defaultResolver;
+    // Single concrete defaultResolver candidate shares the singleton pool (deduped with
+    // resolvers); a multi-candidate default is a stub (no singleton), like multi resolvers.
+    const drCandidates = subject.defaultResolver;
+    if (
+      drCandidates.length === 1 &&
+      !configIndex.abstractTemplates.has(`${key}.${dispatchTargetClass(drCandidates[0])}`)
+    ) {
+      concreteDispatch["defaultResolver"] = drCandidates[0];
     }
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
@@ -401,16 +448,16 @@ abstract class CommandClassEmitter implements Template<EmitAstCommand, [], Comma
       ]);
     }
 
-    if (config.defaultResolver) {
-      const drClassName = dispatchTargetClass(config.defaultResolver);
-      const fieldName = singletonMap.get(drClassName)!;
-      cls.addProperty({
-        name: "defaultResolver",
-        isReadonly: true,
-        type: drClassName,
-        initializer: `this.${fieldName}`,
-      });
-    }
+    emitDefaultResolverField(
+      cls,
+      drCandidates,
+      subjects.defaulted.join(" | "),
+      config.objectType,
+      key,
+      "Template",
+      (c) => configIndex.abstractTemplates.has(`${key}.${c}`),
+      singletonMap,
+    );
 
     return { targetFile: filePath };
   }
@@ -1048,8 +1095,14 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       if (!configIndex.subjectTypes.has(subjectRef)) continue;
       concreteDispatch[subjectRef] = target;
     }
-    if (config.defaultResolver) {
-      concreteDispatch["defaultResolver"] = config.defaultResolver;
+    // Single concrete defaultResolver candidate shares the singleton pool (deduped with
+    // resolvers); a multi-candidate default is a stub (no singleton), like multi resolvers.
+    const drCandidates = subject.defaultResolver;
+    if (
+      drCandidates.length === 1 &&
+      !configIndex.middlewareTemplates.has(`${key}.${dispatchTargetClass(drCandidates[0])}`)
+    ) {
+      concreteDispatch["defaultResolver"] = drCandidates[0];
     }
     const singletonMap = emitDispatchSingletons(cls, concreteDispatch, config.commandName);
 
@@ -1098,16 +1151,16 @@ abstract class MiddlewareCommandClassEmitter implements Template<
       ]);
     }
 
-    if (config.defaultResolver) {
-      const drClassName = dispatchTargetClass(config.defaultResolver);
-      const fieldName = singletonMap.get(drClassName)!;
-      cls.addProperty({
-        name: "defaultResolver",
-        isReadonly: true,
-        type: drClassName,
-        initializer: `this.${fieldName}`,
-      });
-    }
+    emitDefaultResolverField(
+      cls,
+      drCandidates,
+      subjects.defaulted.join(" | "),
+      config.objectType,
+      key,
+      "MiddlewareTemplate",
+      (c) => configIndex.middlewareTemplates.has(`${key}.${c}`),
+      singletonMap,
+    );
 
     return { targetFile: filePath };
   }

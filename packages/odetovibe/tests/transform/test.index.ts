@@ -412,10 +412,11 @@ describe("CommandClassEmitter", () => {
     );
   });
 
-  it("emits defaultResolver property initialised to the named strategy singleton", () => {
+  it("emits defaultResolver as a callable returning the named strategy singleton (single concrete)", () => {
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      resolvers: { Student: "DepartmentMatch", Professor: "DepartmentMatch" },
+      resolvers: { Student: "DepartmentMatch" },
+      defaultSubjects: ["Professor"],
       defaultResolver: "CatchAll",
       templates: {
         AccessTemplate: {
@@ -431,14 +432,46 @@ describe("CommandClassEmitter", () => {
       .getClassOrThrow("AccessBuildingCommand");
     const prop = cls.getPropertyOrThrow("defaultResolver");
     expect(prop.isReadonly()).toBe(true);
-    expect(prop.getTypeNode()?.getText()).toBe("CatchAll");
-    expect(prop.getInitializer()?.getText()).toContain("this.catchAll");
+    // Callable field — no field type annotation; the return type is on the arrow.
+    expect(prop.getTypeNode()).toBeUndefined();
+    const init = prop.getInitializer()?.getText() ?? "";
+    expect(init).toContain("(subject: Professor");
+    expect(init).toContain("): CatchAll =>");
+    expect(init).toContain("this.catchAll");
+  });
+
+  it("emits defaultResolver as a union-return stub for a multi-candidate list", () => {
+    const drCmd = new CommandEntry("AccessBuildingCommand", {
+      ...cmdEntry.config,
+      resolvers: { Student: "DepartmentMatch" },
+      defaultSubjects: ["Professor"],
+      defaultResolver: ["CatchAllAllow", "CatchAllDeny"],
+      templates: {
+        AccessTemplate: {
+          isParameterized: false,
+          strategies: { DepartmentMatch: {}, CatchAllAllow: {}, CatchAllDeny: {} },
+        },
+      },
+    });
+    const project = makeProject();
+    emitCmd.run(drCmd, ctx(withTypes, project));
+    const cls = project
+      .getSourceFileOrThrow("commands/access-building.ts")
+      .getClassOrThrow("AccessBuildingCommand");
+    const prop = cls.getPropertyOrThrow("defaultResolver");
+    const init = prop.getInitializer()?.getText() ?? "";
+    // Multi-candidate → union return type + throw stub; no singleton fields for candidates.
+    expect(init).toContain("): CatchAllAllow | CatchAllDeny =>");
+    expect(init).toContain('throw new Error("Not implemented")');
+    expect(cls.getProperty("catchAllAllow")).toBeUndefined();
+    expect(cls.getProperty("catchAllDeny")).toBeUndefined();
   });
 
   it("deduplicates singleton when defaultResolver names a strategy already used in dispatch", () => {
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      resolvers: { Student: "SharedStrategy", Professor: "SharedStrategy" },
+      resolvers: { Student: "SharedStrategy" },
+      defaultSubjects: ["Professor"],
       defaultResolver: "SharedStrategy",
       templates: {
         AccessTemplate: {
@@ -452,7 +485,7 @@ describe("CommandClassEmitter", () => {
     const cls = project
       .getSourceFileOrThrow("commands/access-building.ts")
       .getClassOrThrow("AccessBuildingCommand");
-    // Only one singleton field despite dispatch + defaultResolver both naming SharedStrategy
+    // Only one singleton field despite a resolver + defaultResolver both naming SharedStrategy
     const singletonProps = cls.getProperties().filter((p) => p.getName() === "sharedStrategy");
     expect(singletonProps).toHaveLength(1);
     const drProp = cls.getPropertyOrThrow("defaultResolver");
@@ -1686,9 +1719,11 @@ describe("MiddlewareCommandClassEmitter", () => {
     );
   });
 
-  it("emits defaultResolver property initialised to the named strategy singleton", () => {
+  it("emits defaultResolver as a callable returning the named strategy singleton (single concrete)", () => {
     const drMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...traceMwEntry.config,
+      resolvers: { Rock: "TraceRockDefault" },
+      defaultSubjects: ["Gem"],
       defaultResolver: "TraceRockDefault",
     });
     const project = makeProject();
@@ -1698,9 +1733,13 @@ describe("MiddlewareCommandClassEmitter", () => {
       .getClassOrThrow("TraceMiddleware");
     const prop = cls.getPropertyOrThrow("defaultResolver");
     expect(prop.isReadonly()).toBe(true);
-    expect(prop.getTypeNode()?.getText()).toBe("TraceRockDefault");
-    expect(prop.getInitializer()?.getText()).toContain("this.traceRockDefault");
-    // singleton deduplication: TraceRockDefault already in dispatch — only one field
+    // Callable field — no field type annotation; the return type is on the arrow.
+    expect(prop.getTypeNode()).toBeUndefined();
+    const init = prop.getInitializer()?.getText() ?? "";
+    expect(init).toContain("(subject: Gem");
+    expect(init).toContain("): TraceRockDefault =>");
+    expect(init).toContain("this.traceRockDefault");
+    // singleton deduplication: TraceRockDefault is both resolveRock's target and the default
     const singletonProps = cls.getProperties().filter((p) => p.getName() === "traceRockDefault");
     expect(singletonProps).toHaveLength(1);
   });

@@ -69,7 +69,7 @@ class DogSpecificResult {
 // Command with only defaultResolver — no specific resolver methods
 class DefaultOnlyCommand extends Command<Person, string, string, [], [Dog, Cat]> {
   readonly commandName = "defaultOnly" as const;
-  readonly defaultResolver = new DefaultOnlyResult();
+  readonly defaultResolver = (subject: Dog | Cat, object: string) => new DefaultOnlyResult();
 }
 
 // Command with defaultResolver AND a specific resolver — specific takes precedence
@@ -78,7 +78,7 @@ class MixedCommand extends Command<Person, string, string, [Dog], [Cat]> {
   resolveDog(subject: Dog, object: string) {
     return new DogSpecificResult();
   }
-  readonly defaultResolver = new DefaultOnlyResult();
+  readonly defaultResolver = (subject: Cat, object: string) => new DefaultOnlyResult();
 }
 
 describe("§D defaultResolver — catch-all fallback when no specific resolver is defined", () => {
@@ -96,20 +96,22 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
     strictEqual(cmd.run(new Cat("Whiskers", true), ""), "default:Whiskers");
   });
 
-  it("defaultResolver receives the object argument", () => {
-    const received: string[] = [];
+  it("defaultResolver is invoked with (subject, object) and returns the Template", () => {
+    const received: Array<{ subject: string; object: string }> = [];
     class ObservingCommand extends Command<Person, string, string, [], [Dog]> {
       readonly commandName = "observing" as const;
-      readonly defaultResolver = {
-        execute: (subject: Dog, object: string): string => {
-          received.push(object);
-          return `default:${subject.name}`;
-        },
+      readonly defaultResolver = (subject: Dog, object: string) => {
+        // The callable itself sees both the dispatched subject and the object,
+        // exactly like a specific resolver method — then returns the Template.
+        received.push({ subject: subject.name, object });
+        return {
+          execute: (s: Dog, _o: string): string => `default:${s.name}`,
+        };
       };
     }
     const cmd = new ObservingCommand();
-    cmd.run(new Dog("Rex", "Lab"), "payload");
-    deepEqual(received, ["payload"]);
+    strictEqual(cmd.run(new Dog("Rex", "Lab"), "payload"), "default:Rex");
+    deepEqual(received, [{ subject: "Rex", object: "payload" }]);
   });
 
   it("run() is callable without any specific resolver methods when all subjects are defaulted", () => {
@@ -156,9 +158,9 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       override get middleware() {
         return [this.mw];
       }
-      readonly defaultResolver = {
+      readonly defaultResolver = (subject: Dog | Cat, object: string) => ({
         execute: (s: Dog | Cat, _o: string): string => `default:${s.name}`,
-      };
+      });
     }
 
     const cmd = new DefaultWithMiddlewareCommand();
@@ -189,14 +191,14 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
           },
         };
       }
-      override readonly defaultResolver = {
+      override readonly defaultResolver = (subject: Cat, object: string) => ({
         execute: <T extends Cat>(s: T, o: string, inner: Runnable<T, string, string>) => {
           log.push("mw-default-before");
           const r = inner.run(s, o);
           log.push("mw-default-after");
           return r;
         },
-      };
+      });
     }
 
     class InnerCommand extends Command<Person, string, string, [Dog, Cat]> {
@@ -287,9 +289,9 @@ describe("§D defaultResolver — catch-all fallback when no specific resolver i
       override get middleware() {
         return [this.outerMw, this.innerMw];
       }
-      readonly defaultResolver = {
+      readonly defaultResolver = (subject: Dog | Cat, object: string) => ({
         execute: (s: Dog | Cat, _o: string): string => `default:${s.name}`,
-      };
+      });
     }
 
     const cmd = new TwoLayerCmd();

@@ -414,10 +414,29 @@ function mergeClass(existing: ClassDeclaration, generated: ClassDeclaration): vo
   for (const genProp of generated.getProperties()) {
     const existingProp = existing.getProperty(genProp.getName());
     if (existingProp) {
-      existingProp.set({
-        ...genProp.getStructure(),
-        docs: existingProp.getJsDocs().map((d) => d.getStructure()),
-      });
+      const genArrow = genProp.getInitializerIfKind(SyntaxKind.ArrowFunction);
+      const existingArrow = existingProp.getInitializerIfKind(SyntaxKind.ArrowFunction);
+      if (genArrow && existingArrow) {
+        // Function-property (e.g. `defaultResolver`): codegen owns the signature
+        // (params + return type), the developer owns the arrow body — mirroring
+        // mergeMethod's signature-updated / body-preserved split for methods.
+        const params = genArrow
+          .getParameters()
+          .map((p) => p.getText())
+          .join(", ");
+        const ret = genArrow.getReturnTypeNode()?.getText();
+        const body = existingArrow.getBody().getText();
+        existingProp.set({
+          ...genProp.getStructure(),
+          initializer: `(${params})${ret ? `: ${ret}` : ""} => ${body}`,
+          docs: existingProp.getJsDocs().map((d) => d.getStructure()),
+        });
+      } else {
+        existingProp.set({
+          ...genProp.getStructure(),
+          docs: existingProp.getJsDocs().map((d) => d.getStructure()),
+        });
+      }
     } else {
       // Only inject a property absent from the existing class when there is no
       // associated method that already has a non-empty body.  A non-empty body
@@ -509,8 +528,20 @@ function propSignature(p: PropertyDeclaration): string {
     .map((m) => m.getText())
     .join(" ");
   const type = p.getTypeNode()?.getText() ?? "";
-  const init = p.getInitializer()?.getText() ?? "";
   const typePart = type ? `: ${type}` : "";
+  // Function-property (e.g. `defaultResolver`): codegen owns the arrow SIGNATURE
+  // (params + return type) but the developer owns the body — exclude the body from
+  // the conflict signature so a body-only edit is not flagged as a strict conflict.
+  const arrow = p.getInitializerIfKind(SyntaxKind.ArrowFunction);
+  if (arrow) {
+    const params = arrow
+      .getParameters()
+      .map((ap) => ap.getText())
+      .join(", ");
+    const ret = arrow.getReturnTypeNode()?.getText() ?? "";
+    return `${mods} ${p.getName()}${typePart} = (${params})${ret ? `: ${ret}` : ""} =>`.trim();
+  }
+  const init = p.getInitializer()?.getText() ?? "";
   const initPart = init ? ` = ${init}` : "";
   return `${mods} ${p.getName()}${typePart}${initPart}`.trim();
 }

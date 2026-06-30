@@ -146,6 +146,15 @@ describe("CommandEntry dispatch normalization", () => {
     const c = index.commands.get("C")!;
     expect(c.resolvers).toEqual({ User: ["A"], Admin: ["A", "B"] });
   });
+
+  it("normalizes defaultResolver: absent → [], scalar → [scalar], list deduped", () => {
+    const absent = new CommandEntry("Cmd", { ...validCmdConfig });
+    expect(absent.defaultResolver).toEqual([]);
+    const scalar = new CommandEntry("Cmd", { ...validCmdConfig, defaultResolver: "X" });
+    expect(scalar.defaultResolver).toEqual(["X"]);
+    const list = new CommandEntry("Cmd", { ...validCmdConfig, defaultResolver: ["A", "B", "A"] });
+    expect(list.defaultResolver).toEqual(["A", "B"]);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -598,6 +607,54 @@ describe("CommandValidator", () => {
       defaultResolver: "CatchAll",
     });
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("passes for a multi-candidate defaultResolver when every candidate covers the defaulted subjects", () => {
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      resolvers: { Student: "StudentOnly" },
+      defaultSubjects: ["Professor"],
+      templates: {
+        AccessTemplate: {
+          isParameterized: true,
+          strategies: {
+            StudentOnly: { subjectSubset: ["Student"] },
+            Allow: { subjectSubset: ["Student", "Professor"] },
+            Deny: { subjectSubset: ["Student", "Professor"] },
+          },
+        },
+      },
+      defaultResolver: ["Allow", "Deny"], // both cover the defaulted Professor
+    });
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
+  });
+
+  it("[defaultResolver-coverage] fails when one candidate in a multi-candidate default misses a defaulted subject", () => {
+    const entry = new CommandEntry("Cmd", {
+      commandName: "accessBuilding",
+      baseType: "Person",
+      objectType: "Building",
+      returnType: "AccessResult",
+      resolvers: { Student: "StudentOnly" },
+      defaultSubjects: ["Professor"],
+      templates: {
+        AccessTemplate: {
+          isParameterized: true,
+          strategies: {
+            StudentOnly: { subjectSubset: ["Student"] },
+            Allow: { subjectSubset: ["Student", "Professor"] }, // covers Professor
+            StudentDeny: { subjectSubset: ["Student"] }, // misses defaulted Professor
+          },
+        },
+      },
+      defaultResolver: ["Allow", "StudentDeny"],
+    });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
+      "defaultResolver-coverage",
+    );
   });
 });
 

@@ -110,7 +110,9 @@ import { Command } from "codascon";
 class LogCommand extends Command<Person, { message: string }, void, [Student], [Professor]> {
   readonly commandName = "log" as const;
   private readonly entry = new LogEntry(); // Strategy — defined below
-  readonly defaultResolver = this.entry; // handles the defaulted subject Professor (the second tuple)
+  // defaultResolver is callable: it receives the dispatched (subject, object) — like a
+  // resolver method — and returns the Template for the defaulted subject Professor.
+  readonly defaultResolver = (subject: Professor, message: { message: string }) => this.entry;
   resolveStudent(_s: Student) {
     return this.entry;
   }
@@ -290,7 +292,7 @@ class CheckoutMiddleware extends MiddlewareCommand<
 > {
   readonly commandName = "checkoutPolicy" as const;
   private readonly forProfessor = new ProfessorPolicy();
-  readonly defaultResolver = new DefaultPolicy();
+  readonly defaultResolver = (subject: Student, equipment: Equipment) => new DefaultPolicy();
   resolveProfessor(
     _p: Professor,
     _e: Equipment,
@@ -500,7 +502,7 @@ Additional implementation rules:
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
 - Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
 - Use middleware for cross-cutting concerns such as logging, auditing, timing, and default enrichments — prefer a middleware Command over duplicating the same logic in individual Templates or Strategies
-- Default-resolve subjects that share one catch-all Strategy instead of repeating it across resolver methods — list those subjects in the Command's defaulted-subjects tuple (the fifth type parameter; `defaultSubjects` in YAML) and assign `readonly defaultResolver`. The defaulted subjects are explicit, so a forgotten subject is a compile error rather than being silently absorbed; the `defaultResolver` Strategy need only cover the defaulted subjects, not the full union
+- Default-resolve subjects that share one catch-all instead of repeating it across resolver methods — list those subjects in the Command's defaulted-subjects tuple (the fifth type parameter; `defaultSubjects` in YAML) and implement the callable `readonly defaultResolver = (subject, object) => …`, which receives the dispatched subject/object like a resolver method and returns the Template. The defaulted subjects are explicit, so a forgotten subject is a compile error rather than being silently absorbed; the returned Template need only cover the defaulted subjects, not the full union
 
 ### Step 4: Implement This Domain
 

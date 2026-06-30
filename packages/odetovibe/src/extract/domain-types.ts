@@ -32,6 +32,18 @@ function normalizeResolvers(resolvers: Command["resolvers"] | undefined): Record
   return out;
 }
 
+/**
+ * Normalize `defaultResolver` to a candidate list: absent → `[]`; a scalar Strategy
+ * name → a one-element list; an existing list → copied and deduped. Mirrors
+ * `normalizeResolvers` so downstream validate/emit logic has a uniform `string[]`
+ * codomain for the defaulted catch-all.
+ */
+function normalizeDefaultResolver(defaultResolver: Command["defaultResolver"]): string[] {
+  if (defaultResolver === undefined) return [];
+  const list = Array.isArray(defaultResolver) ? defaultResolver : [defaultResolver];
+  return [...new Set(list)];
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // SUBJECTS
 // ═══════════════════════════════════════════════════════════════════
@@ -69,12 +81,15 @@ export class CommandEntry extends Subject implements ConfigEntry {
   readonly resolverName = "resolveCommand" as const;
   /** Resolver codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
   readonly resolvers: Record<string, string[]>;
+  /** defaultResolver codomain normalized to a candidate list (`scalar → [scalar]`, deduped; absent → `[]`). */
+  readonly defaultResolver: string[];
   constructor(
     public readonly key: string,
     public readonly config: Command,
   ) {
     super();
     this.resolvers = normalizeResolvers(config.resolvers);
+    this.defaultResolver = normalizeDefaultResolver(config.defaultResolver);
   }
 }
 
@@ -114,12 +129,15 @@ export class MiddlewareCommandEntry extends Subject implements ConfigEntry {
   readonly resolverName = "resolveMiddlewareCommand" as const;
   /** Resolver codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
   readonly resolvers: Record<string, string[]>;
+  /** defaultResolver codomain normalized to a candidate list (`scalar → [scalar]`, deduped; absent → `[]`). */
+  readonly defaultResolver: string[];
   constructor(
     public readonly key: string,
     public readonly config: Command,
   ) {
     super();
     this.resolvers = normalizeResolvers(config.resolvers);
+    this.defaultResolver = normalizeDefaultResolver(config.defaultResolver);
   }
 }
 

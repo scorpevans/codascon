@@ -40,7 +40,7 @@
  *   → _runChain: for each command in [command.middleware..., command]:
  *       → _dispatch: subject.getCommandStrategy(command, object)
  *           → command[subject.resolverName](subject, object)  // specific resolver, or
- *           → command.defaultResolver                            //   defaultResolver fallback
+ *           → command.defaultResolver(subject, object)          //   defaultResolver fallback
  *           → returns a Template instance
  *         → strategy.execute(subject, object)           // regular command
  *         → strategy.execute(subject, object, inner)    // middleware command
@@ -452,14 +452,15 @@ type MwExec<O, R, SU> = {
 /*
  * Per-subject middleware coverage for a single host Subject `S`: the middleware either declares
  * a resolver method (`resolveS`) returning a `MiddlewareTemplate`-shaped value, OR declares a
- * REQUIRED `defaultResolver` whose `execute` covers `S`. The `defaultResolver` branch requires
- * the property to be present (not optional) — a middleware only gets the default escape when it
- * actually declares one (mirrors the `CommandHooks` defaultResolver opt-out). `defaultResolver`
- * is typed to the middleware's `BDS`, so it covers `S` only when `S` was declared defaulted.
+ * REQUIRED `defaultResolver` callable whose returned `execute` covers `S`. The `defaultResolver`
+ * branch requires the property to be present (not optional) — a middleware only gets the default
+ * escape when it actually declares one (mirrors the `CommandHooks` defaultResolver opt-out).
+ * `defaultResolver`'s subject parameter is typed to the middleware's `BDS`, so it covers `S` only
+ * when `S` was declared defaulted.
  */
 type CoverOne<O, R, S extends Subject> =
   | { [K in SubjectResolverName<S>]: (subject: S, object: Readonly<O>) => MwExec<O, R, S> }
-  | { readonly defaultResolver: MwExec<O, R, S> };
+  | { readonly defaultResolver: (subject: S, object: Readonly<O>) => MwExec<O, R, S> };
 
 /*
  * Intersects `CoverOne` over a tuple of host Subjects — the coverage requirement on a middleware
@@ -540,11 +541,11 @@ type ValidResolverNames<BSL extends unknown[]> = UnionToIntersection<
  * `subject.getCommandStrategy(command, object)`, which looks up
  * `command[this.resolverName]` and invokes it. If the specific resolver
  * method is absent (the Command assigns `defaultResolver` instead),
- * `defaultResolver` is returned as the Template.
+ * `defaultResolver` is called with `(this, object)` and its returned Template is used.
  *
  * Both the specific resolver call (`command[methodName](this, object)`) and the
- * `defaultResolver` fallback preserve the `this` binding on the Command, allowing
- * resolver methods to access Command instance state via `this`.
+ * `defaultResolver(this, object)` call preserve the `this` binding on the Command,
+ * allowing resolver methods to access Command instance state via `this`.
  *
  * The `this` parameter constraint (`this & BS`) ensures the Subject
  * is part of the Command's subject union. This is automatically satisfied
@@ -578,7 +579,12 @@ export abstract class Subject {
     this: this & BS,
     command:
       | Visit<C, this & BS>
-      | { readonly defaultResolver: Template<C, any[], CommandSubjectUnion<C>> },
+      | {
+          readonly defaultResolver: (
+            subject: CommandSubjectUnion<C>,
+            object: CommandObject<C>,
+          ) => Template<C, any[], CommandSubjectUnion<C>>;
+        },
     object: CommandObject<C>,
   ): Template<C, any[], this & BS> {
     const specificResolver = this.resolverName as SubjectResolverName<this & BS>;
@@ -586,7 +592,7 @@ export abstract class Subject {
       return (command as Visit<C, this & BS>)[specificResolver](this, object);
     }
     if ("defaultResolver" in command) {
-      return command.defaultResolver as unknown as Template<C, any[], this & BS>;
+      return command.defaultResolver(this, object);
     }
     throw new Error(
       `No resolver for "${this.resolverName}" on command "${(command as AnyCommand).commandName ?? "(unknown)"}". ` +
@@ -740,23 +746,36 @@ export abstract class Command<
   declare readonly [_commandBrand]: { b: B; o: O; r: R; brs: BRS; bds: BDS };
 
   /**
-   * Optional catch-all Template for the *defaulted* subjects (`BDS`).
+   * Optional catch-all resolver for the *defaulted* subjects (`BDS`).
    *
    * `BDS` declares which subjects are intentionally default-resolved. When `BDS`
-   * is non-empty, `run()` requires `defaultResolver` to be assigned, and its
-   * `execute` must accept any subject in `BDS[number]`. When `BDS` is empty (the
-   * default), no `defaultResolver` is required or expected — every subject is
+   * is non-empty, `run()` requires `defaultResolver` to be assigned. It is called
+   * with the dispatched `(subject, object)` — exactly like a specific resolver
+   * method — and returns the Template whose `execute` handles that subject, so the
+   * single collective catch-all may branch among Strategy classes per call. Its
+   * returned Template must accept any subject in `BDS[number]`. When `BDS` is empty
+   * (the default), no `defaultResolver` is required or expected — every subject is
    * handled by a specific resolver method (full exhaustiveness).
    *
    * Specific resolver methods take precedence — `defaultResolver` is only invoked
    * when no matching resolver method is found for the dispatched subject's `resolverName`.
    *
-   * **MiddlewareCommand note**: `MiddlewareCommand` narrows this field to
-   * `MiddlewareTemplate<MiddlewareCommand<B,O,R,BSL>, any[], BSL[number]>`, which requires
-   * `execute` to accept an `inner` continuation as a required third argument. The
+   * **MiddlewareCommand note**: `MiddlewareCommand` narrows this to return a
+   * `MiddlewareTemplate<MiddlewareCommand<B,O,R,BRS,BDS>, any[], BDS[number]>`, whose
+   * `execute` accepts an `inner` continuation as a required third argument. The
    * implementation must call `inner.run(subject, object)` to forward control down the chain.
    */
-  declare readonly defaultResolver?: Template<Command<B, O, R, BRS, BDS>, any[], BDS[number]>;
+  /*
+   * MUST stay generic (`<T extends BDS[number]>`), NOT a fixed `(subject: BDS[number], …)` param.
+   * A fixed param collapses to `never` for fully-resolved (BDS=[]) commands, and AnyCommand's `any`
+   * param is not contravariantly assignable to `never` → every concrete command then fails
+   * `extends AnyCommand` (TS2344 cascade). The generic constraint avoids it, exactly like
+   * `Template.execute<T extends SU>`. See ts-hack MEMORY "defaultResolver is now a CALLABLE field".
+   */
+  declare readonly defaultResolver?: <T extends BDS[number]>(
+    subject: T,
+    object: O,
+  ) => Template<Command<B, O, R, BRS, BDS>, any[], BDS[number]>;
 
   // Lazily populated by `_runChain` on the first dispatch. Caches the result of
   // `this.middleware` so that override getters returning array literals allocate
@@ -849,7 +868,10 @@ export abstract class Command<
         : [BDS[number]] extends [never]
           ? unknown
           : {
-              readonly defaultResolver: Template<Command<B, O, R, BRS, BDS>, any[], BDS[number]>;
+              readonly defaultResolver: (
+                subject: BDS[number],
+                object: O,
+              ) => Template<Command<B, O, R, BRS, BDS>, any[], BDS[number]>;
             }) &
       ValidResolverNames<BRS> &
       ValidResolverNames<BDS>,
@@ -1261,19 +1283,19 @@ export abstract class MiddlewareCommand<
   BDS extends (B & Subject)[] = [],
 > extends Command<B, O, R, BRS, BDS> {
   /**
-   * Narrows `Command.defaultResolver?` to `MiddlewareTemplate`, surfacing the `inner`
+   * Narrows `Command.defaultResolver?` to return a `MiddlewareTemplate`, surfacing the `inner`
    * continuation as a required third argument in the `execute` signature, and typed to the
-   * middleware's defaulted subjects (`BDS`). `inner` is always defined when dispatched via the
-   * middleware chain.
+   * middleware's defaulted subjects (`BDS`). Called with the dispatched `(subject, object)`;
+   * `inner` is always defined when dispatched via the middleware chain.
    *
    * The implementation must call `inner.run(subject, object)` to forward control down
    * the chain. The signature makes this requirement explicit; TypeScript cannot enforce it.
    */
-  declare readonly defaultResolver?: MiddlewareTemplate<
-    MiddlewareCommand<B, O, R, BRS, BDS>,
-    any[],
-    BDS[number]
-  >;
+  /* Same generic-or-`extends AnyCommand`-breaks rule as `Command.defaultResolver` above. */
+  declare readonly defaultResolver?: <T extends BDS[number]>(
+    subject: T,
+    object: O,
+  ) => MiddlewareTemplate<MiddlewareCommand<B, O, R, BRS, BDS>, any[], BDS[number]>;
 
   /** @internal */
   override run(
