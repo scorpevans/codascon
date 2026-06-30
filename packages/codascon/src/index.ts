@@ -592,7 +592,7 @@ export abstract class Subject {
       return (command as Visit<C, this & BS>)[specificResolver](this, object);
     }
     if ("defaultResolver" in command) {
-      return command.defaultResolver(this, object) as unknown as Template<C, any[], this & BS>;
+      return command.defaultResolver(this, object);
     }
     throw new Error(
       `No resolver for "${this.resolverName}" on command "${(command as AnyCommand).commandName ?? "(unknown)"}". ` +
@@ -764,6 +764,13 @@ export abstract class Command<
    * `MiddlewareTemplate<MiddlewareCommand<B,O,R,BRS,BDS>, any[], BDS[number]>`, whose
    * `execute` accepts an `inner` continuation as a required third argument. The
    * implementation must call `inner.run(subject, object)` to forward control down the chain.
+   */
+  /*
+   * MUST stay generic (`<T extends BDS[number]>`), NOT a fixed `(subject: BDS[number], …)` param.
+   * A fixed param collapses to `never` for fully-resolved (BDS=[]) commands, and AnyCommand's `any`
+   * param is not contravariantly assignable to `never` → every concrete command then fails
+   * `extends AnyCommand` (TS2344 cascade). The generic constraint avoids it, exactly like
+   * `Template.execute<T extends SU>`. See ts-hack MEMORY "defaultResolver is now a CALLABLE field".
    */
   declare readonly defaultResolver?: <T extends BDS[number]>(
     subject: T,
@@ -1284,6 +1291,7 @@ export abstract class MiddlewareCommand<
    * The implementation must call `inner.run(subject, object)` to forward control down
    * the chain. The signature makes this requirement explicit; TypeScript cannot enforce it.
    */
+  /* Same generic-or-`extends AnyCommand`-breaks rule as `Command.defaultResolver` above. */
   declare readonly defaultResolver?: <T extends BDS[number]>(
     subject: T,
     object: O,
