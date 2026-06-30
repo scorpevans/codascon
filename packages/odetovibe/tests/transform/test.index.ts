@@ -87,8 +87,7 @@ const cmdEntry = new CommandEntry("AccessBuildingCommand", {
   baseType: "Person",
   objectType: "Building",
   returnType: "AccessResult",
-  subjectUnion: ["Student", "Professor"],
-  dispatch: {
+  resolvers: {
     Student: "AccessTemplate.DepartmentMatch",
     Professor: "GrantAccess",
   },
@@ -243,7 +242,7 @@ describe("CommandClassEmitter", () => {
     const cls = sf.getClassOrThrow("AccessBuildingCommand");
     expect(cls.isExported()).toBe(true);
     expect(cls.getExtends()?.getText()).toBe(
-      "Command<Person, Building, AccessResult, [Student, Professor]>",
+      "Command<Person, Building, AccessResult, [Professor, Student]>",
     );
   });
 
@@ -336,8 +335,7 @@ describe("CommandClassEmitter", () => {
 
   const multiCandidateCmd = new CommandEntry("AccessBuildingCommand", {
     ...cmdEntry.config,
-    subjectUnion: ["Student"],
-    dispatch: { Student: ["DepartmentMatch", "DenyAccess"] },
+    resolvers: { Student: ["DepartmentMatch", "DenyAccess"] },
     templates: {
       AccessTemplate: {
         isParameterized: false,
@@ -347,7 +345,7 @@ describe("CommandClassEmitter", () => {
     },
   });
 
-  it("multi-candidate dispatch: resolver return type is the union of candidate classes, body throws", () => {
+  it("multi-candidate resolvers: resolver return type is the union of candidate classes, body throws", () => {
     const project = makeProject();
     emitCmd.run(multiCandidateCmd, ctx(withTypes, project));
     const method = project
@@ -373,8 +371,7 @@ describe("CommandClassEmitter", () => {
   it("single-element list behaves like a scalar: complete resolver returning the singleton", () => {
     const singleListCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      subjectUnion: ["Student"],
-      dispatch: { Student: ["DepartmentMatch"] },
+      resolvers: { Student: ["DepartmentMatch"] },
       templates: {
         AccessTemplate: {
           isParameterized: false,
@@ -397,8 +394,7 @@ describe("CommandClassEmitter", () => {
   it("deduplicates singleton fields when multiple subjects share the same dispatch target", () => {
     const sharedDispatchCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "SharedStrategy", Professor: "SharedStrategy" },
+      resolvers: { Student: "SharedStrategy", Professor: "SharedStrategy" },
     });
     const project = makeProject();
     emitCmd.run(sharedDispatchCmd, ctx(withTypes, project));
@@ -419,8 +415,7 @@ describe("CommandClassEmitter", () => {
   it("emits defaultResolver property initialised to the named strategy singleton", () => {
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "DepartmentMatch", Professor: "DepartmentMatch" },
+      resolvers: { Student: "DepartmentMatch", Professor: "DepartmentMatch" },
       defaultResolver: "CatchAll",
       templates: {
         AccessTemplate: {
@@ -443,8 +438,7 @@ describe("CommandClassEmitter", () => {
   it("deduplicates singleton when defaultResolver names a strategy already used in dispatch", () => {
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "SharedStrategy", Professor: "SharedStrategy" },
+      resolvers: { Student: "SharedStrategy", Professor: "SharedStrategy" },
       defaultResolver: "SharedStrategy",
       templates: {
         AccessTemplate: {
@@ -471,9 +465,8 @@ describe("CommandClassEmitter", () => {
     // The emitter must not generate a resolveProfessor stub; only resolveStudent is emitted.
     const drCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "DepartmentMatch" }, // Professor is defaulted instead
-      defaultedSubjects: ["Professor"],
+      resolvers: { Student: "DepartmentMatch" }, // Professor is defaulted instead
+      defaultSubjects: ["Professor"],
       defaultResolver: "CatchAll",
       templates: {
         AccessTemplate: {
@@ -535,7 +528,7 @@ describe("CommandClassEmitter", () => {
     const sf = project.getSourceFileOrThrow("commands/access-building.ts");
     const cls = sf.getClassOrThrow("AccessBuildingCommand");
     expect(cls.getExtends()?.getText()).toBe(
-      "Command<Person, Building, Promise<AccessResult>, [Student, Professor]>",
+      "Command<Person, Building, Promise<AccessResult>, [Professor, Student]>",
     );
   });
 
@@ -545,8 +538,7 @@ describe("CommandClassEmitter", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
+      resolvers: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
     const project = makeProject();
@@ -561,8 +553,7 @@ describe("CommandClassEmitter", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
+      resolvers: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
     const project = makeProject();
@@ -692,7 +683,6 @@ describe("CommandClassEmitter", () => {
     // No resolver method is emitted for "Ghost"; the method for the known subject is still emitted.
     const ghostCmd = new CommandEntry("AccessBuildingCommand", {
       ...cmdEntry.config,
-      subjectUnion: ["Student", "Ghost"],
     });
     const index = idx({
       subjectTypes: new Map([["Student", student]]), // "Ghost" absent
@@ -865,8 +855,7 @@ describe("AbstractTemplateEmitter — AbstractTemplateEntry", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
+      resolvers: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
     const tplWithHook = new AbstractTemplateEntry("HookedTemplate", "AccessBuildingCommand", {
@@ -1028,8 +1017,7 @@ describe("AbstractTemplateEmitter — isParameterized: false", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
+      resolvers: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
     const tplWithHook = new AbstractTemplateEntry("GrantAccess", "AccessBuildingCommand", {
@@ -1266,8 +1254,7 @@ describe("StrategyClassEmitter", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
+      resolvers: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
     const tplWithHook = new AbstractTemplateEntry("AccessTemplate", "AccessBuildingCommand", {
@@ -1446,8 +1433,7 @@ describe("emitAst", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
+      resolvers: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
     const index: ConfigIndex = {
@@ -1574,8 +1560,7 @@ const traceMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
   baseType: "Ctx",
   objectType: "Ctx",
   returnType: "Res",
-  subjectUnion: ["Rock", "Gem"],
-  dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+  resolvers: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
   templates: {
     TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
     TraceGem: { isParameterized: false, strategies: { TraceGemDefault: {} } },
@@ -1604,7 +1589,7 @@ describe("MiddlewareCommandClassEmitter", () => {
     const sf = project.getSourceFileOrThrow("commands/trace-middleware.ts");
     const cls = sf.getClassOrThrow("TraceMiddleware");
     expect(cls.isExported()).toBe(true);
-    expect(cls.getExtends()?.getText()).toContain("MiddlewareCommand<Ctx, Ctx, Res, [Rock, Gem]>");
+    expect(cls.getExtends()?.getText()).toContain("MiddlewareCommand<Ctx, Ctx, Res, [Gem, Rock]>");
   });
 
   it("emits readonly commandName with the correct literal", () => {
@@ -1628,11 +1613,10 @@ describe("MiddlewareCommandClassEmitter", () => {
     expect(resolveGem.getReturnTypeNode()?.getText()).toBe("TraceGemDefault");
   });
 
-  it("multi-candidate dispatch: resolver return is the union of candidate classes, body throws, no singleton", () => {
+  it("multi-candidate resolvers: resolver return is the union of candidate classes, body throws, no singleton", () => {
     const multiMw = new MiddlewareCommandEntry("TraceMiddleware", {
       ...traceMwEntry.config,
-      subjectUnion: ["Rock"],
-      dispatch: { Rock: ["TraceRockDefault", "TraceRockVerbose"] },
+      resolvers: { Rock: ["TraceRockDefault", "TraceRockVerbose"] },
       templates: {
         TraceRock: {
           isParameterized: false,
@@ -1678,7 +1662,7 @@ describe("MiddlewareCommandClassEmitter", () => {
     const cls = project
       .getSourceFileOrThrow("commands/trace-middleware.ts")
       .getClassOrThrow("TraceMiddleware");
-    // dispatch: Rock → "TraceRockDefault" → traceRockDefault
+    // resolvers: Rock → "TraceRockDefault" → traceRockDefault
     //           Gem  → "TraceGemDefault"  → traceGemDefault
     const rockField = cls.getPropertyOrThrow("traceRockDefault");
     expect(rockField.isReadonly()).toBe(true);
@@ -1726,8 +1710,8 @@ describe("MiddlewareCommandClassEmitter", () => {
     // The emitter must not generate a resolveGem stub; only resolveRock is emitted.
     const drMwEntry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...traceMwEntry.config,
-      dispatch: { Rock: "TraceRockDefault" }, // Gem is defaulted instead
-      defaultedSubjects: ["Gem"],
+      resolvers: { Rock: "TraceRockDefault" }, // Gem is defaulted instead
+      defaultSubjects: ["Gem"],
       defaultResolver: "TraceRockDefault",
     });
     const project = makeProject();
@@ -1935,8 +1919,7 @@ describe("CommandClassEmitter — middleware getter", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
-    subjectUnion: ["Rock"],
-    dispatch: { Rock: "RockMinerDefault" },
+    resolvers: { Rock: "RockMinerDefault" },
     templates: { RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } } },
     middleware: ["TraceMiddleware"],
   });
@@ -1984,8 +1967,7 @@ describe("CommandClassEmitter — middleware getter", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock"],
-      dispatch: { Rock: "RockMinerDefault" },
+      resolvers: { Rock: "RockMinerDefault" },
       templates: { RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } } },
     });
     const noMwIndex: ConfigIndex = {

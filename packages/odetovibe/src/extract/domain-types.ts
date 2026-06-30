@@ -19,13 +19,13 @@ export interface ConfigEntry {
 }
 
 /**
- * Normalize each dispatch value to a candidate list: a scalar Strategy name
+ * Normalize each `resolvers` value to a candidate list: a scalar Strategy name
  * becomes a one-element list; an existing list is copied and deduped. Gives all
  * downstream extract/validate/emit logic a uniform `string[]` codomain per Subject.
  */
-function normalizeDispatch(dispatch: Command["dispatch"] | undefined): Record<string, string[]> {
+function normalizeResolvers(resolvers: Command["resolvers"] | undefined): Record<string, string[]> {
   const out: Record<string, string[]> = {};
-  for (const [subject, target] of Object.entries(dispatch ?? {})) {
+  for (const [subject, target] of Object.entries(resolvers ?? {})) {
     const list = Array.isArray(target) ? target : [target];
     out[subject] = [...new Set(list)];
   }
@@ -67,14 +67,14 @@ export class PlainTypeEntry extends Subject implements ConfigEntry {
 /** A parsed `commands` entry from the YAML config. */
 export class CommandEntry extends Subject implements ConfigEntry {
   readonly resolverName = "resolveCommand" as const;
-  /** Dispatch codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
-  readonly dispatch: Record<string, string[]>;
+  /** Resolver codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
+  readonly resolvers: Record<string, string[]>;
   constructor(
     public readonly key: string,
     public readonly config: Command,
   ) {
     super();
-    this.dispatch = normalizeDispatch(config.dispatch);
+    this.resolvers = normalizeResolvers(config.resolvers);
   }
 }
 
@@ -112,14 +112,14 @@ export class StrategyEntry extends Subject implements ConfigEntry {
 /** A parsed `middleware` map entry from the YAML config. */
 export class MiddlewareCommandEntry extends Subject implements ConfigEntry {
   readonly resolverName = "resolveMiddlewareCommand" as const;
-  /** Dispatch codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
-  readonly dispatch: Record<string, string[]>;
+  /** Resolver codomains normalized to candidate lists (`scalar → [scalar]`, deduped). */
+  readonly resolvers: Record<string, string[]>;
   constructor(
     public readonly key: string,
     public readonly config: Command,
   ) {
     super();
-    this.dispatch = normalizeDispatch(config.dispatch);
+    this.resolvers = normalizeResolvers(config.resolvers);
   }
 }
 

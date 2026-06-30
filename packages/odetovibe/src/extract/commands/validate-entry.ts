@@ -23,6 +23,7 @@ import type {
   MiddlewareStrategyEntry,
 } from "../domain-types.js";
 import { ValidateCommandHooksCommand } from "./validate-command-hooks.js";
+import { commandSubjects } from "../../command-subjects.js";
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS
@@ -132,11 +133,12 @@ class PlainTypeValidatorDefault extends PlainTypeValidator {}
 //
 // Rules:
 //   - baseType, objectType, returnType must reference known domainTypes
-//   - subjectUnion entries must reference subjectTypes (types with resolverName)
-//   - dispatch must have exactly one entry per subjectUnion member
-//   - dispatch values must be plain strategy names (no dot notation)
-//   - dispatch values must resolve to a known strategy within this Command's templates
-//   - dispatch target strategy's parent template subjectSubset must cover dispatched subject
+//   - resolvers keys + defaultSubjects must reference subjectTypes (resolverName)
+//   - resolvers keys and defaultSubjects must be disjoint (resolution partition)
+//   - resolvers values must be plain strategy names (no dot notation)
+//   - resolvers values must resolve to a known strategy within this Command's templates
+//   - resolver target strategy's parent template subjectSubset must cover the subject
+//   - defaultSubjects non-empty ⟺ defaultResolver declared
 //   - template names must be unique within a Command
 //   - strategy names must be unique across all templates within a Command
 // ═══════════════════════════════════════════════════════════════════
@@ -161,100 +163,66 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // subjectUnion entries must reference subjectTypes (types with resolverName) or typeImports
-    for (const subjectRef of config.subjectUnion) {
+    // resolvers keys + defaultSubjects must reference subjectTypes (resolverName) or typeImports
+    const subjects = commandSubjects(config);
+    const defaultSubjects = subjects.defaulted;
+    for (const subjectRef of new Set(subjects.all)) {
       if (importedNames.has(subjectRef)) {
         console.info(
-          `[odetovibe] INFO: typeImport "${subjectRef}" used as subjectUnion member of "${key}" — skipping Subject validation; compiler will enforce implementation`,
+          `[odetovibe] INFO: typeImport "${subjectRef}" used as a subject of "${key}" — skipping Subject validation; compiler will enforce implementation`,
         );
       } else if (!findDomainType(object, subjectRef)) {
         errors.push(
-          err(
-            key,
-            "subjectUnion-ref",
-            `subjectUnion entry "${subjectRef}" does not reference a known domainType`,
-          ),
+          err(key, "subject-ref", `subject "${subjectRef}" does not reference a known domainType`),
         );
       } else if (!object.subjectTypes.has(subjectRef)) {
         errors.push(
           err(
             key,
-            "subjectUnion-resolverName",
-            `subjectUnion entry "${subjectRef}" is not a Subject (no resolverName)`,
+            "subject-resolverName",
+            `subject "${subjectRef}" is not a Subject (no resolverName)`,
           ),
         );
       }
     }
 
-    // Resolution partition: dispatch keys ∪ defaultedSubjects must partition subjectUnion
-    // (total + disjoint). A subject in neither is a forgotten subject (no silent absorption);
-    // a subject in both violates disjointness.
-    const dispatchKeys = new Set(Object.keys(config.dispatch));
-    const unionSet = new Set(config.subjectUnion);
-    const defaultedSubjects = config.defaultedSubjects ?? [];
-    const defaultedSet = new Set(defaultedSubjects);
-
-    // defaultedSubjects entries must reference subjects in subjectUnion
-    for (const dr of defaultedSubjects) {
-      if (!unionSet.has(dr)) {
-        errors.push(
-          err(
-            key,
-            "defaultedSubjects-ref",
-            `defaultedSubjects entry "${dr}" is not in subjectUnion`,
-          ),
-        );
-      }
-    }
-
-    for (const subjectRef of config.subjectUnion) {
-      const inDispatch = dispatchKeys.has(subjectRef);
-      const inDefault = defaultedSet.has(subjectRef);
-      if (inDispatch && inDefault) {
+    // Resolution partition: the subject union is the resolvers keys (resolved) plus
+    // defaultSubjects (defaulted). Totality is automatic; the two sets must be DISJOINT —
+    // a subject routed both to a specific resolver and to defaultResolver is ambiguous.
+    const resolvedSet = new Set(subjects.resolved);
+    for (const dr of defaultSubjects) {
+      if (resolvedSet.has(dr)) {
         errors.push(
           err(
             key,
             "resolution-partition",
-            `Subject "${subjectRef}" is in both dispatch and defaultedSubjects — the resolution partition must be disjoint`,
+            `Subject "${dr}" is in both resolvers and defaultSubjects — the resolution partition must be disjoint`,
           ),
         );
-      } else if (!inDispatch && !inDefault) {
-        errors.push(
-          err(
-            key,
-            "dispatch-coverage",
-            `Subject "${subjectRef}" is in subjectUnion but in neither dispatch nor defaultedSubjects`,
-          ),
-        );
-      }
-    }
-    for (const dk of dispatchKeys) {
-      if (!unionSet.has(dk)) {
-        errors.push(err(key, "dispatch-extra", `dispatch key "${dk}" is not in subjectUnion`));
       }
     }
 
-    // defaultedSubjects non-empty ⟺ defaultResolver declared
-    if (defaultedSubjects.length > 0 && !config.defaultResolver) {
+    // defaultSubjects non-empty ⟺ defaultResolver declared
+    if (defaultSubjects.length > 0 && !config.defaultResolver) {
       errors.push(
         err(
           key,
-          "defaultedSubjects-resolver",
-          `defaultedSubjects is non-empty but no defaultResolver strategy is declared`,
+          "defaultSubjects-resolver",
+          `defaultSubjects is non-empty but no defaultResolver strategy is declared`,
         ),
       );
     }
-    if (defaultedSubjects.length === 0 && config.defaultResolver) {
+    if (defaultSubjects.length === 0 && config.defaultResolver) {
       errors.push(
         err(
           key,
           "defaultResolver-moot",
-          `defaultResolver is declared but defaultedSubjects is empty — list the defaulted subjects in defaultedSubjects`,
+          `defaultResolver is declared but defaultSubjects is empty — list the defaulted subjects in defaultSubjects`,
         ),
       );
     }
 
-    // dispatch values must be plain strategy names unique across this Command's templates
+    // resolvers values must be plain strategy names unique across this Command's templates
     const ownTemplates = config.templates ?? {};
 
     // template names must be unique within this command
@@ -294,40 +262,40 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // Each dispatch value is a candidate list (normalized scalar → [scalar]).
+    // Each resolvers value is a candidate list (normalized scalar → [scalar]).
     // Validate every candidate; the codomain of a multi-entry list must be fully valid.
-    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+    for (const [subjectRef, targets] of Object.entries(subject.resolvers)) {
       if (targets.length === 0) {
         errors.push(
           err(
             key,
-            "dispatch-empty",
-            `dispatch for "${subjectRef}" has no candidate strategies — name at least one`,
+            "resolvers-empty",
+            `resolvers entry for "${subjectRef}" has no candidate strategies — name at least one`,
           ),
         );
         continue;
       }
       for (const target of targets) {
         if (!target.includes(".")) {
-          // Only plain strategy names are valid dispatch targets — all templates are abstract
+          // Only plain strategy names are valid resolver targets — all templates are abstract
           const owningTplName = stratNameToTpl.get(target);
           if (owningTplName === undefined) {
             errors.push(
               err(
                 key,
-                "dispatch-target-ref",
-                `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
+                "resolver-target-ref",
+                `resolver candidate "${target}" for "${subjectRef}" not found — expected a strategy name`,
               ),
             );
           } else {
             const tplConfig = ownTemplates[owningTplName];
-            const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+            const effectiveSubset = tplConfig.subjectSubset ?? subjects.all;
             if (!effectiveSubset.includes(subjectRef)) {
               errors.push(
                 err(
                   key,
-                  "dispatch-subjectsubset",
-                  `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+                  "resolver-subjectsubset",
+                  `strategy "${target}" resolved for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
                 ),
               );
             }
@@ -336,8 +304,8 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
           errors.push(
             err(
               key,
-              "dispatch-target-format",
-              `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
+              "resolver-target-format",
+              `resolver candidate "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
             ),
           );
         }
@@ -370,15 +338,15 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
           ),
         );
       } else {
-        // Rule 11: middleware dispatch keys must be a superset of this command's dispatch keys
-        const mwSubjects = new Set(mwEntry.config.subjectUnion);
-        for (const subjectRef of config.subjectUnion) {
+        // Rule 11: the middleware's subject union must be a superset of this command's
+        const mwSubjects = new Set(commandSubjects(mwEntry.config).all);
+        for (const subjectRef of subjects.all) {
           if (!mwSubjects.has(subjectRef)) {
             errors.push(
               err(
                 key,
                 "middleware-coverage",
-                `middleware "${mwRef}" does not cover subject "${subjectRef}" — its dispatch keys must be a superset of "${key}"'s`,
+                `middleware "${mwRef}" does not cover subject "${subjectRef}" — its subject union must be a superset of "${key}"'s`,
               ),
             );
           }
@@ -400,17 +368,17 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
         );
       } else {
         const tplConfig = ownTemplates[owningTplName];
-        const effectiveTplSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+        const effectiveTplSubset = tplConfig.subjectSubset ?? subjects.all;
         const stratConfig = tplConfig.strategies[stratName];
         const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
         const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of defaultedSubjects) {
+        for (const subjectRef of defaultSubjects) {
           if (!stratSubjectSet.has(subjectRef)) {
             errors.push(
               err(
                 key,
                 "defaultResolver-coverage",
-                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultedSubjects`,
+                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultSubjects`,
               ),
             );
           }
@@ -428,9 +396,9 @@ class CommandValidatorDefault extends CommandValidator {}
 // TEMPLATE: AbstractTemplateValidator
 //
 // Rules:
-//   - subjectSubset (if present) must be subset of parent Command's subjectUnion
+//   - subjectSubset (if present) must be subset of parent Command's subject union
 //   - commandHooks delegated to ValidateCommandHooksCommand hook
-//   - must not appear directly in parent Command's dispatch (abstract — use Strategy.*)
+//   - must not appear directly in parent Command's resolvers (abstract — use Strategy.*)
 // ═══════════════════════════════════════════════════════════════════
 
 abstract class AbstractTemplateValidator implements Template<
@@ -453,14 +421,14 @@ abstract class AbstractTemplateValidator implements Template<
     }
 
     if (config.subjectSubset) {
-      const union = new Set(cmdEntry.config.subjectUnion);
+      const union = new Set(commandSubjects(cmdEntry.config).all);
       for (const ref of config.subjectSubset) {
         if (!union.has(ref)) {
           errors.push(
             err(
               key,
               "subjectSubset",
-              `subjectSubset entry "${ref}" is not in "${commandKey}"'s subjectUnion`,
+              `subjectSubset entry "${ref}" is not in "${commandKey}"'s subject union`,
             ),
           );
         }
@@ -469,14 +437,14 @@ abstract class AbstractTemplateValidator implements Template<
 
     errors.push(...this.validateCommandHooks.run(subject, object).errors);
 
-    // Abstract templates must not appear directly in dispatch — check every candidate
-    for (const targets of Object.values(cmdEntry.dispatch)) {
+    // Abstract templates must not appear directly in resolvers — check every candidate
+    for (const targets of Object.values(cmdEntry.resolvers)) {
       if (targets.includes(key)) {
         errors.push(
           err(
             key,
-            "abstract-in-dispatch",
-            `abstract template "${key}" is referenced directly in "${commandKey}" dispatch — use a plain strategy name instead`,
+            "abstract-in-resolvers",
+            `abstract template "${key}" is referenced directly in "${commandKey}" resolvers — use a plain strategy name instead`,
           ),
         );
       }
@@ -534,7 +502,8 @@ abstract class StrategyValidator implements Template<
         );
       } else {
         const cmdEntry = object.commands.get(commandKey);
-        const parentSubset = tpl.config.subjectSubset ?? cmdEntry?.config.subjectUnion ?? [];
+        const parentSubset =
+          tpl.config.subjectSubset ?? (cmdEntry ? commandSubjects(cmdEntry.config).all : []);
         const parentSet = new Set(parentSubset);
         for (const ref of config.subjectSubset) {
           if (!parentSet.has(ref)) {
@@ -593,97 +562,64 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    // subject entries must reference subjectTypes or typeImports
-    for (const subjectRef of config.subjectUnion) {
+    // resolvers keys + defaultSubjects must reference subjectTypes (resolverName) or typeImports
+    const subjects = commandSubjects(config);
+    const defaultSubjects = subjects.defaulted;
+    for (const subjectRef of new Set(subjects.all)) {
       if (importedNames.has(subjectRef)) {
         console.info(
-          `[odetovibe] INFO: typeImport "${subjectRef}" used as subject of middleware "${key}" — skipping Subject validation; compiler will enforce implementation`,
+          `[odetovibe] INFO: typeImport "${subjectRef}" used as a subject of middleware "${key}" — skipping Subject validation; compiler will enforce implementation`,
         );
       } else if (!findDomainType(object, subjectRef)) {
         errors.push(
-          err(
-            key,
-            "subjectUnion-ref",
-            `subject "${subjectRef}" does not reference a known domainType`,
-          ),
+          err(key, "subject-ref", `subject "${subjectRef}" does not reference a known domainType`),
         );
       } else if (!object.subjectTypes.has(subjectRef)) {
         errors.push(
           err(
             key,
-            "subjectUnion-resolverName",
+            "subject-resolverName",
             `subject "${subjectRef}" is not a Subject (no resolverName)`,
           ),
         );
       }
     }
 
-    // Resolution partition (same as Command): dispatch keys ∪ defaultedSubjects partition
-    // subjectUnion (total + disjoint); defaultedSubjects ⟺ defaultResolver.
-    const dispatchKeys = new Set(Object.keys(config.dispatch));
-    const unionSet = new Set(config.subjectUnion);
-    const defaultedSubjects = config.defaultedSubjects ?? [];
-    const defaultedSet = new Set(defaultedSubjects);
-
-    for (const dr of defaultedSubjects) {
-      if (!unionSet.has(dr)) {
-        errors.push(
-          err(
-            key,
-            "defaultedSubjects-ref",
-            `defaultedSubjects entry "${dr}" is not in subjectUnion`,
-          ),
-        );
-      }
-    }
-
-    for (const subjectRef of config.subjectUnion) {
-      const inDispatch = dispatchKeys.has(subjectRef);
-      const inDefault = defaultedSet.has(subjectRef);
-      if (inDispatch && inDefault) {
+    // Resolution partition (same as Command): the subject union is the resolvers keys plus
+    // defaultSubjects; the two sets must be DISJOINT; defaultSubjects ⟺ defaultResolver.
+    const resolvedSet = new Set(subjects.resolved);
+    for (const dr of defaultSubjects) {
+      if (resolvedSet.has(dr)) {
         errors.push(
           err(
             key,
             "resolution-partition",
-            `Subject "${subjectRef}" is in both dispatch and defaultedSubjects — the resolution partition must be disjoint`,
+            `Subject "${dr}" is in both resolvers and defaultSubjects — the resolution partition must be disjoint`,
           ),
         );
-      } else if (!inDispatch && !inDefault) {
-        errors.push(
-          err(
-            key,
-            "dispatch-coverage",
-            `Subject "${subjectRef}" is in subjectUnion but in neither dispatch nor defaultedSubjects`,
-          ),
-        );
-      }
-    }
-    for (const dk of dispatchKeys) {
-      if (!unionSet.has(dk)) {
-        errors.push(err(key, "dispatch-extra", `dispatch key "${dk}" is not in subjectUnion`));
       }
     }
 
-    if (defaultedSubjects.length > 0 && !config.defaultResolver) {
+    if (defaultSubjects.length > 0 && !config.defaultResolver) {
       errors.push(
         err(
           key,
-          "defaultedSubjects-resolver",
-          `defaultedSubjects is non-empty but no defaultResolver strategy is declared`,
+          "defaultSubjects-resolver",
+          `defaultSubjects is non-empty but no defaultResolver strategy is declared`,
         ),
       );
     }
-    if (defaultedSubjects.length === 0 && config.defaultResolver) {
+    if (defaultSubjects.length === 0 && config.defaultResolver) {
       errors.push(
         err(
           key,
           "defaultResolver-moot",
-          `defaultResolver is declared but defaultedSubjects is empty — list the defaulted subjects in defaultedSubjects`,
+          `defaultResolver is declared but defaultSubjects is empty — list the defaulted subjects in defaultSubjects`,
         ),
       );
     }
 
-    // dispatch values must be plain strategy names unique across this middleware's templates
+    // resolvers values must be plain strategy names unique across this middleware's templates
     const ownTemplates = config.templates ?? {};
 
     // template names must be unique within this middleware command
@@ -722,15 +658,15 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    // Each dispatch value is a candidate list (normalized scalar → [scalar]).
+    // Each resolvers value is a candidate list (normalized scalar → [scalar]).
     // Validate every candidate; the codomain of a multi-entry list must be fully valid.
-    for (const [subjectRef, targets] of Object.entries(subject.dispatch)) {
+    for (const [subjectRef, targets] of Object.entries(subject.resolvers)) {
       if (targets.length === 0) {
         errors.push(
           err(
             key,
-            "dispatch-empty",
-            `dispatch for "${subjectRef}" has no candidate strategies — name at least one`,
+            "resolvers-empty",
+            `resolvers entry for "${subjectRef}" has no candidate strategies — name at least one`,
           ),
         );
         continue;
@@ -742,19 +678,19 @@ abstract class MiddlewareCommandValidator implements Template<
             errors.push(
               err(
                 key,
-                "dispatch-target-ref",
-                `dispatch target "${target}" for "${subjectRef}" not found — expected a strategy name`,
+                "resolver-target-ref",
+                `resolver candidate "${target}" for "${subjectRef}" not found — expected a strategy name`,
               ),
             );
           } else {
             const tplConfig = ownTemplates[owningTplName];
-            const effectiveSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+            const effectiveSubset = tplConfig.subjectSubset ?? subjects.all;
             if (!effectiveSubset.includes(subjectRef)) {
               errors.push(
                 err(
                   key,
-                  "dispatch-subjectsubset",
-                  `strategy "${target}" dispatched for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
+                  "resolver-subjectsubset",
+                  `strategy "${target}" resolved for "${subjectRef}" belongs to template "${owningTplName}" whose subjectSubset does not include "${subjectRef}"`,
                 ),
               );
             }
@@ -763,8 +699,8 @@ abstract class MiddlewareCommandValidator implements Template<
           errors.push(
             err(
               key,
-              "dispatch-target-format",
-              `dispatch target "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
+              "resolver-target-format",
+              `resolver candidate "${target}" for "${subjectRef}" is malformed — use a plain strategy name`,
             ),
           );
         }
@@ -799,17 +735,17 @@ abstract class MiddlewareCommandValidator implements Template<
         );
       } else {
         const tplConfig = ownTemplates[owningTplName];
-        const effectiveTplSubset = tplConfig.subjectSubset ?? config.subjectUnion;
+        const effectiveTplSubset = tplConfig.subjectSubset ?? subjects.all;
         const stratConfig = tplConfig.strategies[stratName];
         const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
         const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of defaultedSubjects) {
+        for (const subjectRef of defaultSubjects) {
           if (!stratSubjectSet.has(subjectRef)) {
             errors.push(
               err(
                 key,
                 "defaultResolver-coverage",
-                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultedSubjects`,
+                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultSubjects`,
               ),
             );
           }
@@ -854,7 +790,7 @@ abstract class MiddlewareTemplateValidator implements Template<
     }
 
     if (config.subjectSubset) {
-      const union = new Set(cmdEntry.config.subjectUnion);
+      const union = new Set(commandSubjects(cmdEntry.config).all);
       for (const ref of config.subjectSubset) {
         if (!union.has(ref)) {
           errors.push(
@@ -870,14 +806,14 @@ abstract class MiddlewareTemplateValidator implements Template<
 
     errors.push(...this.validateCommandHooks.run(subject, object).errors);
 
-    // Abstract templates must not appear directly in dispatch — check every candidate
-    for (const targets of Object.values(cmdEntry.dispatch)) {
+    // Abstract templates must not appear directly in resolvers — check every candidate
+    for (const targets of Object.values(cmdEntry.resolvers)) {
       if (targets.includes(key)) {
         errors.push(
           err(
             key,
-            "abstract-in-dispatch",
-            `abstract template "${key}" is referenced directly in "${commandKey}" dispatch — use a plain strategy name instead`,
+            "abstract-in-resolvers",
+            `abstract template "${key}" is referenced directly in "${commandKey}" resolvers — use a plain strategy name instead`,
           ),
         );
       }
@@ -932,7 +868,8 @@ abstract class MiddlewareStrategyValidator implements Template<
         );
       } else {
         const cmdEntry = object.middlewareCommands.get(commandKey);
-        const parentSubset = tpl.config.subjectSubset ?? cmdEntry?.config.subjectUnion ?? [];
+        const parentSubset =
+          tpl.config.subjectSubset ?? (cmdEntry ? commandSubjects(cmdEntry.config).all : []);
         const parentSet = new Set(parentSubset);
         for (const ref of config.subjectSubset) {
           if (!parentSet.has(ref)) {
@@ -975,14 +912,14 @@ export class ValidateEntryCommand extends Command<
   ConfigIndex,
   ValidationResult,
   [
-    SubjectTypeEntry,
-    PlainTypeEntry,
-    CommandEntry,
     AbstractTemplateEntry,
-    StrategyEntry,
+    CommandEntry,
     MiddlewareCommandEntry,
-    MiddlewareTemplateEntry,
     MiddlewareStrategyEntry,
+    MiddlewareTemplateEntry,
+    PlainTypeEntry,
+    StrategyEntry,
+    SubjectTypeEntry,
   ]
 > {
   readonly commandName = "validateEntry" as const;

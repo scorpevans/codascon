@@ -63,10 +63,9 @@ middleware:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
-    subjectUnion: [Student, Professor]
-    dispatch:
+    resolvers:
       Professor: ProfessorPolicy
-    defaultedSubjects: [Student]
+    defaultSubjects: [Student]
     defaultResolver: DefaultPolicy
     templates:
       CheckoutMiddlewareTemplate:
@@ -82,9 +81,8 @@ commands:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
-    subjectUnion: [Student, Professor]
     middleware: [CheckoutMiddleware] # first is outermost; applied to every dispatch
-    dispatch:
+    resolvers:
       Student: StudentCheckout
       Professor: ProfessorCheckout
     templates:
@@ -100,13 +98,13 @@ commands:
 **Key rules:**
 
 - `domainTypes` with `resolverName` become Subject classes; without become interfaces
-- Every Subject in `subjectUnion` must appear in exactly one of `dispatch` (resolved) or `defaultedSubjects` (defaulted) — the two partition `subjectUnion` (total + disjoint). A Subject in neither is an error; `defaultedSubjects` non-empty requires a `defaultResolver`
-- `dispatch` values are plain Strategy names, looked up across the Command's `templates`
+- A Command's subject union is derived: the `resolvers` keys (resolved) plus `defaultSubjects` (defaulted). The two must be disjoint; `defaultSubjects` non-empty requires a `defaultResolver`
+- `resolvers` values are plain Strategy names, looked up across the Command's `templates`
 - All Templates generate as abstract classes, regardless of whether `strategies` is empty or not
-- Template `subjectSubset` must be a subset of the parent Command's `subjectUnion`
+- Template `subjectSubset` must be a subset of the parent Command's subject union (`resolvers` keys ∪ `defaultSubjects`)
 - Strategy `subjectSubset` must be a subset of the parent Template's `subjectSubset`; invalid (error) when the parent Template is not parameterized
-- `middleware` entries are structurally identical to Commands — same generic params, dispatch map, and templates; generated template `execute` stubs receive a third `inner: Runnable<SU, O, R>` argument (call `inner.run(subject, object)` to proceed; omit to short-circuit)
-- A `command`'s `middleware:` list registers interceptors in order — first is outermost; each middleware's dispatch must cover all Subjects in the Command
+- `middleware` entries are structurally identical to Commands — same generic params, `resolvers` map, and templates; generated template `execute` stubs receive a third `inner: Runnable<SU, O, R>` argument (call `inner.run(subject, object)` to proceed; omit to short-circuit)
+- A `command`'s `middleware:` list registers interceptors in order — first is outermost; each middleware's subject union must cover all Subjects in the Command
 - Commands with a `middleware:` list emit `override get middleware()` — no manual wiring needed
 
 See [`src/schema.ts`](./src/schema.ts) for the full schema type definitions and validation rules.

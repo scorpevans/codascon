@@ -94,8 +94,7 @@ const validCmdConfig = {
   baseType: "Person",
   objectType: "Building",
   returnType: "AccessResult",
-  subjectUnion: ["Student"],
-  dispatch: { Student: "GrantAccessDefault" },
+  resolvers: { Student: "GrantAccessDefault" },
   templates: {
     GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
   },
@@ -107,22 +106,22 @@ const validCmdConfig = {
 
 describe("CommandEntry dispatch normalization", () => {
   it("normalizes a scalar dispatch value to a one-element candidate list", () => {
-    const entry = new CommandEntry("Cmd", { ...validCmdConfig, dispatch: { Student: "X" } });
-    expect(entry.dispatch).toEqual({ Student: ["X"] });
+    const entry = new CommandEntry("Cmd", { ...validCmdConfig, resolvers: { Student: "X" } });
+    expect(entry.resolvers).toEqual({ Student: ["X"] });
   });
 
   it("preserves a multi-candidate list and dedups repeats", () => {
     const entry = new CommandEntry("Cmd", {
       ...validCmdConfig,
-      dispatch: { Student: ["A", "B", "A"] },
+      resolvers: { Student: ["A", "B", "A"] },
     });
-    expect(entry.dispatch).toEqual({ Student: ["A", "B"] });
+    expect(entry.resolvers).toEqual({ Student: ["A", "B"] });
   });
 
   it("treats a scalar and its one-element list form identically", () => {
-    const scalar = new CommandEntry("Cmd", { ...validCmdConfig, dispatch: { Student: "X" } });
-    const list = new CommandEntry("Cmd", { ...validCmdConfig, dispatch: { Student: ["X"] } });
-    expect(scalar.dispatch).toEqual(list.dispatch);
+    const scalar = new CommandEntry("Cmd", { ...validCmdConfig, resolvers: { Student: "X" } });
+    const list = new CommandEntry("Cmd", { ...validCmdConfig, resolvers: { Student: ["X"] } });
+    expect(scalar.resolvers).toEqual(list.resolvers);
   });
 
   it("parses both scalar and list dispatch forms into normalized candidate lists", () => {
@@ -137,8 +136,7 @@ describe("CommandEntry dispatch normalization", () => {
         "    baseType: User",
         "    objectType: User",
         "    returnType: User",
-        "    subjectUnion: [User, Admin]",
-        "    dispatch:",
+        "    resolvers:",
         "      User: A",
         "      Admin: [A, B]",
         "    templates:",
@@ -146,7 +144,7 @@ describe("CommandEntry dispatch normalization", () => {
       ].join("\n"),
     );
     const c = index.commands.get("C")!;
-    expect(c.dispatch).toEqual({ User: ["A"], Admin: ["A", "B"] });
+    expect(c.resolvers).toEqual({ User: ["A"], Admin: ["A", "B"] });
   });
 });
 
@@ -237,161 +235,91 @@ describe("CommandValidator", () => {
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("returnType-ref");
   });
 
-  it("[subjectUnion-ref] fails when a subjectUnion entry is not a known domain type", () => {
-    const entry = makeCmd({ subjectUnion: ["Ghost"], dispatch: { Ghost: "GrantAccess" } });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("subjectUnion-ref");
+  it("[subject-ref] fails when a resolvers key is not a known domain type", () => {
+    const entry = makeCmd({ resolvers: { Ghost: "GrantAccess" } });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("subject-ref");
   });
 
-  it("[subjectUnion-resolverName] fails when a subjectUnion entry is a plain type (no resolverName)", () => {
-    const entry = makeCmd({ subjectUnion: ["Building"], dispatch: { Building: "GrantAccess" } });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
-      "subjectUnion-resolverName",
-    );
+  it("[subject-resolverName] fails when a resolvers key is a plain type (no resolverName)", () => {
+    const entry = makeCmd({ resolvers: { Building: "GrantAccess" } });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("subject-resolverName");
   });
 
-  it("[dispatch-coverage] fails when a subjectUnion member has no dispatch entry and no defaultResolver", () => {
+  it("[subject-ref] fails when a defaultSubjects entry is not a known Subject", () => {
+    // defaultSubjects entries are subject-validated just like resolvers keys.
     const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccess" }, // Professor missing, no defaultResolver
+      resolvers: { Student: "GrantAccessDefault" },
+      defaultSubjects: ["Ghost"], // not a known domain type
+      defaultResolver: "GrantAccessDefault",
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-coverage");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("subject-ref");
   });
 
-  it("[resolution-partition] passes when a subjectUnion member is defaulted via defaultedSubjects", () => {
-    // Professor is absent from dispatch but listed in defaultedSubjects — the partition is
-    // total and disjoint, so this is valid; defaultResolver handles Professor at runtime.
-    const entry = new CommandEntry("Cmd", {
-      commandName: "accessBuilding",
-      baseType: "Person",
-      objectType: "Building",
-      returnType: "AccessResult",
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault" },
-      defaultedSubjects: ["Professor"],
+  it("derives the subject union from resolvers keys ∪ defaultSubjects (no subjectUnion key)", () => {
+    // No subjectUnion is declared anywhere — the union is purely derived. Student is resolved,
+    // Professor is defaulted; the command is valid.
+    const entry = makeCmd({
+      resolvers: { Student: "GrantAccessDefault" },
+      defaultSubjects: ["Professor"],
       defaultResolver: "GrantAccessDefault",
-      templates: {
-        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
-      },
     });
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
-  it("[dispatch-coverage] fails when a subject is in neither dispatch nor defaultedSubjects", () => {
-    // Professor is absent from dispatch and not defaulted — a forgotten subject.
-    const entry = new CommandEntry("Cmd", {
-      commandName: "accessBuilding",
-      baseType: "Person",
-      objectType: "Building",
-      returnType: "AccessResult",
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault" },
+  it("[fully-defaulted] passes when resolvers is empty and every subject is defaulted", () => {
+    const entry = makeCmd({
+      resolvers: {},
+      defaultSubjects: ["Student"],
       defaultResolver: "GrantAccessDefault",
-      templates: {
-        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
-      },
     });
-    const result = validateCmd.run(entry, indexWithCmd(entry));
-    expect(rules(result)).toContain("dispatch-coverage");
+    expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
-  it("[resolution-partition] fails when a subject is in both dispatch and defaultedSubjects", () => {
-    const entry = new CommandEntry("Cmd", {
-      commandName: "accessBuilding",
-      baseType: "Person",
-      objectType: "Building",
-      returnType: "AccessResult",
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
-      defaultedSubjects: ["Professor"], // also defaulted — violates disjointness
+  it("[resolution-partition] fails when a subject is in both resolvers and defaultSubjects", () => {
+    const entry = makeCmd({
+      resolvers: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      defaultSubjects: ["Professor"], // also defaulted — violates disjointness
       defaultResolver: "GrantAccessDefault",
-      templates: {
-        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
-      },
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolution-partition");
   });
 
-  it("[defaultedSubjects-resolver] fails when defaultedSubjects is set but no defaultResolver", () => {
-    const entry = new CommandEntry("Cmd", {
-      commandName: "accessBuilding",
-      baseType: "Person",
-      objectType: "Building",
-      returnType: "AccessResult",
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault" },
-      defaultedSubjects: ["Professor"], // no defaultResolver declared
-      templates: {
-        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
-      },
+  it("[defaultSubjects-resolver] fails when defaultSubjects is set but no defaultResolver", () => {
+    const entry = makeCmd({
+      resolvers: { Student: "GrantAccessDefault" },
+      defaultSubjects: ["Professor"], // no defaultResolver declared
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain(
-      "defaultedSubjects-resolver",
+      "defaultSubjects-resolver",
     );
   });
 
-  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultedSubjects is empty", () => {
-    const entry = new CommandEntry("Cmd", {
-      commandName: "accessBuilding",
-      baseType: "Person",
-      objectType: "Building",
-      returnType: "AccessResult",
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultSubjects is empty", () => {
+    const entry = makeCmd({
+      resolvers: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
       defaultResolver: "GrantAccessDefault", // moot — nothing is defaulted
-      templates: {
-        GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
-      },
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-moot");
   });
 
-  it("[defaultedSubjects-ref] fails when a defaultedSubjects entry is not in subjectUnion", () => {
-    const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
-      defaultedSubjects: ["Ghost"], // not in subjectUnion
-      defaultResolver: "GrantAccessDefault",
-    });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultedSubjects-ref");
+  it("[resolver-target-ref] fails when a bare name is not a strategy in any template", () => {
+    const entry = makeCmd({ resolvers: { Student: "NoSuchStrategy" }, templates: {} });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-target-ref");
   });
 
-  it("[dispatch-extra] fails when a dispatch key is not in subjectUnion", () => {
+  it("[resolver-target-ref] fails when a bare template name is used (templates are abstract, only strategy names are valid)", () => {
     const entry = makeCmd({
-      dispatch: { Student: "GrantAccess", Professor: "GrantAccess" }, // Professor not in union
-    });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-extra");
-  });
-
-  it("[dispatch-coverage + dispatch-extra] both fire when dispatch has wrong subjects", () => {
-    // Professor is in subjectUnion but missing from dispatch → dispatch-coverage
-    // Ghost is in dispatch but not in subjectUnion → dispatch-extra
-    const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccess", Ghost: "GrantAccess" },
-    });
-    const result = validateCmd.run(entry, indexWithCmd(entry));
-    expect(rules(result)).toContain("dispatch-coverage");
-    expect(rules(result)).toContain("dispatch-extra");
-  });
-
-  it("[dispatch-target-ref] fails when a bare name is not a strategy in any template", () => {
-    const entry = makeCmd({ dispatch: { Student: "NoSuchStrategy" }, templates: {} });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
-  });
-
-  it("[dispatch-target-ref] fails when a bare template name is used (templates are abstract, only strategy names are valid)", () => {
-    const entry = makeCmd({
-      dispatch: { Student: "AccessTemplate" }, // template name, not a strategy name
+      resolvers: { Student: "AccessTemplate" }, // template name, not a strategy name
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-target-ref");
   });
 
   it("accepts a plain strategy name as a bare dispatch target", () => {
     const entry = makeCmd({
-      dispatch: { Student: "DepartmentMatch" }, // plain strategy name, no dot notation
+      resolvers: { Student: "DepartmentMatch" }, // plain strategy name, no dot notation
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
@@ -399,27 +327,26 @@ describe("CommandValidator", () => {
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
-  it("[dispatch-target-format] fails when dispatch value contains a dot (dot notation is not supported)", () => {
+  it("[resolver-target-format] fails when dispatch value contains a dot (dot notation is not supported)", () => {
     const entry = makeCmd({
-      dispatch: { Student: "AccessTemplate.DepartmentMatch" },
+      resolvers: { Student: "AccessTemplate.DepartmentMatch" },
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-target-format");
   });
 
-  it("[dispatch-target-format] fails when dispatch value has more than two dot-separated parts", () => {
-    const entry = makeCmd({ dispatch: { Student: "A.B.C" }, templates: {} });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
+  it("[resolver-target-format] fails when dispatch value has more than two dot-separated parts", () => {
+    const entry = makeCmd({ resolvers: { Student: "A.B.C" }, templates: {} });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-target-format");
   });
 
-  it("[dispatch-subjectsubset] fails when dispatch routes a subject to a strategy whose template's subjectSubset does not cover that subject", () => {
+  it("[resolver-subjectsubset] fails when dispatch routes a subject to a strategy whose template's subjectSubset does not cover that subject", () => {
     // GrantAccessDefault belongs to GrantAccess which has subjectSubset: ["Student"]
     // Dispatching Professor → GrantAccessDefault is invalid since Professor ∉ ["Student"]
     const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      resolvers: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
       templates: {
         GrantAccess: {
           isParameterized: true,
@@ -428,14 +355,14 @@ describe("CommandValidator", () => {
         },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-subjectsubset");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-subjectsubset");
   });
 
   // ── Dispatch candidate sets (StrategyRef | StrategyRef[]) ──────────────────
 
   it("accepts a multi-candidate dispatch list when every candidate is valid", () => {
     const entry = makeCmd({
-      dispatch: { Student: ["DepartmentMatch", "DenyAccess"] },
+      resolvers: { Student: ["DepartmentMatch", "DenyAccess"] },
       templates: {
         AccessTemplate: {
           isParameterized: true,
@@ -446,19 +373,19 @@ describe("CommandValidator", () => {
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
   });
 
-  it("[dispatch-target-ref] fails when one candidate in a multi-list is not a known strategy", () => {
+  it("[resolver-target-ref] fails when one candidate in a multi-list is not a known strategy", () => {
     const entry = makeCmd({
-      dispatch: { Student: ["DepartmentMatch", "NoSuchStrategy"] },
+      resolvers: { Student: ["DepartmentMatch", "NoSuchStrategy"] },
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-ref");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-target-ref");
   });
 
-  it("[dispatch-target-format] fails when one candidate in a multi-list uses dot notation", () => {
+  it("[resolver-target-format] fails when one candidate in a multi-list uses dot notation", () => {
     const entry = makeCmd({
-      dispatch: { Student: ["DepartmentMatch", "AccessTemplate.DenyAccess"] },
+      resolvers: { Student: ["DepartmentMatch", "AccessTemplate.DenyAccess"] },
       templates: {
         AccessTemplate: {
           isParameterized: true,
@@ -466,14 +393,13 @@ describe("CommandValidator", () => {
         },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-target-format");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-target-format");
   });
 
-  it("[dispatch-subjectsubset] fails per-candidate when a candidate's template does not cover the subject", () => {
+  it("[resolver-subjectsubset] fails per-candidate when a candidate's template does not cover the subject", () => {
     // Professor routes to a two-candidate list; StudentOnly's template covers only Student.
     const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: {
+      resolvers: {
         Student: "StudentOnly",
         Professor: ["ProfessorOnly", "StudentOnly"],
       },
@@ -490,19 +416,18 @@ describe("CommandValidator", () => {
         },
       },
     });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-subjectsubset");
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolver-subjectsubset");
   });
 
-  it("[dispatch-empty] fails when a dispatch entry has an empty candidate list", () => {
-    const entry = makeCmd({ dispatch: { Student: [] } });
-    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("dispatch-empty");
+  it("[resolvers-empty] fails when a dispatch entry has an empty candidate list", () => {
+    const entry = makeCmd({ resolvers: { Student: [] } });
+    expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("resolvers-empty");
   });
 
   it("passes when dispatch routes a subject to a strategy under a template with no subjectSubset (full union coverage)", () => {
     // No subjectSubset on template → effective subset is full subjectUnion → both subjects valid
     const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
+      resolvers: { Student: "GrantAccessDefault", Professor: "GrantAccessDefault" },
       templates: {
         GrantAccess: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
       },
@@ -512,8 +437,7 @@ describe("CommandValidator", () => {
 
   it("passes when each subject is dispatched to a strategy under a template whose subjectSubset covers that subject", () => {
     const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "StudentOnly", Professor: "ProfessorOnly" },
+      resolvers: { Student: "StudentOnly", Professor: "ProfessorOnly" },
       templates: {
         StudentTemplate: {
           isParameterized: true,
@@ -532,7 +456,7 @@ describe("CommandValidator", () => {
 
   it("[strategy-name-unique] fails when two templates declare the same strategy name", () => {
     const entry = makeCmd({
-      dispatch: { Student: "Shared" },
+      resolvers: { Student: "Shared" },
       templates: {
         TemplateA: { isParameterized: false, strategies: { Shared: {} } },
         TemplateB: { isParameterized: false, strategies: { Shared: {} } },
@@ -546,7 +470,7 @@ describe("CommandValidator", () => {
     // structurally (duplicate keys are collapsed by the parser), so the rule is defensive —
     // it guards against programmatic misuse and makes the constraint explicit.
     const entry = makeCmd({
-      dispatch: { Student: "GrantAccessDefault" },
+      resolvers: { Student: "GrantAccessDefault" },
       templates: {
         AccessTemplate: { isParameterized: false, strategies: { GrantAccessDefault: {} } },
         DenyTemplate: { isParameterized: false, strategies: { DenyAccessDefault: {} } },
@@ -594,7 +518,7 @@ describe("CommandValidator", () => {
     expect(rules(result)).toHaveLength(2);
   });
 
-  it("[dispatch-target-ref] config.templates absent — ?? {} fallback (line 179)", () => {
+  it("[resolver-target-ref] config.templates absent — ?? {} fallback (line 179)", () => {
     // When a YAML command has no templates key, config.templates is undefined at runtime.
     // The validator coalesces to {} at line 179 so every dispatch target is "not found".
     const entry = new CommandEntry("Cmd", {
@@ -602,10 +526,9 @@ describe("CommandValidator", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "AnyTemplate" },
+      resolvers: { Student: "AnyTemplate" },
     } as any); // templates intentionally absent to trigger the ?? {} path
-    expect(rules(validateCmd.run(entry, withTypes))).toContain("dispatch-target-ref");
+    expect(rules(validateCmd.run(entry, withTypes))).toContain("resolver-target-ref");
   });
 
   // Rule 12: defaultResolver-ref and defaultResolver-coverage (over defaultedSubjects)
@@ -613,9 +536,8 @@ describe("CommandValidator", () => {
     // Professor is defaulted; GrantAccessDefault has no subjectSubset so its effective
     // subset is the full union, which covers the defaulted Professor.
     const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault" },
-      defaultedSubjects: ["Professor"],
+      resolvers: { Student: "GrantAccessDefault" },
+      defaultSubjects: ["Professor"],
       defaultResolver: "GrantAccessDefault",
     });
     expect(validateCmd.run(entry, indexWithCmd(entry)).valid).toBe(true);
@@ -623,9 +545,8 @@ describe("CommandValidator", () => {
 
   it("[defaultResolver-ref] fails when defaultResolver names a strategy not found in templates", () => {
     const entry = makeCmd({
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "GrantAccessDefault" },
-      defaultedSubjects: ["Professor"],
+      resolvers: { Student: "GrantAccessDefault" },
+      defaultSubjects: ["Professor"],
       defaultResolver: "NoSuchStrategy",
     });
     expect(rules(validateCmd.run(entry, indexWithCmd(entry)))).toContain("defaultResolver-ref");
@@ -638,9 +559,8 @@ describe("CommandValidator", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "StudentOnly" },
-      defaultedSubjects: ["Professor"],
+      resolvers: { Student: "StudentOnly" },
+      defaultSubjects: ["Professor"],
       templates: {
         AccessTemplate: {
           isParameterized: true,
@@ -664,9 +584,8 @@ describe("CommandValidator", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student", "Professor"],
-      dispatch: { Student: "StudentOnly" },
-      defaultedSubjects: ["Professor"],
+      resolvers: { Student: "StudentOnly" },
+      defaultSubjects: ["Professor"],
       templates: {
         AccessTemplate: {
           isParameterized: true,
@@ -692,8 +611,7 @@ describe("AbstractTemplateValidator", () => {
     baseType: "Person",
     objectType: "Building",
     returnType: "AccessResult",
-    subjectUnion: ["Student"],
-    dispatch: { Student: "DepartmentMatch" },
+    resolvers: { Student: "DepartmentMatch" },
     templates: {
       AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
     },
@@ -749,8 +667,7 @@ describe("AbstractTemplateValidator", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "GrantAccess" },
+      resolvers: { Student: "GrantAccess" },
       templates: { GrantAccess: { isParameterized: false, strategies: {} } },
     });
     const entry = new AbstractTemplateEntry("AccessTemplate", "Cmd", {
@@ -768,14 +685,13 @@ describe("AbstractTemplateValidator", () => {
     expect(validateCmd.run(entry, index).valid).toBe(true);
   });
 
-  it("[abstract-in-dispatch] fails when abstract template appears bare in parent Command's dispatch", () => {
+  it("[abstract-in-resolvers] fails when abstract template appears bare in parent Command's dispatch", () => {
     const cmdWithBareDispatch = new CommandEntry("Cmd", {
       commandName: "cmd",
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "AccessTemplate" }, // bare — should be AccessTemplate.DepartmentMatch
+      resolvers: { Student: "AccessTemplate" }, // bare — should be AccessTemplate.DepartmentMatch
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
@@ -785,7 +701,7 @@ describe("AbstractTemplateValidator", () => {
       commands: new Map([["Cmd", cmdWithBareDispatch]]),
       abstractTemplates: new Map([["Cmd.AccessTemplate", tplEntry]]),
     };
-    expect(rules(validateCmd.run(tplEntry, index))).toContain("abstract-in-dispatch");
+    expect(rules(validateCmd.run(tplEntry, index))).toContain("abstract-in-resolvers");
   });
 });
 
@@ -799,8 +715,7 @@ describe("StrategyValidator", () => {
     baseType: "Person",
     objectType: "Building",
     returnType: "AccessResult",
-    subjectUnion: ["Student"],
-    dispatch: { Student: "GrantAccess" },
+    resolvers: { Student: "GrantAccess" },
     templates: { GrantAccess: { isParameterized: false, strategies: {} } },
   });
 
@@ -809,8 +724,7 @@ describe("StrategyValidator", () => {
     baseType: "Person",
     objectType: "Building",
     returnType: "AccessResult",
-    subjectUnion: ["Student", "Professor"],
-    dispatch: {
+    resolvers: {
       Student: "AccessTemplate.DepartmentMatch",
       Professor: "AccessTemplate.DepartmentMatch",
     },
@@ -994,8 +908,7 @@ commands:
     baseType: Base
     objectType: Obj
     returnType: Ret
-    subjectUnion: [Subj]
-    dispatch:
+    resolvers:
       Subj: MyTemplate.StratA
     templates:
       MyTemplate:
@@ -1020,8 +933,7 @@ commands:
     baseType: Base
     objectType: Obj
     returnType: Ret
-    subjectUnion: [Subj]
-    dispatch:
+    resolvers:
       Subj: GrantAccess
     templates:
       GrantAccess:
@@ -1045,8 +957,7 @@ commands:
     baseType: Base
     objectType: Obj
     returnType: Ret
-    subjectUnion: [Subj]
-    dispatch:
+    resolvers:
       Subj: MyTemplate.StratA
     templates:
       MyTemplate:
@@ -1161,8 +1072,7 @@ commands:
     baseType: Person
     objectType: Item
     returnType: Result
-    subjectUnion: [Student]
-    dispatch:
+    resolvers:
       Student: GrantAccess
 `);
     expect(index.commands.has("Cmd")).toBe(true);
@@ -1233,8 +1143,7 @@ describe("validateYaml", () => {
       baseType: "Person",
       objectType: "Building",
       returnType: "AccessResult",
-      subjectUnion: ["Student"],
-      dispatch: { Student: "DepartmentMatch" },
+      resolvers: { Student: "DepartmentMatch" },
       templates: {
         AccessTemplate: { isParameterized: true, strategies: { DepartmentMatch: {} } },
       },
@@ -1277,7 +1186,7 @@ commands:
     baseType: Base
     objectType: Ctx
     returnType: Res
-    dispatch:
+    resolvers:
       Rock: RockMinerDefault
       Gem: GemMinerDefault
     templates:
@@ -1295,7 +1204,7 @@ middleware:
     baseType: Base
     objectType: Ctx
     returnType: Res
-    dispatch:
+    resolvers:
       Rock: TraceRockDefault
       Gem: TraceGemDefault
     templates:
@@ -1371,8 +1280,7 @@ describe("MiddlewareCommandValidator", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
-    subjectUnion: ["Rock", "Gem"],
-    dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+    resolvers: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
     templates: {
       TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
       TraceGem: { isParameterized: false, strategies: { TraceGemDefault: {} } },
@@ -1398,60 +1306,52 @@ describe("MiddlewareCommandValidator", () => {
     expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
   });
 
-  it("[dispatch-coverage] fails when a subject has no dispatch entry and no defaultResolver", () => {
+  it("[resolution-partition] passes when a subject is defaulted via defaultSubjects", () => {
+    // Gem is absent from resolvers but listed in defaultSubjects — valid partition.
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
-      dispatch: { Rock: "TraceRockDefault" }, // Gem missing, no defaultResolver
-    });
-    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-coverage");
-  });
-
-  it("[resolution-partition] passes when a subject is defaulted via defaultedSubjects", () => {
-    // Gem is absent from dispatch but listed in defaultedSubjects — valid partition.
-    const entry = new MiddlewareCommandEntry("TraceMiddleware", {
-      ...validMwConfig,
-      dispatch: { Rock: "TraceRockDefault" },
-      defaultedSubjects: ["Gem"],
+      resolvers: { Rock: "TraceRockDefault" },
+      defaultSubjects: ["Gem"],
       defaultResolver: "TraceRockDefault",
     });
     expect(validateCmd.run(entry, mwIdx(entry)).valid).toBe(true);
   });
 
-  it("[resolution-partition] fails when a subject is in both dispatch and defaultedSubjects", () => {
+  it("[resolution-partition] fails when a subject is in both resolvers and defaultSubjects", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
-      dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
-      defaultedSubjects: ["Gem"], // also defaulted — violates disjointness
+      resolvers: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+      defaultSubjects: ["Gem"], // also defaulted — violates disjointness
       defaultResolver: "TraceGemDefault",
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("resolution-partition");
   });
 
-  it("[defaultedSubjects-resolver] fails when defaultedSubjects is set but no defaultResolver", () => {
+  it("[defaultSubjects-resolver] fails when defaultSubjects is set but no defaultResolver", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
-      dispatch: { Rock: "TraceRockDefault" },
-      defaultedSubjects: ["Gem"], // no defaultResolver declared
+      resolvers: { Rock: "TraceRockDefault" },
+      defaultSubjects: ["Gem"], // no defaultResolver declared
     });
-    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultedSubjects-resolver");
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultSubjects-resolver");
   });
 
-  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultedSubjects is empty", () => {
+  it("[defaultResolver-moot] fails when defaultResolver is declared but defaultSubjects is empty", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
-      ...validMwConfig, // dispatch covers both Rock and Gem
+      ...validMwConfig, // resolvers cover both Rock and Gem
       defaultResolver: "TraceRockDefault", // moot — nothing is defaulted
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-moot");
   });
 
-  it("[defaultedSubjects-ref] fails when a defaultedSubjects entry is not in subjectUnion", () => {
+  it("[subject-ref] fails when a defaultSubjects entry is not a known Subject", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
-      dispatch: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
-      defaultedSubjects: ["Ghost"], // not in subjectUnion
+      resolvers: { Rock: "TraceRockDefault", Gem: "TraceGemDefault" },
+      defaultSubjects: ["Ghost"], // not a known domain type
       defaultResolver: "TraceRockDefault",
     });
-    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultedSubjects-ref");
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("subject-ref");
   });
 
   it("[baseType-ref] fails when baseType is not a known domain type", () => {
@@ -1462,15 +1362,15 @@ describe("MiddlewareCommandValidator", () => {
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("baseType-ref");
   });
 
-  it("[dispatch-target-ref] fails when dispatch names a strategy not found in templates", () => {
+  it("[resolver-target-ref] fails when dispatch names a strategy not found in templates", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
-      dispatch: { Rock: "NoSuchStrategy", Gem: "TraceGemDefault" },
+      resolvers: { Rock: "NoSuchStrategy", Gem: "TraceGemDefault" },
     });
-    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-target-ref");
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("resolver-target-ref");
   });
 
-  it("[dispatch-subjectsubset] fails when dispatch routes a subject to a strategy whose template's subjectSubset does not cover that subject", () => {
+  it("[resolver-subjectsubset] fails when dispatch routes a subject to a strategy whose template's subjectSubset does not cover that subject", () => {
     // TraceRockDefault belongs to TraceRock which has subjectSubset: ["Rock"]
     // Dispatching Gem → TraceRockDefault is invalid since Gem ∉ ["Rock"]
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
@@ -1483,9 +1383,9 @@ describe("MiddlewareCommandValidator", () => {
         },
         TraceGem: { isParameterized: false, strategies: { TraceGemDefault: {} } },
       },
-      dispatch: { Rock: "TraceRockDefault", Gem: "TraceRockDefault" },
+      resolvers: { Rock: "TraceRockDefault", Gem: "TraceRockDefault" },
     });
-    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("dispatch-subjectsubset");
+    expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("resolver-subjectsubset");
   });
 
   it("passes when each subject is dispatched to a strategy under a template whose subjectSubset covers that subject", () => {
@@ -1523,8 +1423,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock", "Gem"],
-      dispatch: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
+      resolvers: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
       templates: {
         RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
         GemMiner: { isParameterized: false, strategies: { GemMinerDefault: {} } },
@@ -1554,8 +1453,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock"],
-      dispatch: { Rock: "TraceRockDefault" }, // Gem missing
+      resolvers: { Rock: "TraceRockDefault" }, // Gem missing
       templates: {
         TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
       },
@@ -1565,8 +1463,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock", "Gem"],
-      dispatch: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
+      resolvers: { Rock: "RockMinerDefault", Gem: "GemMinerDefault" },
       templates: {
         RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
         GemMiner: { isParameterized: false, strategies: { GemMinerDefault: {} } },
@@ -1596,8 +1493,7 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock"],
-      dispatch: { Rock: "RockMinerDefault" }, // only Rock
+      resolvers: { Rock: "RockMinerDefault" }, // only Rock
       templates: {
         RockMiner: { isParameterized: false, strategies: { RockMinerDefault: {} } },
       },
@@ -1627,9 +1523,8 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock", "Gem"],
-      dispatch: { Rock: "TraceRockDefault" },
-      defaultedSubjects: ["Gem"],
+      resolvers: { Rock: "TraceRockDefault" },
+      defaultSubjects: ["Gem"],
       templates: {
         TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
       },
@@ -1641,8 +1536,8 @@ describe("MiddlewareCommandValidator", () => {
   it("[defaultResolver-ref] fails when middleware defaultResolver names a strategy not found in templates", () => {
     const entry = new MiddlewareCommandEntry("TraceMiddleware", {
       ...validMwConfig,
-      dispatch: { Rock: "TraceRockDefault" },
-      defaultedSubjects: ["Gem"],
+      resolvers: { Rock: "TraceRockDefault" },
+      defaultSubjects: ["Gem"],
       defaultResolver: "NoSuchStrategy",
     });
     expect(rules(validateCmd.run(entry, mwIdx(entry)))).toContain("defaultResolver-ref");
@@ -1655,9 +1550,8 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock", "Gem"],
-      dispatch: { Rock: "RockOnly" },
-      defaultedSubjects: ["Gem"],
+      resolvers: { Rock: "RockOnly" },
+      defaultSubjects: ["Gem"],
       templates: {
         TraceTemplate: {
           isParameterized: true,
@@ -1678,9 +1572,8 @@ describe("MiddlewareCommandValidator", () => {
       baseType: "Ctx",
       objectType: "Ctx",
       returnType: "Res",
-      subjectUnion: ["Rock", "Gem"],
-      dispatch: { Rock: "RockOnly" },
-      defaultedSubjects: ["Gem"],
+      resolvers: { Rock: "RockOnly" },
+      defaultSubjects: ["Gem"],
       templates: {
         TraceTemplate: {
           isParameterized: true,
@@ -1710,8 +1603,7 @@ describe("MiddlewareTemplateValidator", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
-    subjectUnion: ["Rock"],
-    dispatch: { Rock: "TraceRockDefault" },
+    resolvers: { Rock: "TraceRockDefault" },
     templates: {
       TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
     },
@@ -1780,8 +1672,7 @@ describe("MiddlewareStrategyValidator", () => {
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
-    subjectUnion: ["Rock"],
-    dispatch: { Rock: "TraceRockDefault" },
+    resolvers: { Rock: "TraceRockDefault" },
     templates: {
       TraceRock: { isParameterized: false, strategies: { TraceRockDefault: {} } },
     },
@@ -1841,8 +1732,7 @@ describe("ValidateCommandHooksCommand — MiddlewareTemplateEntry and Middleware
     baseType: "Ctx",
     objectType: "Ctx",
     returnType: "Res",
-    subjectUnion: ["Rock"],
-    dispatch: { Rock: "AuditRockDefault" },
+    resolvers: { Rock: "AuditRockDefault" },
     templates: { AuditRock: { isParameterized: false, strategies: { AuditRockDefault: {} } } },
   });
 

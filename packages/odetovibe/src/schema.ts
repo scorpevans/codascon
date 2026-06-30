@@ -22,15 +22,17 @@
  *   are plain types used as object types, return types, or base types.
  *
  * - **Command**: An operation performed on Subjects. Declares its generic
- *   parameters (base type, object type, return type, subject union) and
- *   its dispatch map — which Template or Strategy handles each Subject.
- *   A Command may also declare an ordered list of middleware to apply.
+ *   parameters (base type, object type, return type) and its `resolvers`
+ *   map — which Template or Strategy handles each Subject. The Command's
+ *   subject union is derived: the `resolvers` keys (resolved Subjects) plus
+ *   `defaultSubjects` (defaulted Subjects). A Command may also declare an
+ *   ordered list of middleware to apply.
  *
  * - **MiddlewareCommand**: An interceptor for a Command's dispatch. Declared
  *   in the top-level `middleware` map. Structurally identical to a Command —
- *   same generic parameters, same dispatch map, same templates — but generates
+ *   same generic parameters, same `resolvers` map, same templates — but generates
  *   a class extending `MiddlewareCommand<B, O, R, BSL>` rather than
- *   `Command<B, O, R, BSL>`. A middleware's `subjectUnion` must be a superset
+ *   `Command<B, O, R, BSL>`. A middleware's subject union must be a superset
  *   of every Command it is registered in (coverage, not equality).
  *
  * - **Template**: The strategy interface/abstract class. Declares which
@@ -41,9 +43,9 @@
  * - **Strategy**: A concrete extension of a Template. May further narrow the
  *   subject union (for parameterized Templates) and override hook bindings.
  *
- * ## Dispatch Reference Format
+ * ## Resolver Reference Format
  *
- * The `dispatch` map on a Command maps each Subject to the set of Strategies it
+ * The `resolvers` map on a Command maps each Subject to the set of Strategies it
  * may legally route to. A value is either a single plain Strategy name or a list
  * of them — both are plain (unqualified) Strategy names looked up across the
  * Templates of the same Command:
@@ -71,33 +73,33 @@
  *
  * The following constraints should be enforced by tooling consuming this schema:
  *
- * 1. **Resolution partition**: A Command's `dispatch` keys and `defaultedSubjects`
- *    form a typed partition of `subjectUnion` — every Subject must appear in exactly
- *    one of the two (total and disjoint). Subjects in `dispatch` are resolved by a
- *    specific Strategy; Subjects in `defaultedSubjects` are routed to `defaultResolver`
- *    at runtime. A Subject in neither is a validation error (it would otherwise be
- *    silently absorbed). `defaultedSubjects` non-empty ⟺ `defaultResolver` declared.
- *    This applies to MiddlewareCommands too — a middleware is a Command in the full
- *    sense and partitions its subjects the same way.
+ * 1. **Resolution partition**: A Command's subject union is defined as its
+ *    `resolvers` keys (resolved Subjects) together with `defaultSubjects` (defaulted
+ *    Subjects). The two sets must be DISJOINT — a Subject in both is a validation
+ *    error. Subjects in `resolvers` are resolved by a specific Strategy; Subjects in
+ *    `defaultSubjects` are routed to `defaultResolver` at runtime. `defaultSubjects`
+ *    non-empty ⟺ `defaultResolver` declared. This applies to MiddlewareCommands too
+ *    — a middleware is a Command in the full sense and partitions its subjects the
+ *    same way.
  *
- * 2. **Dispatch target validity**: Every candidate in a dispatch value must be a
+ * 2. **Resolver target validity**: Every candidate in a `resolvers` value must be a
  *    plain Strategy name, looked up across the Templates of the same Command. The
  *    check is per-candidate over the (normalized) list — a single bad candidate
  *    in an otherwise valid list is an error. A candidate's parent template's
- *    effective `subjectSubset` must cover the dispatched Subject. An empty
- *    candidate list is invalid (a dispatch entry must name at least one Strategy).
+ *    effective `subjectSubset` must cover the resolved Subject. An empty
+ *    candidate list is invalid (a `resolvers` entry must name at least one Strategy).
  *
  * 3. **Subject identity**: A `domainTypes` entry with a `resolverName` property
- *    is a Subject; without it, a plain type. All entries in a Command's
- *    `subjectUnion` must reference Subjects (types with `resolverName`).
+ *    is a Subject; without it, a plain type. All `resolvers` keys and
+ *    `defaultSubjects` entries must reference Subjects (types with `resolverName`).
  *
  * 4. **resolverName convention**: By convention, `resolverName` should be prefixed
  *    with `"resolve"` (e.g. `"resolveStudent"`). The resolverName must be unique
  *    across all Subjects used within the same Command's subject union.
  *
  * 5. **Template subjectSubset**: When provided, must be a subset of the
- *    parent Command's `subjectUnion`. When omitted, defaults to the
- *    full `subjectUnion`.
+ *    parent Command's subject union (`resolvers` keys ∪ `defaultSubjects`).
+ *    When omitted, defaults to the full subject union.
  *
  * 6. **Strategy subjectSubset**: Must be a subset of the parent Template's
  *    effective `subjectSubset`. Only meaningful when the Template's
@@ -119,8 +121,8 @@
  *     map.
  *
  * 11. **Middleware coverage**: Each middleware in a Command's `middleware`
- *     list must declare a `subjectUnion` that is a superset of (or equal to)
- *     the Command's `subjectUnion`. A middleware covering fewer Subjects than
+ *     list must have a subject union that is a superset of (or equal to)
+ *     the Command's subject union. A middleware covering fewer Subjects than
  *     the Command would leave some Subjects unintercepted.
  *
  * 12. **defaultResolver strategy validity**: When `defaultResolver` is
@@ -128,7 +130,7 @@
  *     Its effective `subjectSubset` — the Strategy's own `subjectSubset` if
  *     declared, otherwise the parent Template's `subjectSubset`, otherwise
  *     the full command subject union — must cover every subject in the
- *     Command's `subjectUnion`.
+ *     Command's `defaultSubjects`.
  *
  * ## Out of Scope
  *
@@ -187,8 +189,7 @@
  *     baseType: CampusPerson
  *     objectType: Building
  *     returnType: AccessResult
- *     subjectUnion: [Student, Professor]
- *     dispatch:
+ *     resolvers:
  *       Student: AuditTrace
  *       Professor: AuditTrace
  *     templates:
@@ -203,9 +204,8 @@
  *     baseType: CampusPerson
  *     objectType: Building
  *     returnType: AccessResult
- *     subjectUnion: [Student, Professor]
  *     middleware: [AuditMiddleware]
- *     dispatch:
+ *     resolvers:
  *       Student: DepartmentMatch
  *       Professor: GrantAccessDefault
  *     templates:
@@ -275,9 +275,9 @@ export type DomainType = {
  * An operation that can be performed on Subjects.
  *
  * Maps directly to a class extending `Command<B, O, R, CSU>` in the
- * framework. The Command's resolver methods (one per Subject in the union)
- * are not declared here — they are derived from `subjectUnion` entries
- * and their `resolverName` values. The `dispatch` map specifies which
+ * framework. The Command's resolver methods (one per resolved Subject)
+ * are not declared here — they are derived from the `resolvers` keys
+ * and their `resolverName` values. The `resolvers` map specifies which
  * Template or Strategy each resolver method resolves to.
  *
  * @property commandName    — The string literal used as the Command's
@@ -285,10 +285,10 @@ export type DomainType = {
  *                            in `CommandHooks<H>` when this Command is a
  *                            hook on a Template.
  *
- * @property baseType       — The `B` generic parameter. All Subjects in
- *                            `subjectUnion` must extend `B & Subject`.
- *                            Use this to constrain Subjects to share a
- *                            common interface (e.g. `CampusPerson`).
+ * @property baseType       — The `B` generic parameter. All Subjects (the
+ *                            `resolvers` keys and `defaultSubjects`) must extend
+ *                            `B & Subject`. Use this to constrain Subjects to share
+ *                            a common interface (e.g. `CampusPerson`).
  *
  * @property objectType     — The `O` generic parameter. The context/payload
  *                            passed alongside the Subject to both visit
@@ -299,24 +299,22 @@ export type DomainType = {
  *                            `execute` and `run`. Use `Promise<T>` for
  *                            async Commands.
  *
- * @property subjectUnion   — The `CSU` tuple. References to domain types
- *                            that have `resolverName` (i.e. Subjects). Each
- *                            entry requires a corresponding resolver method
- *                            on the Command class, enforced at compile time
- *                            by `CommandSubjectStrategies<C>`.
- *
- * @property dispatch       — Maps each Subject to its legal resolution codomain.
- *                            Keys are Subject type references (must match
- *                            entries in `subjectUnion`). A value is either a
- *                            single plain Strategy name or a list of them,
+ * @property resolvers      — Maps each resolved Subject to its legal resolution
+ *                            codomain. Keys are Subject type references (each must
+ *                            have a `resolverName` in `domainTypes`); they define
+ *                            the resolved half of the subject union. A value is
+ *                            either a single plain Strategy name or a list of them,
  *                            looked up across the Templates of the same Command.
  *                            A scalar is equivalent to a one-element list; a
  *                            single candidate generates a complete resolver, a
  *                            multi-candidate list generates a resolver stub whose
  *                            return type is the union of the candidate Strategy
- *                            classes (see "Dispatch Reference Format").
- *                            The resolverName for each Subject key is derived
- *                            from the Subject's `resolverName` in `domainTypes`.
+ *                            classes (see "Resolver Reference Format").
+ *                            The resolver method name for each Subject key is
+ *                            derived from the Subject's `resolverName` in `domainTypes`.
+ *                            Each entry generates a corresponding resolver method on
+ *                            the Command class, enforced at compile time by
+ *                            `CommandSubjectStrategies<C>`.
  *
  * @property middleware      — Optional ordered list of middleware to register
  *                            for this Command. Each entry is a key in the
@@ -325,32 +323,33 @@ export type DomainType = {
  *                            (runs first, finishes last).
  *
  *                            Each listed middleware must cover all Subjects in
- *                            this Command's `subjectUnion` (middleware BSL ⊇
+ *                            this Command's subject union (middleware BSL ⊇
  *                            command BSL — coverage, not equality). Codegen
  *                            emits an `override get middleware()` getter on the
  *                            Command class returning the registered instances.
  *
- * @property defaultedSubjects — Optional list of Subjects that are intentionally
+ * @property defaultSubjects — Optional list of Subjects that are intentionally
  *                            default-resolved. These Subjects are NOT given a
- *                            `dispatch` entry; instead they route to `defaultResolver`
- *                            at runtime. Together with the `dispatch` keys they must
- *                            partition `subjectUnion` (total + disjoint). Maps to the
- *                            generated Command's `BDS` (Base Defaulted Subjects) type
- *                            parameter: `Command<B, O, R, [dispatch keys], [defaultedSubjects]>`.
+ *                            `resolvers` entry; instead they route to `defaultResolver`
+ *                            at runtime. They must be DISJOINT from the `resolvers`
+ *                            keys; together the two sets form the Command's subject
+ *                            union. Maps to the generated Command's `BDS` (Base
+ *                            Defaulted Subjects) type parameter:
+ *                            `Command<B, O, R, [resolvers keys], [defaultSubjects]>`.
  *                            When empty/absent, the Command is fully resolved and codegen
- *                            emits the 4-argument `Command<B, O, R, [subjectUnion]>` form.
+ *                            emits the 4-argument `Command<B, O, R, [resolvers keys]>` form.
  *
- * @property defaultResolver — The catch-all Strategy handling the `defaultedSubjects`
- *                            Subjects. Required exactly when `defaultedSubjects` is
- *                            non-empty; declaring it without `defaultedSubjects` is a
+ * @property defaultResolver — The catch-all Strategy handling the `defaultSubjects`
+ *                            Subjects. Required exactly when `defaultSubjects` is
+ *                            non-empty; declaring it without `defaultSubjects` is a
  *                            validation error (the defaulted Subjects must be explicit).
  *
  *                            Codegen emits a `readonly defaultResolver` property
  *                            on the Command class, typed as the referenced Strategy
  *                            class and initialized to the corresponding singleton
- *                            field (shared with the dispatch singleton pool). Resolver
+ *                            field (shared with the `resolvers` singleton pool). Resolver
  *                            stubs are generated only for the resolved Subjects (the
- *                            `dispatch` keys) — the defaulted Subjects route to
+ *                            `resolvers` keys) — the defaulted Subjects route to
  *                            `defaultResolver` via the runtime fallback.
  *
  *                            The referenced Strategy must exist within this
@@ -359,7 +358,7 @@ export type DomainType = {
  *                            `subjectSubset` if declared, otherwise the parent
  *                            Template's `subjectSubset`, otherwise the full
  *                            command subject union — must cover every Subject
- *                            in `defaultedSubjects` (validation rule 12).
+ *                            in `defaultSubjects` (validation rule 12).
  *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
@@ -375,18 +374,17 @@ export type DomainType = {
  *                            Only Strategy names (from this map) are valid
  *                            as dispatch targets.
  */
-/** A Command entry in the YAML config — declares generic params, middleware, dispatch map, and templates. */
+/** A Command entry in the YAML config — declares generic params, middleware, resolvers map, and templates. */
 export type Command = {
   commandName: string;
   baseType: DomainTypeRef;
   objectType: DomainTypeRef;
   returnType: DomainTypeRef;
   returnAsync?: boolean;
-  subjectUnion: SubjectRef[];
   middleware?: MiddlewareRef[];
-  defaultedSubjects?: SubjectRef[];
+  defaultSubjects?: SubjectRef[];
   defaultResolver?: StrategyRef;
-  dispatch: {
+  resolvers: {
     [subject: SubjectRef]: StrategyRef | StrategyRef[];
   };
   templates: {
@@ -450,8 +448,8 @@ export type Command = {
  *
  * @property subjectSubset  — Optional narrowing of the parent Command's
  *                            subject union. When provided, must be a subset
- *                            of the Command's `subjectUnion`. When omitted,
- *                            defaults to the full `subjectUnion`.
+ *                            of the Command's subject union. When omitted,
+ *                            defaults to the full subject union.
  *
  *                            This becomes the `SU` parameter (or its
  *                            constraint, when `isParameterized` is true).
@@ -541,7 +539,7 @@ export type Strategy = {
  *
  *                                 These types are not first-class domain
  *                                 participants — they cannot appear in structural
- *                                 positions such as `subjectUnion` or `dispatch`.
+ *                                 positions such as `resolvers` or `defaultSubjects`.
  *                                 Only `domainTypes` entries are first-class.
  *
  *                                 ```yaml
@@ -560,7 +558,7 @@ export type Strategy = {
  *                            MiddlewareCommand — an interceptor that wraps
  *                            Command dispatch. Structurally identical to a
  *                            Command entry (same generic parameters, same
- *                            dispatch map, same templates), but generates a
+ *                            `resolvers` map, same templates), but generates a
  *                            class extending `MiddlewareCommand<B, O, R, BSL>`
  *                            rather than `Command<B, O, R, BSL>`.
  *
@@ -574,7 +572,7 @@ export type Strategy = {
  *
  * @property commands       — All Commands, keyed by class name. Each
  *                            Command declares its generic parameters, its
- *                            optional middleware list, its dispatch map,
+ *                            optional middleware list, its `resolvers` map,
  *                            and its Templates (with nested Strategies).
  */
 /** Root schema for a codascon domain YAML config — declares namespace, type imports, domain types, middleware, and commands. */

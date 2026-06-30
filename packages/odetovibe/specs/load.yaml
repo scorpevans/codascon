@@ -44,11 +44,9 @@ commands:
     objectType: WriteContext
     returnType: WriteResult
     returnAsync: true
-    subjectUnion:
-      - SourceFileEntry
     # Routing is mode-based (WriteContext.mode), not subject-type-based: the one
     # subject legally resolves to any of the three writers. Declare the real codomain.
-    dispatch:
+    resolvers:
       SourceFileEntry: [OverwriteWriterDefault, MergeWriterDefault, StrictMergeWriterDefault]
     templates:
       # Unconditionally overwrites the output file.

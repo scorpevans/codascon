@@ -392,10 +392,9 @@ middleware:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
-    subjectUnion: [Student, Professor]
-    dispatch:
+    resolvers:
       Professor: ProfessorPolicy
-    defaultedSubjects: [Student]
+    defaultSubjects: [Student]
     defaultResolver: DefaultPolicy
     templates:
       CheckoutMiddlewareTemplate:
@@ -411,9 +410,8 @@ commands:
     baseType: Person
     objectType: Equipment
     returnType: CheckoutResult
-    subjectUnion: [Student, Professor]
     middleware: [CheckoutMiddleware]
-    dispatch:
+    resolvers:
       Student: StudentCheckout
       Professor: ProfessorCheckout
     templates:
@@ -502,7 +500,7 @@ Additional implementation rules:
 - Use commandHooks liberally: when `execute` invokes another domain operation, declare it as a hook Command on the Template — prefer splitting logic across multiple Commands over concentrating it in a single `execute` body
 - Use singletons for Command, Template, and Strategy instances whenever custom constructor arguments are not required — instantiate once and reuse
 - Use middleware for cross-cutting concerns such as logging, auditing, timing, and default enrichments — prefer a middleware Command over duplicating the same logic in individual Templates or Strategies
-- Default-resolve subjects that share one catch-all Strategy instead of repeating it across resolver methods — list those subjects in the Command's defaulted-subjects tuple (the fifth type parameter; `defaultedSubjects` in YAML) and assign `readonly defaultResolver`. The defaulted subjects are explicit, so a forgotten subject is a compile error rather than being silently absorbed; the `defaultResolver` Strategy need only cover the defaulted subjects, not the full union
+- Default-resolve subjects that share one catch-all Strategy instead of repeating it across resolver methods — list those subjects in the Command's defaulted-subjects tuple (the fifth type parameter; `defaultSubjects` in YAML) and assign `readonly defaultResolver`. The defaulted subjects are explicit, so a forgotten subject is a compile error rather than being silently absorbed; the `defaultResolver` Strategy need only cover the defaulted subjects, not the full union
 
 ### Step 4: Implement This Domain
 

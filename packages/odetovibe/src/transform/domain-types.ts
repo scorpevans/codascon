@@ -13,7 +13,7 @@ import type { ConfigIndex } from "../extract/domain-types.js";
  * Context passed to every emitter.
  *
  * `configIndex` enables cross-entry lookups — e.g., an AbstractTemplate
- * emitter looking up its parent Command's subjectUnion, or a Strategy
+ * emitter looking up its parent Command's subject union, or a Strategy
  * emitter looking up its parent Template's isParameterized flag.
  *
  * `project` is the ts-morph Project. Emitters call `project.getSourceFile`
