@@ -99,7 +99,7 @@ class AuthnMiddleware extends MiddlewareCommand<
    * resolved user identity. Short-circuits with 401 if token is absent or
    * unknown — inner.run() is never called, stopping the chain immediately.
    */
-  readonly defaultResolver = {
+  readonly defaultResolver = (_subject: Endpoint, _request: ApiRequest) => ({
     execute<T extends Endpoint>(
       subject: T,
       request: ApiRequest,
@@ -112,7 +112,7 @@ class AuthnMiddleware extends MiddlewareCommand<
       // Enrich the request with the resolved identity before passing down the chain.
       return inner.run(subject, { ...request, user });
     },
-  };
+  });
 }
 
 // ─── Middleware 2: Authorization ────────────────────────────────────────────

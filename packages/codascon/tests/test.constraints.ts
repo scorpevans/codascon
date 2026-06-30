@@ -629,7 +629,7 @@ class SparseCoverageLogCommand extends Command<
       subject: s.name,
     }),
   };
-  readonly defaultResolver = this.entry;
+  readonly defaultResolver = (subject: Cat | Bird, object: { action: string }) => this.entry;
   resolveDog() {
     return this.entry;
   }
@@ -989,9 +989,12 @@ describe("§14 compile-time constraint tests", () => {
     resolveRock(_: Rock, __: Readonly<Ctx>): MiddlewareTemplate<PartedMw, any[], Rock> {
       return { execute: (s, o, inner) => inner.run(s, o) };
     }
-    override readonly defaultResolver: MiddlewareTemplate<PartedMw, any[], Gem> = {
+    override readonly defaultResolver: (
+      subject: Gem,
+      object: Ctx,
+    ) => MiddlewareTemplate<PartedMw, any[], Gem> = (subject, object) => ({
       execute: (s, o, inner) => inner.run(s, o),
-    };
+    });
   }
   class _mc6Cmd extends MeasureCommand {
     override get middleware() {
@@ -1055,15 +1058,15 @@ describe("§MC middleware compile-time constraints", () => {
             inner.run(s, o),
         };
       }
-      override readonly defaultResolver = {
+      override readonly defaultResolver = (subject: Dog, object: string) => ({
         execute: <T extends Dog>(s: T, o: string, inner: Runnable<T, string, string>) =>
           inner.run(s, o),
-      };
+      });
     }
     void DefMw;
   });
 
-  it("14j9: MiddlewareTemplate<C,H,SU>-typed value is assignable to MiddlewareCommand.defaultResolver", () => {
+  it("14j9: MiddlewareTemplate<C,H,SU>-typed value is returnable from MiddlewareCommand.defaultResolver callable", () => {
     // Regression guard for the subtype chain:
     //   MiddlewareTemplate<C,H,SU>  →  MiddlewareTemplate<MiddlewareCommand<B,O,R,BSL>, any[], BSL[number]>
     //                               →  Template<Command<B,O,R,BSL>, any[], BSL[number]>
@@ -1081,7 +1084,7 @@ describe("§MC middleware compile-time constraints", () => {
         inner.run(s, o),
     };
     class TraceMwWithDefault extends TraceMiddleware {
-      override readonly defaultResolver = catchAll; // must compile
+      override readonly defaultResolver = (subject: Rock | Gem, object: Ctx) => catchAll; // must compile
     }
     void TraceMwWithDefault;
   });
@@ -1103,7 +1106,9 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     // methods; the run() this constraint is satisfied by the declared defaultResolver.
     class DefaultCmd extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "defaultCmd" as const;
-      readonly defaultResolver = { execute: (s: Dog | Cat, _o: string): string => s.name };
+      readonly defaultResolver = (subject: Dog | Cat, object: string) => ({
+        execute: (s: Dog | Cat, _o: string): string => s.name,
+      });
     }
 
     void DefaultCmd;
@@ -1127,12 +1132,12 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     void _14j3;
   });
 
-  it("14j4: defaultResolver with wrong return type — compile error at implementation site", () => {
-    // The defaultResolver field requires a Template (with an `execute` method).
+  it("14j4: defaultResolver with wrong type — compile error at implementation site", () => {
+    // The defaultResolver field requires a callable `(subject, object) => Template`.
     // Assigning a plain string must be rejected. Dog is in BDS so the field is operative.
     class BadDefaultCmd extends Command<Person, string, string, [], [Dog]> {
       readonly commandName = "badDefault" as const;
-      // @ts-expect-error — `string` is not assignable to the defaultResolver Template type
+      // @ts-expect-error — `string` is not assignable to the defaultResolver callable type
       readonly defaultResolver = "not a template";
     }
     void BadDefaultCmd;
@@ -1165,7 +1170,9 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     // when an unrelated subject is defaulted.
     class BadResolverCmd extends Command<Subject, string, string, [Dog], [Cat]> {
       readonly commandName = "badResolverCmd" as const;
-      readonly defaultResolver = { execute: (_s: Cat, _o: string): string => "" };
+      readonly defaultResolver = (subject: Cat, object: string) => ({
+        execute: (_s: Cat, _o: string): string => "",
+      });
       resolveDog(_d: Dog) {
         // Returns wrong shape — missing execute method; run() must be uncallable.
         return { notATemplate: true };
@@ -1187,7 +1194,9 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     // defaultResolver, Cat would have been silently absorbed.)
     class ForgotCatCmd extends Command<Person, string, string, [Dog, Cat], [Bird]> {
       readonly commandName = "forgotCat" as const;
-      readonly defaultResolver = { execute: (_s: Bird, _o: string): string => "default" };
+      readonly defaultResolver = (subject: Bird, object: string) => ({
+        execute: (_s: Bird, _o: string): string => "default",
+      });
       resolveDog(_d: Dog) {
         return { execute: (_s: Dog, _o: string): string => "dog" };
       }
@@ -1223,8 +1232,10 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     // that accepts only a subset of BDS is rejected at the assignment site.
     class NarrowDefaultCmd extends Command<Person, string, string, [], [Dog, Cat]> {
       readonly commandName = "narrowDefault" as const;
-      // @ts-expect-error — execute accepts only Dog but BDS = [Dog, Cat]; must accept Dog | Cat
-      readonly defaultResolver = { execute: (_s: Dog, _o: string): string => "dog-only" };
+      // @ts-expect-error — returned template's execute accepts only Dog but BDS = [Dog, Cat]; must accept Dog | Cat
+      readonly defaultResolver = (subject: Dog | Cat, object: string) => ({
+        execute: (_s: Dog, _o: string): string => "dog-only",
+      });
     }
     void NarrowDefaultCmd;
   });
@@ -1234,7 +1245,9 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     // and a covering defaultResolver compiles and run() is callable for both halves.
     class PartitionedCmd extends Command<Person, string, string, [Dog], [Cat]> {
       readonly commandName = "partitioned" as const;
-      readonly defaultResolver = { execute: (_s: Cat, _o: string): string => "cat-default" };
+      readonly defaultResolver = (subject: Cat, object: string) => ({
+        execute: (_s: Cat, _o: string): string => "cat-default",
+      });
       resolveDog(_d: Dog) {
         return { execute: (_s: Dog, _o: string): string => "dog" };
       }
@@ -1242,6 +1255,18 @@ describe("§14 compile-time constraint tests — defaultResolver", () => {
     const cmd = new PartitionedCmd();
     cmd.run(new Dog("Rex", "Lab"), ""); // resolved — must compile
     cmd.run(new Cat("Whiskers", true), ""); // defaulted — must compile
+  });
+
+  it("14j13: defaultResolver as a bare (non-callable) Template object is rejected", () => {
+    // The breaking change: defaultResolver is a `(subject, object) => Template` callable, not a
+    // bare Template value. Assigning a Template-shaped object directly (the pre-change form) must
+    // be rejected — an object literal is not assignable to the callable type.
+    class BareTemplateDefaultCmd extends Command<Person, string, string, [], [Dog]> {
+      readonly commandName = "bareTemplateDefault" as const;
+      // @ts-expect-error — `{ execute }` object is not a `(subject, object) => Template` callable
+      readonly defaultResolver = { execute: (_s: Dog, _o: string): string => "bare" };
+    }
+    void BareTemplateDefaultCmd;
   });
 });
 

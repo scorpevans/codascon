@@ -267,7 +267,8 @@ class SparseLogCommand extends Command<Person, { action: string }, LogEntry, [Do
       subject: s.name,
     }),
   };
-  readonly defaultResolver = this.fallbackEntry;
+  readonly defaultResolver = (subject: Cat | Bird, object: { action: string }) =>
+    this.fallbackEntry;
   resolveDog() {
     return {
       execute: (s: Dog, o: { action: string }): LogEntry => ({

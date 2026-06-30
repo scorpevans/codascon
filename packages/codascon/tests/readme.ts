@@ -64,7 +64,7 @@ class LogEntry extends LogTemplate {}
 class LogCommand extends Command<Person, { message: string }, void, [Student], [Professor]> {
   readonly commandName = "log" as const;
   private readonly entry = new LogEntry();
-  readonly defaultResolver = this.entry; // fallback declared for resolver methods
+  readonly defaultResolver = (_p: Professor, _entry: { message: string }) => this.entry; // fallback for defaulted subjects
   resolveStudent(_s: Student): Template<LogCommand, [], Student> {
     return this.entry;
   }
@@ -154,7 +154,7 @@ class CheckoutMiddleware extends MiddlewareCommand<
 > {
   readonly commandName = "checkoutPolicy" as const;
   private readonly forProfessor = new ProfessorPolicy();
-  readonly defaultResolver = new DefaultPolicy();
+  readonly defaultResolver = (_s: Student, _e: Equipment) => new DefaultPolicy();
   resolveProfessor(
     _p: Professor,
     _e: Equipment,
