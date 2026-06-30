@@ -69,6 +69,10 @@
  *   real members — the constraint bites as soon as it has something to bite on.)
  *   The developer fills in the runtime choice.
  *
+ * `defaultResolver` uses this same scalar/list format and the same cardinality
+ * split — single concrete candidate → complete callable returning the singleton;
+ * multi-candidate → stub callable with the candidate-class union return type.
+ *
  * ## Validation Rules
  *
  * The following constraints should be enforced by tooling consuming this schema:
@@ -126,8 +130,9 @@
  *     the Command would leave some Subjects unintercepted.
  *
  * 12. **defaultResolver strategy validity**: When `defaultResolver` is
- *     present, the named Strategy must exist within the Command's templates.
- *     Its effective `subjectSubset` — the Strategy's own `subjectSubset` if
+ *     present, every candidate (a scalar is a one-element list) must name a
+ *     Strategy that exists within the Command's templates. Each candidate's
+ *     effective `subjectSubset` — the Strategy's own `subjectSubset` if
  *     declared, otherwise the parent Template's `subjectSubset`, otherwise
  *     the full command subject union — must cover every subject in the
  *     Command's `defaultSubjects`.
@@ -339,26 +344,32 @@ export type DomainType = {
  *                            When empty/absent, the Command is fully resolved and codegen
  *                            emits the 4-argument `Command<B, O, R, [resolvers keys]>` form.
  *
- * @property defaultResolver — The catch-all Strategy handling the `defaultSubjects`
+ * @property defaultResolver — The catch-all handling the `defaultSubjects`
  *                            Subjects. Required exactly when `defaultSubjects` is
  *                            non-empty; declaring it without `defaultSubjects` is a
  *                            validation error (the defaulted Subjects must be explicit).
+ *                            Like a `resolvers` value, it is either a single plain
+ *                            Strategy name or a list of them — a scalar is equivalent
+ *                            to a one-element list.
  *
- *                            Codegen emits a `readonly defaultResolver` property
- *                            on the Command class, typed as the referenced Strategy
- *                            class and initialized to the corresponding singleton
- *                            field (shared with the `resolvers` singleton pool). Resolver
- *                            stubs are generated only for the resolved Subjects (the
- *                            `resolvers` keys) — the defaulted Subjects route to
- *                            `defaultResolver` via the runtime fallback.
+ *                            Codegen emits a callable `readonly defaultResolver`
+ *                            field on the Command class — `(subject, object) =>
+ *                            Strategy` — mirroring the `resolvers` cardinality split:
+ *                            a single concrete candidate generates a COMPLETE resolver
+ *                            returning that Strategy's singleton (shared with the
+ *                            `resolvers` singleton pool); a multi-candidate list
+ *                            generates a STUB whose return type is the union of the
+ *                            candidate Strategy classes (`throw new Error`), for the
+ *                            developer to fill. Resolver stubs are generated only for
+ *                            the resolved Subjects (the `resolvers` keys); the defaulted
+ *                            Subjects route to `defaultResolver` via the runtime fallback.
  *
- *                            The referenced Strategy must exist within this
- *                            Command's templates and its effective
- *                            `subjectSubset` — the Strategy's own
- *                            `subjectSubset` if declared, otherwise the parent
- *                            Template's `subjectSubset`, otherwise the full
- *                            command subject union — must cover every Subject
- *                            in `defaultSubjects` (validation rule 12).
+ *                            Each candidate Strategy must exist within this Command's
+ *                            templates and its effective `subjectSubset` — the
+ *                            Strategy's own `subjectSubset` if declared, otherwise the
+ *                            parent Template's `subjectSubset`, otherwise the full
+ *                            command subject union — must cover every Subject in
+ *                            `defaultSubjects` (validation rule 12).
  *
  * @property templates      — All Templates (strategy implementations) for
  *                            this Command, keyed by class name. Each Template
@@ -383,7 +394,7 @@ export type Command = {
   returnAsync?: boolean;
   middleware?: MiddlewareRef[];
   defaultSubjects?: SubjectRef[];
-  defaultResolver?: StrategyRef;
+  defaultResolver?: StrategyRef | StrategyRef[];
   resolvers: {
     [subject: SubjectRef]: StrategyRef | StrategyRef[];
   };

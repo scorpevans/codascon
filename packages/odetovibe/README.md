@@ -99,7 +99,7 @@ commands:
 
 - `domainTypes` with `resolverName` become Subject classes; without become interfaces
 - A Command's subject union is derived: the `resolvers` keys (resolved) plus `defaultSubjects` (defaulted). The two must be disjoint; `defaultSubjects` non-empty requires a `defaultResolver`
-- `resolvers` values are plain Strategy names, looked up across the Command's `templates`
+- `resolvers` values and `defaultResolver` are plain Strategy names, looked up across the Command's `templates`. Both accept a scalar or a list: a single concrete candidate generates a complete resolver returning its singleton; a multi-candidate list generates a stub whose return type is the union of the candidate classes (codegen owns the signature, you fill the body)
 - All Templates generate as abstract classes, regardless of whether `strategies` is empty or not
 - Template `subjectSubset` must be a subset of the parent Command's subject union (`resolvers` keys ∪ `defaultSubjects`)
 - Strategy `subjectSubset` must be a subset of the parent Template's `subjectSubset`; invalid (error) when the parent Template is not parameterized

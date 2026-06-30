@@ -147,6 +147,8 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
   execute(subject: CommandEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, config } = subject;
+    // Normalized defaultResolver candidate list (scalar → [scalar]; absent → []).
+    const defaultResolverList = subject.defaultResolver;
     const importedNames = allTypeImportNames(object);
 
     // baseType, objectType, returnType must reference known domainTypes or typeImports
@@ -203,7 +205,7 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
     }
 
     // defaultSubjects non-empty ⟺ defaultResolver declared
-    if (defaultSubjects.length > 0 && !config.defaultResolver) {
+    if (defaultSubjects.length > 0 && defaultResolverList.length === 0) {
       errors.push(
         err(
           key,
@@ -212,7 +214,7 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
         ),
       );
     }
-    if (defaultSubjects.length === 0 && config.defaultResolver) {
+    if (defaultSubjects.length === 0 && defaultResolverList.length > 0) {
       errors.push(
         err(
           key,
@@ -354,9 +356,9 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
       }
     }
 
-    // Rule 12: defaultResolver must reference a known strategy and cover all subjects
-    if (config.defaultResolver !== undefined) {
-      const stratName = config.defaultResolver;
+    // Rule 12: every defaultResolver candidate must reference a known strategy and cover
+    // all defaulted subjects (a scalar was normalized to a one-element list upstream).
+    for (const stratName of defaultResolverList) {
       const owningTplName = stratNameToTpl.get(stratName);
       if (owningTplName === undefined) {
         errors.push(
@@ -366,22 +368,22 @@ abstract class CommandValidator implements Template<ValidateEntryCommand, [], Co
             `defaultResolver "${stratName}" not found — expected a strategy name within "${key}"'s templates`,
           ),
         );
-      } else {
-        const tplConfig = ownTemplates[owningTplName];
-        const effectiveTplSubset = tplConfig.subjectSubset ?? subjects.all;
-        const stratConfig = tplConfig.strategies[stratName];
-        const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
-        const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of defaultSubjects) {
-          if (!stratSubjectSet.has(subjectRef)) {
-            errors.push(
-              err(
-                key,
-                "defaultResolver-coverage",
-                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultSubjects`,
-              ),
-            );
-          }
+        continue;
+      }
+      const tplConfig = ownTemplates[owningTplName];
+      const effectiveTplSubset = tplConfig.subjectSubset ?? subjects.all;
+      const stratConfig = tplConfig.strategies[stratName];
+      const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
+      const stratSubjectSet = new Set(effectiveStratSubset);
+      for (const subjectRef of defaultSubjects) {
+        if (!stratSubjectSet.has(subjectRef)) {
+          errors.push(
+            err(
+              key,
+              "defaultResolver-coverage",
+              `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultSubjects`,
+            ),
+          );
         }
       }
     }
@@ -546,6 +548,8 @@ abstract class MiddlewareCommandValidator implements Template<
   execute(subject: MiddlewareCommandEntry, object: Readonly<ConfigIndex>): ValidationResult {
     const errors: ValidationError[] = [];
     const { key, config } = subject;
+    // Normalized defaultResolver candidate list (scalar → [scalar]; absent → []).
+    const defaultResolverList = subject.defaultResolver;
     const importedNames = allTypeImportNames(object);
 
     // baseType, objectType, returnType must reference known domainTypes or typeImports
@@ -600,7 +604,7 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    if (defaultSubjects.length > 0 && !config.defaultResolver) {
+    if (defaultSubjects.length > 0 && defaultResolverList.length === 0) {
       errors.push(
         err(
           key,
@@ -609,7 +613,7 @@ abstract class MiddlewareCommandValidator implements Template<
         ),
       );
     }
-    if (defaultSubjects.length === 0 && config.defaultResolver) {
+    if (defaultSubjects.length === 0 && defaultResolverList.length > 0) {
       errors.push(
         err(
           key,
@@ -721,9 +725,9 @@ abstract class MiddlewareCommandValidator implements Template<
       }
     }
 
-    // Rule 12: defaultResolver must reference a known strategy and cover all subjects
-    if (config.defaultResolver !== undefined) {
-      const stratName = config.defaultResolver;
+    // Rule 12: every defaultResolver candidate must reference a known strategy and cover
+    // all defaulted subjects (a scalar was normalized to a one-element list upstream).
+    for (const stratName of defaultResolverList) {
       const owningTplName = stratNameToTpl.get(stratName);
       if (owningTplName === undefined) {
         errors.push(
@@ -733,22 +737,22 @@ abstract class MiddlewareCommandValidator implements Template<
             `defaultResolver "${stratName}" not found — expected a strategy name within "${key}"'s templates`,
           ),
         );
-      } else {
-        const tplConfig = ownTemplates[owningTplName];
-        const effectiveTplSubset = tplConfig.subjectSubset ?? subjects.all;
-        const stratConfig = tplConfig.strategies[stratName];
-        const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
-        const stratSubjectSet = new Set(effectiveStratSubset);
-        for (const subjectRef of defaultSubjects) {
-          if (!stratSubjectSet.has(subjectRef)) {
-            errors.push(
-              err(
-                key,
-                "defaultResolver-coverage",
-                `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultSubjects`,
-              ),
-            );
-          }
+        continue;
+      }
+      const tplConfig = ownTemplates[owningTplName];
+      const effectiveTplSubset = tplConfig.subjectSubset ?? subjects.all;
+      const stratConfig = tplConfig.strategies[stratName];
+      const effectiveStratSubset = stratConfig?.subjectSubset ?? effectiveTplSubset;
+      const stratSubjectSet = new Set(effectiveStratSubset);
+      for (const subjectRef of defaultSubjects) {
+        if (!stratSubjectSet.has(subjectRef)) {
+          errors.push(
+            err(
+              key,
+              "defaultResolver-coverage",
+              `defaultResolver strategy "${stratName}" does not cover defaulted subject "${subjectRef}" — its effective subjectSubset must cover every subject in "${key}"'s defaultSubjects`,
+            ),
+          );
         }
       }
     }
